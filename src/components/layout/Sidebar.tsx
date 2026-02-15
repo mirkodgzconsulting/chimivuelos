@@ -47,25 +47,15 @@ export function Sidebar() {
     <aside className="fixed left-0 top-0 z-40 h-screen w-48 border-r border-slate-200 bg-white flex flex-col shadow-sm">
       {/* Logo Section */}
       <div className="flex h-16 items-center justify-center border-b border-slate-100 px-4">
-        <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="relative h-7 w-7">
-               {/* 
-                  Since the provided logo is white SVG, we need a container with background 
-                  OR a trusted dark version. Let's make a Chimivuelos Brand Circle 
-               */}
-               <div className="absolute inset-0 bg-chimipink rounded-full flex items-center justify-center">
-                  <Image 
-                   src="/IconChimiVuelos-White.svg" 
-                   alt="Chimivuelos" 
-                   width={16} 
-                   height={16} 
-                   className="w-4 h-4"
-                  />
-               </div>
-            </div>
-            <span className="text-base font-bold tracking-tight text-slate-900">
-              CHIMI<span className="text-chimipink">VUELOS</span>
-            </span>
+        <Link href="/dashboard" className="flex items-center justify-center w-full">
+            <Image 
+               src="/chimilogosidebar.svg" 
+               alt="Chimivuelos" 
+               width={140} 
+               height={40} 
+               className="h-10 w-auto object-contain"
+               priority
+            />
         </Link>
       </div>
 

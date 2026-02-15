@@ -14,6 +14,12 @@ chimivuelos
 password database:
 chimi2026@@A
 
+Email:
+ info@chimivuelos.pe
+Contraseña: 
+chimi2026@@A
+
+
 Documento Técnico – Plataforma Web CHIMIVUELOS
 Panel Cliente + Panel Administrador
 Propuesta técnica resumida para implementación de plataforma de gestión de vuelos directos,

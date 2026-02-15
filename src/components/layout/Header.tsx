@@ -1,8 +1,21 @@
+"use client";
 import * as React from 'react';
-import { Search, Bell } from 'lucide-react';
+import { Search, Bell, LogOut, ChevronDown, User, Settings } from 'lucide-react';
 import Image from 'next/image';
+import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 
 export function Header() {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  };
+
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm">
       {/* Search Bar - Expanded */}
@@ -25,23 +38,66 @@ export function Header() {
           <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-chimipink ring-2 ring-white animate-pulse" />
         </button>
 
-        {/* Profile Dropdown Logic would go here */}
-        <div className="ml-2 flex items-center gap-3 border-l border-slate-200 pl-4">
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-semibold text-slate-900 leading-none">Admin User</p>
-            <p className="text-xs text-slate-500 mt-1">admin@chimivuelos.pe</p>
-          </div>
-          <div className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-slate-100 p-0.5">
-             <div className="absolute inset-0 bg-linear-to-tr from-chimipink to-chimicyan opacity-20" /> {/* Avatar bg */}
-             <Image 
-                src="/user.jpg" 
-                alt="Admin" 
-                width={40} 
-                height={40}
-                className="h-full w-full rounded-full object-cover"
-                unoptimized
-             />
-          </div>
+        {/* Profile Dropdown */}
+        <div className="relative ml-2 border-l border-slate-200 pl-4">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center gap-3 hover:bg-slate-50 p-1.5 rounded-lg transition-colors outline-none cursor-pointer"
+            >
+                <div className="text-right hidden sm:block">
+                    <p className="text-sm font-semibold text-slate-900 leading-none">Admin User</p>
+                </div>
+                <div className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-slate-100 p-0.5">
+                    {/* Fallback pattern if image fails */}
+                    <div className="absolute inset-0 bg-linear-to-tr from-chimipink to-chimicyan opacity-20" /> 
+                    <Image 
+                        src="/user.jpg" 
+                        alt="Admin" 
+                        width={40} 
+                        height={40}
+                        className="h-full w-full rounded-full object-cover"
+                        unoptimized // Local file
+                    />
+                </div>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isOpen && (
+                <>
+                    {/* Backdrop to close on verify click outside */}
+                    <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+                    
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                        <div className="p-2 border-b border-slate-100 block sm:hidden">
+                            <p className="text-sm font-semibold text-slate-900 px-2">Admin User</p>
+                        </div>
+                        
+                        <div className="p-1">
+                            <button className="flex items-center w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-md transition-colors">
+                                <User className="w-4 h-4 mr-2 text-slate-500" />
+                                Mi Perfil
+                            </button>
+                            <button className="flex items-center w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-md transition-colors">
+                                <Settings className="w-4 h-4 mr-2 text-slate-500" />
+                                Configuración
+                            </button>
+                        </div>
+                        
+                        <div className="h-px bg-slate-100 my-1"/>
+                        
+                        <div className="p-1">
+                            <button 
+                                onClick={handleSignOut}
+                                className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 rounded-md transition-colors font-medium"
+                            >
+                                <LogOut className="w-4 h-4 mr-2" />
+                                Cerrar Sesión
+                            </button>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
       </div>
     </header>
