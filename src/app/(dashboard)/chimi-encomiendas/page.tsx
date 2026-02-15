@@ -15,15 +15,16 @@ import {
 } from "@/components/ui/dialog"
 import { Card, CardContent } from "@/components/ui/card"
 import { 
+    Package, 
     Plus, 
     Search, 
     FileText, 
-    Download, 
     Trash2, 
+    Download, 
+    User,
     Pencil, 
     ChevronLeft, 
     ChevronRight,
-    Package,
     MapPin,
     Link as LinkIcon
 } from 'lucide-react'
@@ -153,7 +154,10 @@ export default function ParcelsPage() {
     }, [])
 
     useEffect(() => {
-        loadData()
+        const init = async () => {
+             await loadData()
+        }
+        init()
     }, [loadData])
 
     // Handlers
@@ -296,7 +300,7 @@ export default function ParcelsPage() {
 
     const handleStatusChange = async (id: string, newStatus: string) => {
         // Optimistic UI
-        setParcels(prev => prev.map(p => p.id === id ? { ...p, status: newStatus as any } : p))
+        setParcels(prev => prev.map(p => p.id === id ? { ...p, status: newStatus as Parcel['status'] } : p))
         
         const result = await updateParcelStatus(id, newStatus)
         if (result.error) {
@@ -846,8 +850,11 @@ export default function ParcelsPage() {
                                                 </button>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-slate-700 text-sm">
-                                                    {parcel.package_type} <span className="text-slate-400">({parcel.package_weight})</span>
+                                                <div className="flex items-center gap-2">
+                                                    <User size={18} className="text-slate-400 shrink-0" />
+                                                    <div className="text-slate-700 text-sm">
+                                                        {parcel.package_type} <span className="text-slate-400">({parcel.package_weight})</span>
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">

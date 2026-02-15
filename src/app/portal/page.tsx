@@ -1,5 +1,5 @@
 import { getClientUser } from '@/app/actions/client-portal'
-import { Plane, Package, Banknote, ShieldCheck, Info, FileText, CheckCircle2 } from 'lucide-react'
+import { Plane, Package, Banknote, ShieldCheck, Info, CheckCircle2, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -54,7 +54,10 @@ export default async function PortalPage() {
                 </div>
 
                 {/* Important Notice Box */}
-                <div className="w-full bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl shadow-lg border border-slate-800/50 relative overflow-hidden mb-8 transform md:rotate-1 hover:rotate-0 transition-transform duration-500 p-6 md:p-8">
+                <div 
+                    className="w-full text-white rounded-2xl shadow-lg border border-slate-800/50 relative overflow-hidden mb-8 transform md:rotate-1 hover:rotate-0 transition-transform duration-500 p-6 md:p-8"
+                    style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)' }}
+                >
                     <div className="absolute top-4 right-4">
                         <ShieldCheck className="text-chimipink opacity-20" size={48} />
                     </div>
@@ -127,7 +130,16 @@ function Step({ number, title, desc, highlight }: { number: string, title: strin
     )
 }
 
-function QuickLink({ href, icon: Icon, title, desc, color, hoverBorder }: any) {
+interface QuickLinkProps {
+    href: string;
+    icon: LucideIcon;
+    title: string;
+    desc: string;
+    color: string;
+    hoverBorder: string;
+}
+
+function QuickLink({ href, icon: Icon, title, desc, color, hoverBorder }: QuickLinkProps) {
     return (
         <Link href={href} className={cn(
             "flex items-center gap-4 p-4 rounded-xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all group",
