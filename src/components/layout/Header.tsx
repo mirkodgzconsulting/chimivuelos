@@ -7,7 +7,14 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { MobileSidebar } from '@/components/layout/MobileSidebar';
 
-export function Header() {
+import { User as SupabaseUser } from '@supabase/supabase-js';
+
+interface HeaderProps {
+  user?: SupabaseUser | null;
+  role?: 'admin' | 'client';
+}
+
+export function Header({ user, role }: HeaderProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const router = useRouter();
   const supabase = createClient();
@@ -18,11 +25,15 @@ export function Header() {
     router.refresh();
   };
 
+  // Safe name extraction
+  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario';
+  const displayRole = role === 'admin' ? 'Administrador' : 'Cliente';
+
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm">
       {/* Mobile Sidebar Trigger (Hamburger) */}
       <div className="md:hidden mr-4">
-        <MobileSidebar />
+        <MobileSidebar role={role} />
       </div>
 
       {/* Search Bar - Expanded */}
@@ -52,7 +63,8 @@ export function Header() {
                 className="flex items-center gap-3 hover:bg-slate-50 p-1.5 rounded-lg transition-colors outline-none cursor-pointer"
             >
                 <div className="text-right hidden sm:block">
-                    <p className="text-sm font-semibold text-slate-900 leading-none">Admin User</p>
+                    <p className="text-sm font-semibold text-slate-900 leading-none">{displayName}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">{displayRole}</p>
                 </div>
                 <div className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-slate-100 p-0.5">
                     {/* Fallback pattern if image fails */}
@@ -77,7 +89,8 @@ export function Header() {
                     
                     <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                         <div className="p-2 border-b border-slate-100 block sm:hidden">
-                            <p className="text-sm font-semibold text-slate-900 px-2">Admin User</p>
+                            <p className="text-sm font-semibold text-slate-900 px-2">{displayName}</p>
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider px-2">{displayRole}</p>
                         </div>
                         
                         <div className="p-1">

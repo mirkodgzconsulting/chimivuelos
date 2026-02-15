@@ -1,23 +1,28 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 
-export default function DashboardLayout({
+import { createClient } from "@/lib/supabase/server";
+
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       
       {/* Sidebar - Fixed Left */}
-      <Sidebar />
+      <Sidebar role="admin" />
 
       {/* Main Content Area */}
       <div className="md:pl-48 flex flex-col min-h-screen transition-all duration-300">
         
         {/* Header - Sticky Top */}
         <div className="z-30 w-full">
-             <Header />
+             <Header user={user} role="admin" />
         </div>
 
         {/* Dynamic Page Content */}

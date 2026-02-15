@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Search, Trash2, Edit, FileText, Download, FolderOpen, X, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,7 +31,12 @@ interface Flight {
     balance: number
     status: 'pending' | 'finished'
     documents: FlightDocument[]
-    profiles: any
+    profiles: {
+        first_name: string
+        last_name: string
+        email: string
+        phone: string
+    } | null
 }
 
 interface ClientOption {
@@ -41,6 +46,18 @@ interface ClientOption {
     email: string
     phone: string
 }
+
+const DOCUMENT_TYPES = [
+    "Pasaje de Ida",
+    "Pasaje de Retorno",
+    "Pasaje Ida y Vuelta",
+    "Itinerario de Viaje",
+    "Carta de Invitación",
+    "Reserva de Hotel",
+    "Permiso Notarial",
+    "Seguro de Viaje",
+    "Otros"
+]
 
 export default function FlightsPage() {
     const [flights, setFlights] = useState<Flight[]>([])
@@ -86,8 +103,9 @@ export default function FlightsPage() {
     })
 
     // Dynamic Documents State
-    const [numDocs, setNumDocs] = useState(0)
-    const [documentInputs, setDocumentInputs] = useState<{ title: string, file: File | null }[]>([])
+    const [documentInputs, setDocumentInputs] = useState<{ title: string, file: File | null }[]>(
+        DOCUMENT_TYPES.map(type => ({ title: type, file: null }))
+    )
     
     // Existing Docs (Load separate from form data)
     const [existingDocs, setExistingDocs] = useState<FlightDocument[]>([])
@@ -136,35 +154,13 @@ export default function FlightsPage() {
         setShowClientList(false)
     }
 
-    // Handle Document Count Change
-    const handleNumDocsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const count = parseInt(e.target.value) || 0
-        if (count > 5) {
-            alert('Máximo 5 documentos')
-            return
-        }
-        setNumDocs(count)
-        
-        setDocumentInputs(prev => {
-            const newInputs = [...prev]
-            if (count > prev.length) {
-                // Add
-                for (let i = prev.length; i < count; i++) {
-                    newInputs.push({ title: '', file: null })
-                }
-            } else {
-                // Remove
-                newInputs.splice(count)
-            }
-            return newInputs
-        })
-    }
+    // Handle Document Input Change
 
     // Handle Document Input Change
-    const handleDocInputChange = (index: number, field: 'title' | 'file', value: string | File | null) => {
+    const handleDocInputChange = (index: number, value: File | null) => {
         setDocumentInputs(prev => {
             const newInputs = [...prev]
-            newInputs[index] = { ...newInputs[index], [field]: value }
+            newInputs[index] = { ...newInputs[index], file: value }
             return newInputs
         })
     }
@@ -182,8 +178,11 @@ export default function FlightsPage() {
             balance: '',
             status: 'pending',
         })
-        setNumDocs(0)
-        setDocumentInputs([])
+        const initialDocs = DOCUMENT_TYPES.map(type => ({ 
+            title: type, 
+            file: null 
+        }))
+        setDocumentInputs(initialDocs)
         setExistingDocs([])
         setClientSearch('')
         setSelectedFlightId(null)
@@ -206,8 +205,14 @@ export default function FlightsPage() {
         })
         setClientSearch(`${flight.profiles.first_name} ${flight.profiles.last_name}`)
         setExistingDocs(flight.documents || [])
-        setDocumentInputs([])
-        setNumDocs(0)
+        
+        // Initialize with fixed list
+        const initialDocs = DOCUMENT_TYPES.map(type => ({ 
+            title: type, 
+            file: null 
+        }))
+        setDocumentInputs(initialDocs)
+        
         setSelectedFlightId(flight.id)
         setIsDialogOpen(true)
     }
@@ -231,7 +236,7 @@ export default function FlightsPage() {
 
     const handleStatusChange = async (id: string, newStatus: string) => {
         // Optimistic update locally first for speed
-        setFlights(prev => prev.map(f => f.id === id ? { ...f, status: newStatus as any } : f))
+        setFlights(prev => prev.map(f => f.id === id ? { ...f, status: newStatus as Flight['status'] } : f))
         await updateFlightStatus(id, newStatus)
         // No need to reload all data if successful, but loadData ensures sync
     }
@@ -262,10 +267,12 @@ export default function FlightsPage() {
         })
 
         // Append Documents
-        documentInputs.forEach((doc, idx) => {
+        let uploadIndex = 0
+        documentInputs.forEach((doc) => {
              if (doc.file) {
-                 data.append(`document_title_${idx}`, doc.title)
-                 data.append(`document_file_${idx}`, doc.file)
+                 data.append(`document_title_${uploadIndex}`, doc.title)
+                 data.append(`document_file_${uploadIndex}`, doc.file)
+                 uploadIndex++
              }
         })
 
@@ -514,37 +521,38 @@ export default function FlightsPage() {
                                      </div>
                                 )}
 
-                                <div className="flex items-center gap-2 mb-4">
-                                    <Label>¿Cuántos documentos nuevos?</Label>
-                                    <Input 
-                                        type="number" 
-                                        min="0" 
-                                        max="5" 
-                                        className="w-20"
-                                        value={numDocs}
-                                        onChange={handleNumDocsChange}
-                                    />
-                                </div>
-
-                                {documentInputs.map((input, idx) => (
-                                    <div key={idx} className="grid grid-cols-2 gap-4 mb-2 p-3 bg-slate-50 rounded border border-slate-200">
+                                {documentInputs.map((input, idx) => {
+                                    return (
+                                    <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2 p-3 bg-slate-50 rounded border border-slate-200 items-center">
                                         <div>
-                                            <Label className="text-xs">Título del Archivo</Label>
-                                            <Input 
-                                                value={input.title} 
-                                                onChange={(e) => handleDocInputChange(idx, 'title', e.target.value)}
-                                                placeholder="Ej. Ticket Aéreo"
-                                            />
+                                            <Label className="text-xs font-semibold text-slate-700 block mb-1">
+                                                {idx === documentInputs.length - 1 ? "Otros (Especificar Título)" : input.title}
+                                            </Label>
+                                            
+                                            {idx === documentInputs.length - 1 && (
+                                                <Input 
+                                                    placeholder="Especifique el título..."
+                                                    onChange={(e) => {
+                                                        const newVal = e.target.value
+                                                        setDocumentInputs(prev => {
+                                                            const copy = [...prev]
+                                                            copy[idx].title = newVal || "Otros"
+                                                            return copy
+                                                        })
+                                                    }}
+                                                    className="h-8 text-xs mb-1"
+                                                />
+                                            )}
                                         </div>
                                         <div>
-                                            <Label className="text-xs">Archivo</Label>
                                             <Input 
                                                 type="file" 
-                                                onChange={(e) => handleDocInputChange(idx, 'file', e.target.files?.[0] || null)}
+                                                className="text-xs"
+                                                onChange={(e) => handleDocInputChange(idx, e.target.files?.[0] || null)}
                                             />
                                         </div>
                                     </div>
-                                ))}
+                                )})}
                             </div>
 
                             <DialogFooter>
@@ -579,7 +587,7 @@ export default function FlightsPage() {
                         <select 
                             className="h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chimiteal cursor-pointer"
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value as any)}
+                            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'finished')}
                         >
                             <option value="all">Todos</option>
                             <option value="pending">Pendiente</option>
@@ -675,7 +683,7 @@ export default function FlightsPage() {
                                             <td className="px-6 py-4 text-center">
                                                 {flight.documents && flight.documents.length > 0 ? (
                                                     <Button size="sm" variant="ghost" className="text-chimiteal hover:bg-teal-50" onClick={() => setDocsViewerFlight(flight)}>
-                                                        <FolderOpen className="h-5 w-5" />
+                                                        <FileText className="h-5 w-5" />
                                                         <span className="ml-1 text-xs">{flight.documents.length}</span>
                                                     </Button>
                                                 ) : (

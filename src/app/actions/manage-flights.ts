@@ -7,7 +7,7 @@ import { uploadClientFile, deleteFileFromR2, deleteImageFromCloudflare, getFileU
 /**
  * Interface for Flight Document
  */
-interface FlightDocument {
+export interface FlightDocument {
     title: string
     path: string
     name: string

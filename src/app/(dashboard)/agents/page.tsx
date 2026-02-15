@@ -48,9 +48,12 @@ export default function AgentsPage() {
     const { data, error } = await supabase
         .from("profiles")
         .select("*")
+        .neq('role', 'client') // Exclude clients
         .order("created_at", { ascending: false })
     return { data, error }
   }, [supabase])
+
+
 
   const refreshAgents = async () => {
     const { data, error } = await getAgentsList()
@@ -340,7 +343,7 @@ export default function AgentsPage() {
                           ? "bg-slate-900 text-white"
                           : "bg-cyan-100 text-cyan-800"
                       )}>
-                        {agent.role === 'admin' ? 'Administrador' : 'Usuario'}
+                        {agent.role === 'admin' ? 'Administrador' : 'Agente'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-slate-500">

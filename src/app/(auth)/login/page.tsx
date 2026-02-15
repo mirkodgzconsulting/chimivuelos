@@ -21,17 +21,26 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data: { user }, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (authError) {
-        throw authError;
+      if (authError || !user) {
+        throw authError || new Error('Error al iniciar sesión');
       }
 
+      // Check User Role (Prioritize Metadata for Speed/Safety)
+      const role = user.user_metadata?.role || 'client' // Default to client if unknown for safety
+      
       router.refresh();
-      router.push('/dashboard');
+
+      if (role === 'client') {
+        router.push('/portal');
+      } else {
+        router.push('/dashboard');
+      }
+      
     } catch (err) {
       console.error('Login error:', err);
       const message = err instanceof Error ? err.message : 'Error al iniciar sesión';

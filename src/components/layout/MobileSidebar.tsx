@@ -45,11 +45,18 @@ const SidebarItem = ({ icon: Icon, label, href, isActive, onClick }: SidebarItem
   </Link>
 );
 
-export function MobileSidebar() {
+interface MobileSidebarProps {
+  role?: 'admin' | 'client';
+}
+
+export function MobileSidebar({ role }: MobileSidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+
+  // Determine if we should show client view
+  const isClientView = role === 'client' || (role !== 'admin' && pathname.startsWith('/portal'));
 
   return (
     <div className="md:hidden flex items-center">
@@ -77,14 +84,16 @@ export function MobileSidebar() {
         {/* Header */}
         <div className="flex h-16 items-center justify-between border-b border-slate-100 px-4">
             <div className="flex items-center">
-                <Image 
-                src="/chimilogosidebar.svg" 
-                alt="Chimivuelos" 
-                width={120} 
-                height={32} 
-                className="h-8 w-auto object-contain"
-                priority
-                />
+                <Link href={isClientView ? "/portal" : "/dashboard"} onClick={() => setIsOpen(false)}>
+                    <Image 
+                    src="/chimilogosidebar.svg" 
+                    alt="Chimivuelos" 
+                    width={120} 
+                    height={32} 
+                    className="h-8 w-auto object-contain"
+                    priority
+                    />
+                </Link>
             </div>
             <button 
                 onClick={() => setIsOpen(false)}
@@ -96,23 +105,37 @@ export function MobileSidebar() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Principal</div>
-            
-            <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} onClick={() => setIsOpen(false)} />
-            <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} onClick={() => setIsOpen(false)} />
-            <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} onClick={() => setIsOpen(false)} />
-            
-            <div className="my-4 border-t border-slate-100 mx-2" />
-            
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Operaciones</div>
-            <SidebarItem icon={Plane} label="Vuelos" href="/chimi-vuelos" isActive={pathname.startsWith('/chimi-vuelos')} onClick={() => setIsOpen(false)} />
-            <SidebarItem icon={Banknote} label="Giros" href="/chimi-giros" isActive={pathname.startsWith('/chimi-giros')} onClick={() => setIsOpen(false)} />
-            <SidebarItem icon={Package} label="Encomiendas" href="/chimi-encomiendas" isActive={pathname.startsWith('/chimi-encomiendas')} onClick={() => setIsOpen(false)} />
+            {isClientView ? (
+                /* CLIENT MENU */
+                <>
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Mi Portal</div>
+                    <SidebarItem icon={LayoutDashboard} label="Inicio" href="/portal" isActive={pathname === '/portal'} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={Plane} label="Mis Vuelos" href="/portal/vuelos" isActive={pathname.startsWith('/portal/vuelos')} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={Package} label="Mis Encomiendas" href="/portal/encomiendas" isActive={pathname.startsWith('/portal/encomiendas')} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={Banknote} label="Mis Giros" href="/portal/giros" isActive={pathname.startsWith('/portal/giros')} onClick={() => setIsOpen(false)} />
+                </>
+            ) : (
+                /* ADMIN MENU */
+                <>
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Principal</div>
+                    
+                    <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} onClick={() => setIsOpen(false)} />
+                    
+                    <div className="my-4 border-t border-slate-100 mx-2" />
+                    
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Operaciones</div>
+                    <SidebarItem icon={Plane} label="Vuelos" href="/chimi-vuelos" isActive={pathname.startsWith('/chimi-vuelos')} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={Banknote} label="Giros" href="/chimi-giros" isActive={pathname.startsWith('/chimi-giros')} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={Package} label="Encomiendas" href="/chimi-encomiendas" isActive={pathname.startsWith('/chimi-encomiendas')} onClick={() => setIsOpen(false)} />
 
-            <div className="my-4 border-t border-slate-100 mx-2" />
+                    <div className="my-4 border-t border-slate-100 mx-2" />
 
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Sistema</div>
-            <SidebarItem icon={Settings} label="Configuración" href="/settings" isActive={pathname.startsWith('/settings')} onClick={() => setIsOpen(false)} />
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Sistema</div>
+                    <SidebarItem icon={Settings} label="Configuración" href="/settings" isActive={pathname.startsWith('/settings')} onClick={() => setIsOpen(false)} />
+                </>
+            )}
         </div>
 
         {/* Footer */}
