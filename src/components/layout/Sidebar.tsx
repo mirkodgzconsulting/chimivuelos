@@ -44,7 +44,7 @@ export function Sidebar() {
   const router = useRouter();
   
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-48 border-r border-slate-200 bg-white flex flex-col shadow-sm">
+    <aside className="fixed left-0 top-0 z-40 h-screen w-48 border-r border-slate-200 bg-white hidden md:flex flex-col shadow-sm">
       {/* Logo Section */}
       <div className="flex h-16 items-center justify-center border-b border-slate-100 px-4">
         <Link href="/dashboard" className="flex items-center justify-center w-full">

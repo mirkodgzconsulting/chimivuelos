@@ -433,7 +433,7 @@ export default function FlightsPage() {
                             </div>
 
                             {/* Auto-filled Fields */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label>Correo</Label>
                                     <Input value={formData.client_email} readOnly className="bg-slate-50 text-slate-500" />
@@ -445,7 +445,7 @@ export default function FlightsPage() {
                             </div>
                             
                             {/* Flight Details */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                      <Label>Fecha de Viaje</Label>
                                      <Input type="date" name="travel_date" value={formData.travel_date} onChange={handleInputChange} required />
@@ -467,7 +467,7 @@ export default function FlightsPage() {
                             </div>
 
                             {/* Financials */}
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div className="grid gap-2">
                                     <Label>Costo</Label>
                                     <Input type="number" step="0.01" name="cost" value={formData.cost} onChange={handleInputChange} />

@@ -1,9 +1,11 @@
+
 "use client";
 import * as React from 'react';
 import { Search, Bell, LogOut, ChevronDown, User, Settings } from 'lucide-react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { MobileSidebar } from '@/components/layout/MobileSidebar';
 
 export function Header() {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -18,6 +20,11 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm">
+      {/* Mobile Sidebar Trigger (Hamburger) */}
+      <div className="md:hidden mr-4">
+        <MobileSidebar />
+      </div>
+
       {/* Search Bar - Expanded */}
       <div className="flex flex-1 items-center max-w-lg">
         <div className="relative w-full">

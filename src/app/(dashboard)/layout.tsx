@@ -13,7 +13,7 @@ export default function DashboardLayout({
       <Sidebar />
 
       {/* Main Content Area */}
-      <div className="pl-48 flex flex-col min-h-screen transition-all duration-300">
+      <div className="md:pl-48 flex flex-col min-h-screen transition-all duration-300">
         
         {/* Header - Sticky Top */}
         <div className="z-30 w-full">
