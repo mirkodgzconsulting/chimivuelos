@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Proxima Nova", var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono);
+  
+  --color-chimipink: #F52AA0;
+  --color-chimicyan: #02FDEE;
+  --color-chimiteal: #149094;
+  
+  --color-chimipink-hover: #D41A85;
+  --color-chimicyan-hover: #02DBCF;
+  --color-chimiteal-hover: #0E6B6E;
+}
+
+/* Force light mode variables */
+:root {
+  --background: #F8FAFC; /* Slate 50 */
+  --foreground: #1E293B; /* Slate 800 */
+}
+
+/* Remove dark mode or force it to be the same as light mode if needed, 
+   but for now we just won't define distinct dark mode vars */
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Proxima Nova", var(--font-montserrat), system-ui, sans-serif;
+}

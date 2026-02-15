@@ -1,0 +1,114 @@
+fuente:"proxima nova"
+color 1: #F52AA0
+color 2: #02FDEE
+color 3: #149094
+
+supabase
+user:
+info@chimivuelos.pe
+password:
+chimi2026@@A
+
+nombre de proyecto:
+chimivuelos
+password database:
+chimi2026@@A
+
+Documento Técnico – Plataforma Web CHIMIVUELOS
+Panel Cliente + Panel Administrador
+Propuesta técnica resumida para implementación de plataforma de gestión de vuelos directos,
+documentos y soporte.
+Este documento incluye ahora las funcionalidades de Envío de Dinero y Envío de Encomiendas.
+1. Objetivo del sistema
+El objetivo de este proyecto es desarrollar una plataforma web segura para CHIMIVUELOS,
+diseñada para que sus clientes puedan acceder a sus vuelos, encomiendas, giros de dinero, documentos y comunicaciones
+desde un panel privado, mientras que ustedes podrán administrar toda la operación desde un
+panel administrativo interno.
+La plataforma estará dividida en dos áreas completamente separadas: Panel Cliente (área
+privada del viajero) y Panel Administrador (área privada de gestión interna de CHIMIVUELOS).
+2. Estructura del sistema (roles obligatorios)
+La plataforma se desarrollará con dos roles obligatorios, ya que cada usuario tendrá permisos y
+accesos distintos. Esta separación garantiza seguridad, privacidad y control total.
+2.1 Panel Cliente (Área privada del viajero)
+Cada cliente tendrá acceso a un panel privado dentro de la plataforma, donde podrá gestionar
+su información de forma simple y segura.
+• Registrarse e iniciar sesión con usuario y contraseña
+• Recuperar contraseña en caso de olvido
+• Ver sus vuelos directos disponibles dentro del sistema
+• Consultar historial y estado de Envíos de Dinero (Giros)
+• Consultar historial y seguimiento (tracking) de Encomiendas
+• Consultar detalles del vuelo (fechas, origen, destino, aerolínea, código de vuelo,
+observaciones, etc.)
+• Descargar documentos relacionados al vuelo (ticket, itinerario, factura, seguro, entre otros)
+• Subir documentos solicitados por CHIMIVUELOS (pasaporte, visa, DNI, etc.)
+• Gestionar su perfil básico (datos personales y contacto)
+• Cerrar sesión de manera segura
+3. Aceptación de Términos y Condiciones
+Antes de poder utilizar la plataforma, el cliente deberá aceptar los Términos y Condiciones
+directamente dentro del sistema. Esta aceptación quedará registrada con fecha y hora,
+garantizando trazabilidad y respaldo para CHIMIVUELOS.
+En caso de actualización futura de los términos, el sistema solicitará nuevamente la aceptación
+de la nueva versión.
+4. Sistema de Tickets (comunicación cliente ↔ CHIMIVUELOS)
+La comunicación se realizará mediante un sistema interno de tickets, permitiendo tener control
+y seguimiento de todas las solicitudes.
+• Crear una solicitud o consulta
+• Enviar mensajes dentro del ticket
+• Recibir respuesta oficial de CHIMIVUELOS
+• Ver historial completo de conversación
+• Consultar el estado del ticket (abierto, en proceso o resuelto)
+5. Botón directo de WhatsApp
+Dentro del Panel Cliente se integrará un botón directo de contacto por WhatsApp, permitiendo
+comunicación rápida en caso de dudas urgentes, complementando el sistema de tickets.
+6. Panel Administrador (Área interna CHIMIVUELOS)
+La plataforma incluirá un panel administrativo exclusivo para CHIMIVUELOS, desde donde
+ustedes podrán gestionar toda la operación.
+• Visualizar y administrar todos los clientes registrados
+• Crear y cargar información de vuelos directos asignándolos a cada cliente
+• Registrar y gestionar Envíos de Dinero (Giros) con sus respectivos comprobantes
+• Registrar y gestionar Envíos de Encomiendas (Paquetería) con códigos de seguimiento
+• Actualizar información del vuelo cuando sea necesario (cambios de horario, detalles,
+observaciones, etc.)
+• Actualizar estados de giros y encomiendas (Recibido, En Tránsito, Entregado, etc.)
+• Subir documentos directamente a cada cliente (ticket, itinerario, factura, seguro, etc.)
+• Solicitar documentación al cliente cuando sea necesario
+• Gestionar y responder tickets de soporte
+• Controlar el estado de cada ticket y su seguimiento
+• Gestionar y actualizar los Términos y Condiciones de la plataforma
+7. Seguridad y control de acceso
+La plataforma contará con un sistema de seguridad basado en roles, asegurando que:
+• Los clientes solo puedan ver su propia información
+• CHIMIVUELOS tenga acceso total a la gestión interna
+• Los documentos estén protegidos y no sean públicos
+• El sistema permita cierre de sesión y control de accesos de forma segura
+8. Tiempo estimado de desarrollo y metodología de trabajo
+El tiempo estimado de desarrollo para la primera versión funcional de la plataforma es de 1
+semana, siempre que se realicen reuniones rápidas de coordinación con el encargado de
+CHIMIVUELOS.
+Durante esta semana se trabajará en conjunto para definir correctamente el flujo real de trabajo
+de la agencia, especialmente en los siguientes puntos:
+• Venta y emisión de vuelos directos
+• Carga y entrega de información del vuelo al cliente
+• Entrega de documentos (ticket, itinerario, factura, etc.)
+• Proceso de soporte y atención al cliente
+• Gestión de cambios o incidencias relacionadas al vuelo
+Estas reuniones permitirán construir el panel adaptado al funcionamiento real de
+CHIMIVUELOS, asegurando que el sistema sea práctico y fácil de usar desde el primer día.
+9. Precio del desarrollo
+Costo total del desarrollo 800€
+Este precio incluye:
+• Panel Cliente completo
+• Panel Administrador completo
+• Login / Logout / Recuperación de contraseña
+• Aceptación de Términos y Condiciones
+• Gestión de vuelos directos
+• Gestión segura de documentos
+• Sistema interno de tickets
+• Botón directo de WhatsApp
+• Pruebas funcionales y puesta en marcha
+10. Conclusión
+Esta plataforma permitirá que CHIMIVUELOS gestione toda su operación de forma digital,
+profesional y segura. La separación de roles garantizará control total y protección de datos,
+mientras que el sistema de tickets permitirá organizar la comunicación con los clientes y
+mantener historial de cada solicitud. El botón de WhatsApp proporcionará un canal directo para
+atención inmediata, mejorando la experiencia del usuario.
