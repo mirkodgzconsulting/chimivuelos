@@ -119,7 +119,7 @@ export async function createTransfer(formData: FormData) {
 
         if (error) throw error
 
-        revalidatePath('/money-transfers')
+        revalidatePath('/chimi-transfers')
         return { success: true }
 
     } catch (error: unknown) {
@@ -203,7 +203,7 @@ export async function updateTransfer(formData: FormData) {
 
         if (error) throw error
 
-        revalidatePath('/money-transfers')
+        revalidatePath('/chimi-transfers')
         return { success: true }
 
     } catch (error: unknown) {
@@ -220,7 +220,7 @@ export async function updateTransferStatus(id: string, status: string) {
     try {
         const { error } = await supabase.from('money_transfers').update({ status }).eq('id', id)
         if (error) throw error
-        revalidatePath('/money-transfers')
+        revalidatePath('/chimi-transfers')
         return { success: true }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error updating status'
@@ -255,7 +255,7 @@ export async function deleteTransfer(id: string) {
         const { error } = await supabase.from('money_transfers').delete().eq('id', id)
         if (error) throw error
 
-        revalidatePath('/money-transfers')
+        revalidatePath('/chimi-transfers')
         return { success: true }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error deleting transfer'
@@ -288,7 +288,7 @@ export async function deleteTransferDocument(transferId: string, docPath: string
              await supabase.from('money_transfers').update({ documents: docs as unknown }).eq('id', transferId)
         }
 
-        revalidatePath('/money-transfers')
+        revalidatePath('/chimi-transfers')
         return { success: true }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error deleting document'
@@ -339,4 +339,81 @@ export async function getClientsForDropdown() {
         .eq('role', 'client')
         .order('first_name', { ascending: true })
     return data || []
+}
+
+/**
+ * Public Track Transfer by Code
+ */
+export async function getTransferByCode(code: string) {
+    const supabase = supabaseAdmin
+    
+    // Clean code
+    const cleanCode = code.trim().toUpperCase()
+
+    const { data, error } = await supabase
+        .from('money_transfers')
+        .select(`
+            created_at,
+            amount_sent,
+            amount_received,
+            beneficiary_name,
+            beneficiary_bank,
+            beneficiary_account,
+            transfer_code,
+            status,
+            profiles:client_id (
+                first_name,
+                last_name
+            )
+        `)
+        .ilike('transfer_code', cleanCode) // Case insensitive match
+        .single()
+    
+    if (error || !data) {
+        return { error: 'Giro no encontrado' }
+    }
+
+    // Return limited data for privacy
+    return {
+        success: true,
+        data: {
+            created_at: data.created_at,
+            amount_sent: data.amount_sent,
+            amount_received: data.amount_received,
+            beneficiary_name: maskName(data.beneficiary_name),
+            beneficiary_bank: data.beneficiary_bank,
+            beneficiary_account: data.beneficiary_account ? maskAccount(data.beneficiary_account) : null,
+            sender_name: maskName(getSenderName(data.profiles)),
+            code: data.transfer_code,
+            status: data.status
+        }
+    }
+}
+
+function maskName(name: string) {
+    if (!name) return '***'
+    const parts = name.split(' ')
+    return parts.map((part, index) => {
+        if (index === 0) return part // Show first name
+        return part.charAt(0) + '***' // Mask others
+    }).join(' ')
+}
+
+function maskAccount(account: string) {
+    if (!account) return '***'
+    if (account.length <= 4) return '****'
+    return '****' + account.slice(-4)
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getSenderName(profiles: any) {
+    if (!profiles) return '***'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = profiles as any
+    if (Array.isArray(p)) {
+        const profile = p[0]
+        return profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : '***'
+    } else {
+        return `${p.first_name || ''} ${p.last_name || ''}`.trim() || '***'
+    }
 }

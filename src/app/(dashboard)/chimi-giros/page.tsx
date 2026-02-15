@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { 
     Search, Plus, FileSpreadsheet, Pencil, Trash2, 
-    ChevronLeft, ChevronRight, FileText, FolderOpen, Download 
+    ChevronLeft, ChevronRight, FileText, FolderOpen, Download, Link as LinkIcon 
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
@@ -297,8 +297,14 @@ export default function MoneyTransfersPage() {
 
     const handleDelete = async (id: string) => {
         if (!confirm("¿Eliminar este giro? Se borrarán los archivos adjuntos.")) return
+        if (!confirm("¿Eliminar este giro? Se borrarán los archivos adjuntos.")) return
         const result = await deleteTransfer(id)
         if (!result.error) loadData()
+    }
+
+    const openTrackingLink = (code: string) => {
+        const url = `${window.location.origin}/giros?code=${code}`
+        window.open(url, '_blank')
     }
 
     // Filter Logic
@@ -515,10 +521,10 @@ export default function MoneyTransfersPage() {
                                             onChange={handleInputChange}
                                             className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-chimiteal"
                                         >
-                                            <option value="pending">Pendiente (Recibido)</option>
-                                            <option value="processing">En Proceso (Enviando)</option>
-                                            <option value="available">Disponible (Para Cobro)</option>
-                                            <option value="completed">Completado (Entregado)</option>
+                                            <option value="pending">Pendiente</option>
+                                            <option value="processing">En Proceso</option>
+                                            <option value="available">Para Cobro</option>
+                                            <option value="completed">Entregado</option>
                                             <option value="cancelled">Cancelado</option>
                                         </select>
                                     </div>
@@ -698,8 +704,8 @@ export default function MoneyTransfersPage() {
                             <option value="all">Todos</option>
                             <option value="pending">Pendiente</option>
                             <option value="processing">En Proceso</option>
-                            <option value="available">Disponible</option>
-                            <option value="completed">Completado</option>
+                            <option value="available">Para Cobro</option>
+                            <option value="completed">Entregado</option>
                             <option value="cancelled">Cancelado</option>
                         </select>
 
@@ -774,7 +780,22 @@ export default function MoneyTransfersPage() {
                                              <td className="px-6 py-4 text-xs text-slate-500">
                                                 {new Date(transfer.created_at).toLocaleDateString('es-PE')}
                                             </td>
-                                            <td className="px-6 py-4 font-mono text-slate-600">{transfer.transfer_code || '-'}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono text-slate-600">{transfer.transfer_code || '-'}</span>
+                                                    {transfer.transfer_code && (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-6 w-6 p-0 text-slate-400 hover:text-chimipink" 
+                                                            onClick={() => openTrackingLink(transfer.transfer_code)}
+                                                            title="Abrir enlace de seguimiento"
+                                                        >
+                                                            <LinkIcon className="h-3 w-3" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4">
                                                 <div className="font-medium text-slate-900">{transfer.profiles?.first_name} {transfer.profiles?.last_name}</div>
                                                 <div className="text-xs text-slate-500">{transfer.profiles?.email}</div>
@@ -823,10 +844,10 @@ export default function MoneyTransfersPage() {
                                                           'bg-amber-100 text-amber-700'}
                                                     `}
                                                 >
-                                                    <option value="pending">Pendiente (Recibido)</option>
-                                                    <option value="processing">En Proceso (Enviando)</option>
-                                                    <option value="available">Disponible (Para Cobro)</option>
-                                                    <option value="completed">Completado (Entregado)</option>
+                                                    <option value="pending">Pendiente</option>
+                                                    <option value="processing">En Proceso</option>
+                                                    <option value="available">Para Cobro</option>
+                                                    <option value="completed">Entregado</option>
                                                     <option value="cancelled">Cancelado</option>
                                                 </select>
                                             </td>

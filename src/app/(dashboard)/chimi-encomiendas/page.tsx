@@ -24,7 +24,8 @@ import {
     ChevronLeft, 
     ChevronRight,
     Package,
-    MapPin
+    MapPin,
+    Link as LinkIcon
 } from 'lucide-react'
 import { getParcels, createParcel, updateParcel, deleteParcel, updateParcelStatus, deleteParcelDocument, getParcelDocumentUrl } from '@/app/actions/manage-parcels'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
@@ -155,21 +156,6 @@ export default function ParcelsPage() {
         loadData()
     }, [loadData])
 
-    // Auto-Calculate Balance Effect
-    useEffect(() => {
-        const cost = parseFloat(formData.shipping_cost) || 0
-        const onAccount = parseFloat(formData.on_account) || 0
-        
-        const balance = (cost - onAccount).toFixed(2)
-
-        setFormData(prev => {
-            if (prev.balance !== balance) {
-                return { ...prev, balance }
-            }
-            return prev
-        })
-    }, [formData.shipping_cost, formData.on_account])
-
     // Handlers
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target
@@ -179,7 +165,19 @@ export default function ParcelsPage() {
              if (!/^\d*\.?\d*$/.test(value)) return
         }
 
-        setFormData(prev => ({ ...prev, [name]: value }))
+        setFormData(prev => {
+            const newData = { ...prev, [name]: value }
+            
+            // Auto-calculate balance if cost or on_account changes
+            if (name === 'shipping_cost' || name === 'on_account') {
+                const cost = parseFloat(newData.shipping_cost) || 0
+                const onAccount = parseFloat(newData.on_account) || 0
+                const balance = (cost - onAccount).toFixed(2)
+                newData.balance = balance
+            }
+            
+            return newData
+        })
     }
 
     const handleNumDocsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -198,10 +196,13 @@ export default function ParcelsPage() {
         })
     }
 
-    const handleDocInputChange = (index: number, field: 'title' | 'file', value: any) => {
+    const handleDocInputChange = (index: number, field: 'title' | 'file', value: string | File | null) => {
         const newInputs = [...documentInputs]
-        if (field === 'title') newInputs[index].title = value
-        else newInputs[index].file = value
+        if (field === 'title') {
+            newInputs[index].title = value as string
+        } else {
+            newInputs[index].file = value as File | null
+        }
         setDocumentInputs(newInputs)
     }
 
@@ -319,6 +320,11 @@ export default function ParcelsPage() {
         }
     }
 
+    const openTrackingLink = (code: string) => {
+        const url = `${window.location.origin}/encomienda?code=${code}`
+        window.open(url, '_blank')
+    }
+
     // Filter Logic
     const filteredParcels = useMemo(() => {
         return parcels.filter(p => {
@@ -369,6 +375,7 @@ export default function ParcelsPage() {
         <div className="space-y-6">
             
             {/* Header Area */}
+
             <div className="flex items-center justify-center">
                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
@@ -729,7 +736,7 @@ export default function ParcelsPage() {
                         <select 
                             className="h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chimiteal cursor-pointer"
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value as any)}
+                            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'warehouse' | 'transit' | 'delivered' | 'cancelled')}
                         >
                             <option value="all">Todos</option>
                             <option value="pending">Pendiente</option>
@@ -808,7 +815,22 @@ export default function ParcelsPage() {
                                              <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
                                                 {new Date(parcel.created_at).toLocaleDateString('es-PE')}
                                             </td>
-                                            <td className="px-6 py-4 font-mono text-slate-600 font-bold whitespace-nowrap">{parcel.tracking_code || '-'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono text-slate-600 font-bold">{parcel.tracking_code || '-'}</span>
+                                                    {parcel.tracking_code && (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-6 w-6 p-0 text-slate-400 hover:text-chimipink" 
+                                                            onClick={() => openTrackingLink(parcel.tracking_code)}
+                                                            title="Abrir enlace de seguimiento"
+                                                        >
+                                                            <LinkIcon className="h-3 w-3" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="font-medium text-slate-900 truncate max-w-[150px]" title={`${parcel.profiles?.first_name} ${parcel.profiles?.last_name}`}>
                                                     {parcel.profiles?.first_name} {parcel.profiles?.last_name}

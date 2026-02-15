@@ -48,7 +48,7 @@ export async function updateSession(request: NextRequest) {
     '/agents',
     '/clients',
     '/flights',
-    '/money-transfers',
+    '/chimi-transfers',
     '/parcels'
   ]
 

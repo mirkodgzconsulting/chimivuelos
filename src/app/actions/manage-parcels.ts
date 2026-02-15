@@ -116,7 +116,7 @@ export async function updateParcel(formData: FormData) {
         .eq('id', id)
         .single()
         
-    let currentDocs = existing?.documents || []
+    const currentDocs = existing?.documents || []
 
     // 1. Core Data
     // Sender ID is locked in UI but we might receive it anyway, usually we don't update it
@@ -213,7 +213,7 @@ export async function deleteParcelDocument(id: string, docPath: string) {
         
     if (!existing) return { error: 'Parcel not found' }
 
-    const newDocs = existing.documents.filter((d: any) => d.path !== docPath)
+    const newDocs = existing.documents.filter((d: {path: string}) => d.path !== docPath)
     
     // We update the array in DB. File remains in bucket (soft delete) or implement bucket delete logic.
 
@@ -242,4 +242,74 @@ export async function updateParcelStatus(id: string, status: string) {
 
 export async function getParcelDocumentUrl(path: string, storage: StorageType = 'r2') {
     return await getFileUrl(path, storage)
+}
+
+/**
+ * Public Track Parcel by Code
+ */
+export async function getParcelByCode(code: string) {
+    const supabase = supabaseAdmin
+    
+    // Clean code
+    const cleanCode = code.trim().toUpperCase()
+
+    const { data, error } = await supabase
+        .from('parcels')
+        .select(`
+            created_at,
+            package_description,
+            package_weight,
+            package_type,
+            recipient_name,
+            recipient_address,
+            tracking_code,
+            status,
+            profiles:sender_id (
+                first_name,
+                last_name
+            )
+        `)
+        .ilike('tracking_code', cleanCode) // Case insensitive match
+        .single()
+    
+    if (error || !data) {
+        return { error: 'Encomienda no encontrada' }
+    }
+
+    // Return limited data for privacy
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = data.profiles as any
+    const senderName = p ? `${p.first_name || ''} ${p.last_name || ''}`.trim() : '***'
+
+    return {
+        success: true,
+        data: {
+            created_at: data.created_at,
+            description: data.package_description,
+            weight: data.package_weight,
+            type: data.package_type,
+            recipient_name: maskName(data.recipient_name),
+            recipient_address: maskAddress(data.recipient_address), // Mask address for privacy
+            sender_name: maskName(senderName),
+            code: data.tracking_code,
+            status: data.status
+        }
+    }
+}
+
+function maskName(name: string) {
+    if (!name) return '***'
+    const parts = name.split(' ')
+    return parts.map((part, index) => {
+        if (index === 0) return part // Show first name
+        return part.charAt(0) + '***' // Mask others
+    }).join(' ')
+}
+
+function maskAddress(address: string) {
+    if (!address) return '***'
+    // Show only the last part (city/country) or first few chars
+    // Simple strategy: Show first 5 chars then ***
+    if (address.length <= 5) return address
+    return address.substring(0, 5) + '***'
 }

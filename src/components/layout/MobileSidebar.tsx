@@ -105,9 +105,9 @@ export function MobileSidebar() {
             <div className="my-4 border-t border-slate-100 mx-2" />
             
             <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Operaciones</div>
-            <SidebarItem icon={Plane} label="Vuelos" href="/flights" isActive={pathname.startsWith('/flights')} onClick={() => setIsOpen(false)} />
-            <SidebarItem icon={Banknote} label="Giros" href="/money-transfers" isActive={pathname.startsWith('/money-transfers')} onClick={() => setIsOpen(false)} />
-            <SidebarItem icon={Package} label="Encomiendas" href="/parcels" isActive={pathname.startsWith('/parcels')} onClick={() => setIsOpen(false)} />
+            <SidebarItem icon={Plane} label="Vuelos" href="/chimi-vuelos" isActive={pathname.startsWith('/chimi-vuelos')} onClick={() => setIsOpen(false)} />
+            <SidebarItem icon={Banknote} label="Giros" href="/chimi-giros" isActive={pathname.startsWith('/chimi-giros')} onClick={() => setIsOpen(false)} />
+            <SidebarItem icon={Package} label="Encomiendas" href="/chimi-encomiendas" isActive={pathname.startsWith('/chimi-encomiendas')} onClick={() => setIsOpen(false)} />
 
             <div className="my-4 border-t border-slate-100 mx-2" />
 
