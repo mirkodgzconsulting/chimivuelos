@@ -1,7 +1,7 @@
 
 "use client";
 import * as React from 'react';
-import { Search, Bell, LogOut, ChevronDown, User, Settings } from 'lucide-react';
+import { Search, LogOut, ChevronDown, User } from 'lucide-react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -51,10 +51,11 @@ export function Header({ user, role }: HeaderProps) {
       {/* Right Actions */}
       <div className="flex items-center gap-4">
         {/* Notifications */}
-        <button className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-colors">
+        {/* Notifications - Disabled for now */}
+        {/* <button className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-colors">
           <Bell className="h-5 w-5 text-slate-600" />
           <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-chimipink ring-2 ring-white animate-pulse" />
-        </button>
+        </button> */}
 
         {/* Profile Dropdown */}
         <div className="relative ml-2 border-l border-slate-200 pl-4">
@@ -98,10 +99,10 @@ export function Header({ user, role }: HeaderProps) {
                                 <User className="w-4 h-4 mr-2 text-slate-500" />
                                 Mi Perfil
                             </button>
-                            <button className="flex items-center w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-md transition-colors">
+                            {/* <button className="flex items-center w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-md transition-colors">
                                 <Settings className="w-4 h-4 mr-2 text-slate-500" />
                                 Configuración
-                            </button>
+                            </button> */}
                         </div>
                         
                         <div className="h-px bg-slate-100 my-1"/>

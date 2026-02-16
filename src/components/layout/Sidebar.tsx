@@ -7,7 +7,6 @@ import {
   Banknote, 
   Package, 
   Users, 
-  Settings, 
   LogOut,
   UserCog
 } from 'lucide-react';
@@ -96,8 +95,8 @@ export function Sidebar({ role }: SidebarProps) {
         
                 <div className="my-4 border-t border-slate-100 mx-2" />
         
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Sistema</div>
-                <SidebarItem icon={Settings} label="Configuración" href="/settings" isActive={pathname.startsWith('/settings')} />
+                {/* <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Sistema</div> */}
+                {/* <SidebarItem icon={Settings} label="Configuración" href="/settings" isActive={pathname.startsWith('/settings')} /> */}
             </>
         )}
       </div>
