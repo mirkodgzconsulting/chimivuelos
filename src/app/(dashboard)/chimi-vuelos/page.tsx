@@ -250,6 +250,8 @@ export default function FlightsPage() {
         }
     }
 
+    const [isSubmitting, setIsSubmitting] = useState(false)
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         
@@ -258,33 +260,42 @@ export default function FlightsPage() {
             return
         }
 
-        const data = new FormData()
-        if (selectedFlightId) data.append('id', selectedFlightId)
-        
-        // Append main fields
-        Object.entries(formData).forEach(([key, val]) => {
-            data.append(key, val)
-        })
+        setIsSubmitting(true)
 
-        // Append Documents
-        let uploadIndex = 0
-        documentInputs.forEach((doc) => {
-             if (doc.file) {
-                 data.append(`document_title_${uploadIndex}`, doc.title)
-                 data.append(`document_file_${uploadIndex}`, doc.file)
-                 uploadIndex++
-             }
-        })
+        try {
+            const data = new FormData()
+            if (selectedFlightId) data.append('id', selectedFlightId)
+            
+            // Append main fields
+            Object.entries(formData).forEach(([key, val]) => {
+                data.append(key, val)
+            })
 
-        if (selectedFlightId) {
-             await updateFlight(data)
-        } else {
-             await createFlight(data)
+            // Append Documents
+            let uploadIndex = 0
+            documentInputs.forEach((doc) => {
+                 if (doc.file) {
+                     data.append(`document_title_${uploadIndex}`, doc.title)
+                     data.append(`document_file_${uploadIndex}`, doc.file)
+                     uploadIndex++
+                 }
+            })
+
+            if (selectedFlightId) {
+                 await updateFlight(data)
+            } else {
+                 await createFlight(data)
+            }
+
+            setIsDialogOpen(false)
+            resetForm()
+            loadData()
+        } catch (error) {
+            console.error(error)
+            alert('Error al guardar el vuelo')
+        } finally {
+            setIsSubmitting(false)
         }
-
-        setIsDialogOpen(false)
-        resetForm()
-        loadData()
     }
 
     const handleExportExcel = () => {
@@ -522,6 +533,11 @@ export default function FlightsPage() {
                                 )}
 
                                 {documentInputs.map((input, idx) => {
+                                    // Check if this document type is already uploaded
+                                    const isAlreadyUploaded = existingDocs.some(doc => (doc.title || doc.name) === input.title)
+                                    // If uploaded and not "Otros", hide the input
+                                    if (isAlreadyUploaded && input.title !== "Otros") return null
+
                                     return (
                                     <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2 p-3 bg-slate-50 rounded border border-slate-200 items-center">
                                         <div>
@@ -556,8 +572,8 @@ export default function FlightsPage() {
                             </div>
 
                             <DialogFooter>
-                                <Button type="submit" className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 w-full sm:w-auto font-bold shadow-md">
-                                    {selectedFlightId ? 'Actualizar Vuelo' : 'Guardar Vuelo'}
+                                <Button type="submit" disabled={isSubmitting} className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 w-full sm:w-auto font-bold shadow-md">
+                                    {isSubmitting ? 'Guardando...' : (selectedFlightId ? 'Actualizar Vuelo' : 'Guardar Vuelo')}
                                 </Button>
                             </DialogFooter>
                         </form>

@@ -33,13 +33,13 @@ const SidebarItem = ({ icon: Icon, label, href, isActive, onClick }: SidebarItem
     href={href}
     onClick={onClick}
     className={cn(
-      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group",
+      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group",
       isActive 
-        ? "bg-chimipink text-white shadow-md shadow-pink-200" 
-        : "text-slate-600 hover:bg-slate-50 hover:text-chimipink"
+        ? "bg-chimipink text-white shadow-md shadow-pink-500/20 font-bold" 
+        : "text-slate-600 font-medium hover:bg-white/40 hover:text-slate-900"
     )}
   >
-    <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-white" : "text-slate-400 group-hover:text-chimipink")} />
+    <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-white" : "text-slate-500 group-hover:text-slate-800")} />
     <span>{label}</span>
   </Link>
 );
@@ -76,12 +76,12 @@ export function MobileSidebar({ role }: MobileSidebarProps) {
 
       {/* Slide-out Panel */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col",
+        "fixed inset-y-0 left-0 z-50 w-64 bg-sidebar shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         
         {/* Header */}
-        <div className="flex h-16 items-center justify-between border-b border-slate-100 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
             <div className="flex items-center">
                 <Link href={isClientView ? "/portal" : "/dashboard"} onClick={() => setIsOpen(false)}>
                     <Image 
@@ -122,23 +122,20 @@ export function MobileSidebar({ role }: MobileSidebarProps) {
                     <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} onClick={() => setIsOpen(false)} />
                     <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} onClick={() => setIsOpen(false)} />
                     
-                    <div className="my-4 border-t border-slate-100 mx-2" />
+                    <div className="my-4 border-t border-sidebar-border mx-2" />
                     
                     <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Operaciones</div>
                     <SidebarItem icon={Plane} label="Vuelos" href="/chimi-vuelos" isActive={pathname.startsWith('/chimi-vuelos')} onClick={() => setIsOpen(false)} />
                     <SidebarItem icon={Banknote} label="Giros" href="/chimi-giros" isActive={pathname.startsWith('/chimi-giros')} onClick={() => setIsOpen(false)} />
                     <SidebarItem icon={Package} label="Encomiendas" href="/chimi-encomiendas" isActive={pathname.startsWith('/chimi-encomiendas')} onClick={() => setIsOpen(false)} />
 
-                    <div className="my-4 border-t border-slate-100 mx-2" />
-
-                    {/* <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Sistema</div> */}
-                    {/* <SidebarItem icon={Settings} label="Configuración" href="/settings" isActive={pathname.startsWith('/settings')} onClick={() => setIsOpen(false)} /> */}
+                    <div className="my-4 border-t border-sidebar-border mx-2" />
                 </>
             )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-slate-100 p-4">
+        <div className="border-t border-sidebar-border p-4">
             <button 
             onClick={async () => {
                 await supabase.auth.signOut()

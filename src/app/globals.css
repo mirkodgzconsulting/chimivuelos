@@ -142,10 +142,41 @@ body {
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
-    @apply bg-background text-foreground;
   }
+}
+
+/* Custom Animations */
+@keyframes pulse-fast {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-pulse-fast {
+  animation: pulse-fast 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Sidebar Gradient Override - Global Theme Control */
+.bg-sidebar {
+  /* Stronger Brand Gradient: Visible Pink to Visible Cyan */
+  background: linear-gradient(180deg, #ffcce0 0%, #b0effd 100%);
+  border-right: 1px solid rgba(236, 72, 153, 0.3); 
+}
+
+.bg-header {
+  /* Horizontal Gradient for Header: Pink (Left) to Cyan (Right) */
+  background: linear-gradient(to right, #ffcce0, #b0effd);
+  border-bottom: 1px solid rgba(236, 72, 153, 0.3);
+}
+
+.bg-page {
+  /* Stronger Brand Gradient for Full Page Background */
+  background: linear-gradient(135deg, #ffd6e8 0%, #b8f2fe 100%) !important;
+  background-attachment: fixed;
 }

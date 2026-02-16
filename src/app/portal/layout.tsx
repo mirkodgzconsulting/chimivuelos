@@ -17,7 +17,7 @@ export default async function ClientLayout({
   const user = await getClientUser();
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+    <div className="min-h-screen bg-page font-sans text-slate-900">
       
       {/* Sidebar - Fixed Left (Shared Component) */}
       <Sidebar role="client" />
@@ -31,12 +31,12 @@ export default async function ClientLayout({
         </div>
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 p-4 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 md:p-8 space-y-6 w-full">
           {children}
         </main>
 
         {/* Footer */}
-        <footer className="py-6 px-8 border-t border-slate-200 text-center text-sm text-slate-500 bg-slate-50">
+        <footer className="py-6 px-8 border-t border-slate-200/60 text-center text-sm text-slate-500 bg-transparent">
           © {new Date().getFullYear()} Chimivuelos S.A.C. - Portal de Clientes
         </footer>
       </div>

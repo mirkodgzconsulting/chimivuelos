@@ -12,7 +12,7 @@ export default async function DashboardLayout({
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+    <div className="min-h-screen bg-page font-sans text-slate-900">
       
       {/* Sidebar - Fixed Left */}
       <Sidebar role="admin" />
@@ -31,7 +31,7 @@ export default async function DashboardLayout({
         </main>
 
         {/* Footer */}
-        <footer className="py-6 px-8 border-t border-slate-200 dark:border-slate-800 text-center text-sm text-slate-500">
+        <footer className="py-6 px-8 border-t border-slate-200/60 dark:border-slate-800 text-center text-sm text-slate-500 bg-transparent">
           © {new Date().getFullYear()} Chimivuelos S.A.C. - Todos los derechos reservados.
         </footer>
       </div>

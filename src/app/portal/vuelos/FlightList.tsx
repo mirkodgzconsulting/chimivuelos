@@ -1,58 +1,45 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Plane, Calendar, FileText, Download, AlertCircle, ChevronDown, ArrowRight } from "lucide-react"
+import { Plane, Calendar, ArrowRight } from "lucide-react"
 import { TermsGuard } from '@/components/client/TermsGuard'
-import { getFlightDocumentUrl } from '@/app/actions/manage-flights'
-import { cn } from "@/lib/utils"
+import { useRouter } from 'next/navigation'
 
-export interface FlightDocument {
+interface FlightDocument {
     title: string
     path: string
     name: string
-    type: string
-    size: number
     storage: 'r2' | 'images'
 }
 
 export interface Flight {
     id: string
     airline: string
-    status: 'scheduled' | 'delayed' | 'cancelled' | 'landed' | 'finished'
+    status: 'scheduled' | 'delayed' | 'cancelled' | 'landed' | 'finished' | 'pending' | 'confirmed'
     pnr?: string
     travel_date: string
     itinerary?: string
     documents?: FlightDocument[]
     terms_accepted_at?: string
-    terms_ip?: string
 }
 
 export default function FlightList({ flights, termsContent, termsVersion }: { flights: Flight[], termsContent: string, termsVersion: string }) {
     const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null)
     const [showTerms, setShowTerms] = useState(false)
-    const [expandedFlightId, setExpandedFlightId] = useState<string | null>(null)
+    const router = useRouter()
 
-    const handleViewDocs = (flight: Flight) => {
+    const handleFlightClick = (flight: Flight) => {
         if (!flight.terms_accepted_at) {
             setSelectedFlight(flight)
             setShowTerms(true)
         } else {
-            setExpandedFlightId(flight.id === expandedFlightId ? null : flight.id)
+            router.push(`/portal/vuelos/${flight.id}`)
         }
     }
 
     const handleTermsSuccess = () => {
         if (selectedFlight) {
-            setExpandedFlightId(selectedFlight.id)
-        }
-    }
-
-    const handleDownload = async (path: string, storage: 'r2' | 'images') => {
-        const result = await getFlightDocumentUrl(path, storage)
-        if (result.url) {
-            window.open(result.url, '_blank')
+            router.push(`/portal/vuelos/${selectedFlight.id}`)
         }
     }
 
@@ -71,112 +58,71 @@ export default function FlightList({ flights, termsContent, termsVersion }: { fl
     }
 
     return (
-        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-4">
             {flights.map((flight) => {
-                const isExpanded = expandedFlightId === flight.id
-                const isTermsAccepted = !!flight.terms_accepted_at
+                // Formatting Date: DD/MM/YY
+                const dateObj = new Date(flight.travel_date)
+                const dateStr = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                
+                // Formatting Itinerary
+                // If usage of flight.itinerary is generic list, we try to use it. 
+                // Fallback: Airline + PNR or Origin -> Dest if available (but flight structure is simple)
+                // Assuming itinerary field contains the route like "Lima - Madrid - Milan" as per user request.
+                const routeText = flight.itinerary && flight.itinerary.length < 50 ? flight.itinerary : `${flight.airline} (${flight.pnr || 'Vuelo'})`
 
                 return (
-                    <Card key={flight.id} className="overflow-hidden shadow-sm hover:shadow-md transition-all border-slate-200">
-                        <CardContent className="p-4 sm:p-6">
+                    <div 
+                        key={flight.id} 
+                        onClick={() => handleFlightClick(flight)}
+                        className="cursor-pointer group relative bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden"
+                    >
+                        {/* Left Color Bar */}
+                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-chimipink to-chimicyan"></div>
+
+                        <div className="p-4 pl-6 flex flex-col md:flex-row items-center justify-between gap-4">
                             
-                            {/* Header: Icon, Title, Alert */}
-                            <div className="flex justify-between items-start mb-4 sm:mb-6 relative">
-                                <div className="flex items-start gap-3 sm:gap-4">
-                                    <div className="bg-slate-50 p-2.5 sm:p-3 rounded-xl text-slate-700 shrink-0">
-                                        <Plane size={24} />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h3 className="font-bold text-slate-900 text-base sm:text-lg truncate pr-2">{flight.airline || 'Vuelo'}</h3>
-                                        {flight.pnr && (
-                                            <span className="text-xs sm:text-sm font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md mt-1 inline-block">
-                                                {flight.pnr}
-                                            </span>
-                                        )}
-                                    </div>
+                            {/* Flight Info */}
+                            <div className="flex-1 flex flex-col md:flex-row md:items-center gap-x-8 gap-y-2">
+                                {/* Airline */}
+                                <div className="flex items-center gap-3 min-w-fit">
+                                    <span className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-bold uppercase tracking-wider">
+                                        {flight.airline}
+                                    </span>
+                                </div>
+
+                                {/* Route */}
+                                <div className="flex items-center gap-2 text-slate-800 text-lg font-bold">
+                                    <Plane className="text-chimipink fill-current opacity-20" size={20} />
+                                    <span>{routeText}</span>
                                 </div>
                                 
-                                {!isTermsAccepted && (
-                                    <div className="text-chimipink animate-pulse shrink-0" title="Acción Requerida">
-                                        <AlertCircle size={22} />
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Content: Date */}
-                            <div className="flex items-center gap-3 text-slate-500 mb-4 sm:mb-6">
-                                <Calendar size={18} />
-                                <span className="font-medium text-sm sm:text-base">{new Date(flight.travel_date).toLocaleDateString()}</span>
-                            </div>
-
-                            {/* Footer: Action Button */}
-                            <Button 
-                                onClick={() => handleViewDocs(flight)}
-                                variant="ghost"
-                                className="w-full justify-between px-0 hover:bg-transparent hover:text-chimipink text-slate-800 font-bold group h-auto py-0"
-                            >
-                                {isTermsAccepted ? (
-                                    <>
-                                        <span className="text-base">{isExpanded ? 'Ocultar Documentos' : 'Ver Documentos'}</span>
-                                        <ChevronDown className={cn("h-5 w-5 transition-transform text-slate-400 group-hover:text-chimipink", isExpanded && "rotate-180")} />
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="text-base">Ver Detalles</span>
-                                        <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1 text-slate-400 group-hover:text-chimipink" />
-                                    </>
-                                )}
-                            </Button>
-
-                            {/* Expanded Content (Only after terms) */}
-                            {isExpanded && isTermsAccepted && (
-                                <div className="mt-6 pt-6 border-t border-slate-100 animate-in slide-in-from-top-2 space-y-4">
-                                    
-                                    {/* Flight Details Grid */}
-                                    <div className="grid grid-cols-1 gap-4 text-sm">
-                                        {flight.itinerary && (
-                                            <div className="space-y-1">
-                                                <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Itinerario</span>
-                                                <p className="text-slate-600 bg-slate-50 p-3 rounded-md border border-slate-100 font-medium whitespace-pre-wrap">
-                                                    {flight.itinerary}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Documents Section */}
-                                    <div>
-                                        <h4 className="font-bold text-xs text-slate-400 uppercase tracking-wider mb-3 mt-2">Documentos Disponibles</h4>
-                                        <div className="space-y-3">
-                                            {flight.documents && flight.documents.length > 0 ? (
-                                                flight.documents.map((doc, idx) => (
-                                                    <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center justify-between hover:border-chimiteal/30 transition-colors">
-                                                        <div className="flex items-center gap-3 overflow-hidden">
-                                                            <FileText size={18} className="text-slate-400 shrink-0" />
-                                                            <span className="text-sm font-semibold text-slate-700 truncate">{doc.title || doc.name}</span>
-                                                        </div>
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="ghost" 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                handleDownload(doc.path, doc.storage)
-                                                            }}
-                                                            className="h-8 w-8 p-0 text-slate-400 hover:text-chimiteal hover:bg-white"
-                                                        >
-                                                            <Download size={18} />
-                                                        </Button>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <p className="text-sm text-center text-slate-400 py-2 italic bg-slate-50 rounded-lg">No hay documentos adjuntos.</p>
-                                            )}
-                                        </div>
-                                    </div>
+                                {/* Date */}
+                                <div className="flex items-center gap-2 text-sm text-slate-500 min-w-fit">
+                                    <Calendar size={16} className="text-slate-400" />
+                                    <span className="capitalize">{new Date(flight.travel_date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                            </div>
+
+                            {/* Status & Action */}
+                            <div className="flex items-center gap-4 min-w-fit">
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${
+                                    flight.status === 'confirmed' || flight.status === 'scheduled' ? 'bg-green-100 text-green-700' :
+                                    flight.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                    'bg-yellow-100 text-yellow-700'
+                                }`}>
+                                   {flight.status === 'scheduled' ? 'Programado' : 
+                                    flight.status === 'confirmed' ? 'Confirmado' :
+                                    flight.status === 'cancelled' ? 'Cancelado' :
+                                    flight.status === 'pending' ? 'Pendiente' :
+                                    flight.status}
+                                </span>
+                                
+                                <div className="hidden md:flex items-center gap-1 text-chimipink text-sm font-bold group-hover:translate-x-1 transition-transform">
+                                    Ver Detalles <ArrowRight size={16} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 )
             })}
 

@@ -55,7 +55,7 @@ export default async function PortalPage() {
 
                 {/* Important Notice Box */}
                 <div 
-                    className="w-full text-white rounded-2xl shadow-lg border border-slate-800/50 relative overflow-hidden mb-8 transform md:rotate-1 hover:rotate-0 transition-transform duration-500 p-6 md:p-8"
+                    className="w-full text-white rounded-2xl shadow-lg border border-slate-800/50 relative overflow-hidden mb-8 p-6 md:p-8"
                     style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)' }}
                 >
                     <div className="absolute top-4 right-4">

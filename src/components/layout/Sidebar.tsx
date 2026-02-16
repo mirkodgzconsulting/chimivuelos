@@ -27,13 +27,13 @@ const SidebarItem = ({ icon: Icon, label, href, isActive }: SidebarItemProps) =>
   <Link 
     href={href}
     className={cn(
-      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group",
+      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group",
       isActive 
-        ? "bg-chimipink text-white shadow-md shadow-pink-200" 
-        : "text-slate-600 hover:bg-slate-50 hover:text-chimipink"
+        ? "bg-chimipink text-white shadow-md shadow-pink-500/20 font-bold" 
+        : "text-slate-600 font-medium hover:bg-white/40 hover:text-slate-900"
     )}
   >
-    <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-white" : "text-slate-400 group-hover:text-chimipink")} />
+    <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-white" : "text-slate-500 group-hover:text-slate-800")} />
     <span>{label}</span>
   </Link>
 );
@@ -51,9 +51,9 @@ export function Sidebar({ role }: SidebarProps) {
   const isClientView = role === 'client' || (role !== 'admin' && pathname.startsWith('/portal'));
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-48 border-r border-slate-200 bg-white hidden md:flex flex-col shadow-sm">
+    <aside className="fixed left-0 top-0 z-40 h-screen w-48 border-r border-sidebar-border bg-sidebar hidden md:flex flex-col shadow-sm">
       {/* Logo Section */}
-      <div className="flex h-16 items-center justify-center border-b border-slate-100 px-4">
+      <div className="flex h-16 items-center justify-center border-b border-sidebar-border px-4">
         <Link href={isClientView ? "/portal" : "/dashboard"} className="flex items-center justify-center w-full">
             <Image 
                src="/chimilogosidebar.svg" 
@@ -86,23 +86,20 @@ export function Sidebar({ role }: SidebarProps) {
                 <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} />
                 <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} />
                 
-                <div className="my-4 border-t border-slate-100 mx-2" />
+                <div className="my-4 border-t border-sidebar-border mx-2" />
                 
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Operaciones</div>
                 <SidebarItem icon={Plane} label="Vuelos" href="/chimi-vuelos" isActive={pathname.startsWith('/chimi-vuelos')} />
                  <SidebarItem icon={Banknote} label="Giros" href="/chimi-giros" isActive={pathname.startsWith('/chimi-giros')} />
                 <SidebarItem icon={Package} label="Encomiendas" href="/chimi-encomiendas" isActive={pathname.startsWith('/chimi-encomiendas')} />
         
-                <div className="my-4 border-t border-slate-100 mx-2" />
-        
-                {/* <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Sistema</div> */}
-                {/* <SidebarItem icon={Settings} label="Configuración" href="/settings" isActive={pathname.startsWith('/settings')} /> */}
+                <div className="my-4 border-t border-sidebar-border mx-2" />
             </>
         )}
       </div>
 
       {/* Footer / User Profile */}
-      <div className="border-t border-slate-100 p-4">
+      <div className="border-t border-sidebar-border p-4">
         <button 
           onClick={async () => {
             const supabase = createClient()
