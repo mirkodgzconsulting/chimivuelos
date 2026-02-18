@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plane, Calendar, ArrowRight } from "lucide-react"
+import { Plane, Calendar, ArrowRight, Banknote } from "lucide-react"
 import { TermsGuard } from '@/components/client/TermsGuard'
 import { useRouter } from 'next/navigation'
 
@@ -21,6 +21,11 @@ export interface Flight {
     itinerary?: string
     documents?: FlightDocument[]
     terms_accepted_at?: string
+    balance?: number
+}
+
+const formatCurrency = (amount: number | undefined) => {
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount || 0)
 }
 
 export default function FlightList({ flights, termsContent, termsVersion }: { flights: Flight[], termsContent: string, termsVersion: string }) {
@@ -61,10 +66,6 @@ export default function FlightList({ flights, termsContent, termsVersion }: { fl
     return (
         <div className="space-y-4">
             {flights.map((flight) => {
-                // Formatting Date: DD/MM/YY
-                const dateObj = new Date(flight.travel_date)
-                const dateStr = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' })
-                
                 // Formatting Itinerary
                 // If usage of flight.itinerary is generic list, we try to use it. 
                 // Fallback: Airline + PNR or Origin -> Dest if available (but flight structure is simple)
@@ -78,7 +79,7 @@ export default function FlightList({ flights, termsContent, termsVersion }: { fl
                         className="cursor-pointer group relative bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden"
                     >
                         {/* Left Color Bar */}
-                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-chimipink to-chimicyan"></div>
+                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-linear-to-b from-chimipink to-chimicyan"></div>
 
                         <div className="p-4 pl-6 flex flex-col md:flex-row items-center justify-between gap-4">
                             
@@ -106,6 +107,15 @@ export default function FlightList({ flights, termsContent, termsVersion }: { fl
 
                             {/* Status & Action */}
                             <div className="flex items-center gap-4 min-w-fit">
+                                {flight.balance && flight.balance > 0 ? (
+                                    <div className="flex items-center gap-1.5 px-3 py-1 bg-red-600 text-white rounded-full shadow-sm shadow-red-200 animate-pulse" title="Saldo pendiente de pago">
+                                        <Banknote size={14} />
+                                        <span className="text-xs font-bold uppercase tracking-wider">
+                                            Tienes una deuda de: {formatCurrency(flight.balance)}
+                                        </span>
+                                    </div>
+                                ) : null}
+
                                 <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${
                                     flight.status === 'confirmed' || flight.status === 'scheduled' ? 'bg-green-100 text-green-700' :
                                     flight.status === 'cancelled' ? 'bg-red-100 text-red-700' :

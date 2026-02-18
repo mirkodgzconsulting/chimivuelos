@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Download, Eye, FileText, Loader2 } from "lucide-react"
@@ -64,7 +65,7 @@ export function FlightDocumentRow({ doc }: { doc: FlightDocument }) {
                     <div className="bg-pink-50 text-chimipink p-2 rounded shrink-0 group-hover:bg-chimipink group-hover:text-white transition-colors">
                         <FileText size={16} />
                     </div>
-                    <span className="text-sm font-medium text-slate-700 leading-tight group-hover:text-chimipink transition-colors whitespace-normal break-words">
+                    <span className="text-sm font-medium text-slate-700 leading-tight group-hover:text-chimipink transition-colors whitespace-normal break-all">
                         {doc.title || doc.name}
                     </span>
                 </div>
@@ -89,11 +90,15 @@ export function FlightDocumentRow({ doc }: { doc: FlightDocument }) {
                             ) : url ? (
                                 <>
                                     {isImage && (
-                                        <img 
-                                            src={url} 
-                                            alt={doc.name} 
-                                            className="max-w-full max-h-full object-contain shadow-md rounded" 
-                                        />
+                                        <div className="relative w-full h-full">
+                                            <Image 
+                                                src={url} 
+                                                alt={doc.name} 
+                                                fill
+                                                className="object-contain shadow-md rounded"
+                                                unoptimized
+                                            />
+                                        </div>
                                     )}
                                     {isPdf && (
                                         <iframe 
