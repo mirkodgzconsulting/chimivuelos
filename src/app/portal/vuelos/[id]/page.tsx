@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { Plane, Calendar, FileText, Banknote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { ClientDownloadButton } from '../ClientDownloadButton'
+import { FlightDocumentRow } from '../ClientDownloadButton'
 import { FlightRecommendations } from '../components/FlightRecommendations'
 import { FlightFAQ } from '../components/FlightFAQ'
 
@@ -18,9 +18,48 @@ interface FlightDocument {
     storage: 'r2' | 'images'
 }
 
+const DETAILS_LABELS: Record<string, string> = {
+    ticket_one_way: "Pasaje solo ida",
+    ticket_round_trip: "Pasaje ida y vuelta",
+    insurance_1m: "Seguro x 1 mes",
+    insurance_2m: "Seguro x 2 meses",
+    insurance_3m: "Seguro x 3 meses",
+    doc_invitation_letter: "Redacción carta invitación",
+    doc_agency_managed: "Carta inv. gestionada por agencia",
+    svc_airport_assistance: "Asistencia aeroportuaria",
+    svc_return_activation: "Activación pasaje retorno",
+    hotel_3d_2n: "Hotel 3 días / 2 noches",
+    hotel_2d_1n: "Hotel 2 días / 1 noche",
+    baggage_1pc_23kg: "1 pc 23kg",
+    baggage_2pc_23kg: "2 pc 23kg",
+    baggage_1pc_10kg: "1 pc 10kg",
+    baggage_backpack: "1 Mochila",
+}
+
 export default async function FlightDetailPage({ params }: { params: { id: string } }) {
     const { id } = await params
     const flight = await getFlightById(id)
+
+    let flightDetails: Record<string, any> = {}
+    try {
+        if (typeof flight?.details === 'string') {
+            flightDetails = JSON.parse(flight.details)
+        } else if (flight?.details) {
+            flightDetails = flight.details
+        }
+    } catch (e) {
+        console.error("Error parsing flight details", e)
+    }
+
+    // Filter relevant details to show
+    const activeDetails = Object.entries(DETAILS_LABELS).filter(([key]) => {
+        return flightDetails[key] === true
+    })
+    
+    // Also check for special note
+    if (flightDetails.special_note) {
+        activeDetails.push(['special_note', `Nota: ${flightDetails.special_note}`])
+    }
 
     if (!flight) {
         redirect('/portal/vuelos')
@@ -101,6 +140,47 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
                                         </div>
                                     </div>
 
+                                    {/* Flight Details (Tu Vuelo Incluye) */}
+                                    {activeDetails.length > 0 && (
+                                        <div>
+                                            <h3 className="text-xs font-bold text-chimipink uppercase tracking-wider mb-2 flex items-center gap-2">
+                                                <Plane size={14} /> Tu Vuelo Incluye
+                                            </h3>
+                                            <div className="bg-white/40 p-4 rounded-lg border border-white/40">
+                                                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    {activeDetails.map(([key, label]) => (
+                                                        <li key={key} className="flex items-center gap-2 text-sm text-slate-700">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-chimiteal shrink-0" />
+                                                            {label}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    )}
+
+
+                                </div>
+
+                                {/* Documents Group */}
+                                <div className="space-y-8">
+                                    {/* Documents */}
+                                    <div>
+                                        <h3 className="text-xs font-bold text-chimipink uppercase tracking-wider mb-4 flex items-center gap-2">
+                                            <FileText size={14} /> Documentos
+                                        </h3>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {flight.documents && flight.documents.length > 0 ? (
+                                                flight.documents.map((doc: FlightDocument, idx: number) => (
+                                                    <FlightDocumentRow key={idx} doc={doc} />
+                                                ))
+                                            ) : (
+                                                <p className="text-sm text-slate-400 italic">No hay documentos cargados.</p>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     {/* Integrated Payment Info (Moved Here) */}
                                     <div>
                                         <h3 className="text-xs font-bold text-chimipink uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -126,36 +206,6 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
                                                     <span className="font-bold text-lg">{formatCurrency(flight.balance)}</span>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Documents Group */}
-                                <div className="space-y-8">
-                                    {/* Documents */}
-                                    <div>
-                                        <h3 className="text-xs font-bold text-chimipink uppercase tracking-wider mb-4 flex items-center gap-2">
-                                            <FileText size={14} /> Documentos
-                                        </h3>
-                                        
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            {flight.documents && flight.documents.length > 0 ? (
-                                                flight.documents.map((doc: FlightDocument, idx: number) => (
-                                                    <div key={idx} className="flex items-center justify-between p-3 bg-white/60 border border-white/50 rounded-lg hover:bg-white/80 hover:border-chimipink/30 transition-colors group">
-                                                        <div className="flex items-center gap-3 flex-1 mr-2">
-                                                            <div className="bg-pink-50 text-chimipink p-2 rounded shrink-0">
-                                                                <FileText size={16} />
-                                                            </div>
-                                                            <span className="text-sm font-medium text-slate-700 leading-tight">
-                                                                {doc.title || doc.name}
-                                                            </span>
-                                                        </div>
-                                                        <ClientDownloadButton doc={doc} />
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <p className="text-sm text-slate-400 italic">No hay documentos cargados.</p>
-                                            )}
                                         </div>
                                     </div>
                                 </div>

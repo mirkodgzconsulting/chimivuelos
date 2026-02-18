@@ -86,9 +86,14 @@ export async function getFileUrl(path: string, storage: StorageType): Promise<st
     } else {
         // R2 Presigned URL
         try {
+            const isViewable = path.toLowerCase().endsWith('.pdf') || 
+                               path.match(/\.(jpg|jpeg|png|webp|gif)$/i);
+
             const command = new GetObjectCommand({
                 Bucket: CLOUDFLARE_R2_BUCKET_NAME,
                 Key: path,
+                ResponseContentDisposition: isViewable ? 'inline' : undefined,
+                ResponseContentType: path.toLowerCase().endsWith('.pdf') ? 'application/pdf' : undefined,
             });
             // Link valid for 1 hour (3600 seconds)
             return await getSignedUrl(r2, command, { expiresIn: 3600 });

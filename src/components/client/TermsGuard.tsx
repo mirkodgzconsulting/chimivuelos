@@ -33,7 +33,6 @@ export function TermsGuard({
 }: TermsGuardProps) {
     const [accepted, setAccepted] = useState(false)
     const [loading, setLoading] = useState(false)
-    const router = useRouter()
 
     const handleAccept = async () => {
         if (!accepted) return
@@ -44,7 +43,6 @@ export function TermsGuard({
             if (result.success) {
                 onSuccess()
                 onOpenChange(false)
-                router.refresh() // Refresh server data so the lock is removed
             } else {
                 alert('Hubo un error al registrar su aceptación. Intente nuevamente.')
             }

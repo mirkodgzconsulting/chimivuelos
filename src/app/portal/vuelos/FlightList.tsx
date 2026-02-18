@@ -38,6 +38,7 @@ export default function FlightList({ flights, termsContent, termsVersion }: { fl
     }
 
     const handleTermsSuccess = () => {
+        router.refresh()
         if (selectedFlight) {
             router.push(`/portal/vuelos/${selectedFlight.id}`)
         }

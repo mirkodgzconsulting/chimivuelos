@@ -494,7 +494,7 @@ export default function ParcelsPage() {
                                         <h4 className="font-semibold text-slate-700 text-xs mb-2 uppercase">Costos</h4>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             <div className="grid gap-2">
-                                                <Label>Costo Envío (€)</Label>
+                                                <Label>Total a Pagar (€)</Label>
                                                 <Input name="shipping_cost" type="number" step="0.01" value={formData.shipping_cost} onChange={handleInputChange} required />
                                             </div>
                                              <div className="grid gap-2">

@@ -31,6 +31,21 @@ export async function createFlight(formData: FormData) {
         const on_account = parseFloat(formData.get('on_account') as string) || 0
         const balance = parseFloat(formData.get('balance') as string) || (cost - on_account)
         const status = formData.get('status') as string || 'pending'
+        
+        // New Fields
+        const return_date = formData.get('return_date') as string
+        const sold_price = parseFloat(formData.get('sold_price') as string) || 0
+        const fee_agv = parseFloat(formData.get('fee_agv') as string) || 0
+        const payment_method_it = formData.get('payment_method_it') as string
+        const payment_method_pe = formData.get('payment_method_pe') as string
+        
+        let details = {}
+        try {
+            const detailsStr = formData.get('details') as string
+            if (detailsStr) details = JSON.parse(detailsStr)
+        } catch (e) {
+            console.error('Error parsing details:', e)
+        }
 
         // Handle Documents
         // Since input fields are dynamic (title_0, file_0, title_1, file_1...), we loop
@@ -64,6 +79,13 @@ export async function createFlight(formData: FormData) {
             on_account,
             balance,
             status,
+
+            details,
+            return_date,
+            sold_price,
+            fee_agv,
+            payment_method_it,
+            payment_method_pe,
             documents: documents as unknown
         })
 
@@ -100,6 +122,21 @@ export async function updateFlight(formData: FormData) {
         const balance = parseFloat(formData.get('balance') as string) || (cost - on_account)
         const status = formData.get('status') as string
 
+        // New Fields
+        const return_date = formData.get('return_date') as string
+        const sold_price = parseFloat(formData.get('sold_price') as string) || 0
+        const fee_agv = parseFloat(formData.get('fee_agv') as string) || 0
+        const payment_method_it = formData.get('payment_method_it') as string
+        const payment_method_pe = formData.get('payment_method_pe') as string
+
+        let details = {}
+        try {
+            const detailsStr = formData.get('details') as string
+            if (detailsStr) details = JSON.parse(detailsStr)
+        } catch (e) {
+            console.error('Error parsing details:', e)
+        }
+
         // Build new documents array (Start with existing ones that weren't deleted)
         const currentDocuments: FlightDocument[] = (existingFlight.documents as unknown as FlightDocument[]) || []
 
@@ -131,6 +168,13 @@ export async function updateFlight(formData: FormData) {
             on_account,
             balance,
             status,
+
+            details,
+            return_date,
+            sold_price,
+            fee_agv,
+            payment_method_it,
+            payment_method_pe,
             documents: currentDocuments as unknown // Cast for Supabase JSONB
         }).eq('id', id)
 

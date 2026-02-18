@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,7 +29,14 @@ interface Flight {
     cost: number
     on_account: number
     balance: number
+
     status: 'pending' | 'finished'
+    return_date?: string
+    sold_price: number
+    fee_agv: number
+    payment_method_it?: string
+    payment_method_pe?: string
+    details?: FlightDetails
     documents: FlightDocument[]
     profiles: {
         first_name: string
@@ -47,6 +54,43 @@ interface ClientOption {
     phone: string
 }
 
+interface FlightDetails {
+    ticket_one_way: boolean
+    ticket_round_trip: boolean
+    insurance_1m: boolean
+    insurance_2m: boolean
+    insurance_3m: boolean
+    doc_invitation_letter: boolean
+    doc_agency_managed: boolean
+    svc_airport_assistance: boolean
+    svc_return_activation: boolean
+    hotel_3d_2n: boolean
+    hotel_2d_1n: boolean
+    baggage_1pc_23kg: boolean
+    baggage_2pc_23kg: boolean
+    baggage_1pc_10kg: boolean
+    baggage_backpack: boolean
+    special_note: string
+}
+
+const DETAILS_LABELS: Record<string, string> = {
+    ticket_one_way: "Pasaje solo ida",
+    ticket_round_trip: "Pasaje ida y vuelta",
+    insurance_1m: "Seguro x 1 mes",
+    insurance_2m: "Seguro x 2 meses",
+    insurance_3m: "Seguro x 3 meses",
+    doc_invitation_letter: "Redacción carta invitación",
+    doc_agency_managed: "Carta inv. gestionada por agencia",
+    svc_airport_assistance: "Asistencia aeroportuaria",
+    svc_return_activation: "Activación pasaje retorno",
+    hotel_3d_2n: "Hotel 3 días / 2 noches",
+    hotel_2d_1n: "Hotel 2 días / 1 noche",
+    baggage_1pc_23kg: "1 pc 23kg",
+    baggage_2pc_23kg: "2 pc 23kg",
+    baggage_1pc_10kg: "1 pc 10kg",
+    baggage_backpack: "1 Mochila",
+}
+
 const DOCUMENT_TYPES = [
     "Pasaje de Ida",
     "Pasaje de Retorno",
@@ -58,6 +102,44 @@ const DOCUMENT_TYPES = [
     "Seguro de Viaje",
     "Otros"
 ]
+
+const ITINERARY_OPTIONS = [
+    "Lima - Milano - Lima",
+    "Milano - Lima - Milano",
+    "Roma - Lima - Roma",
+    "Lima - Roma - Lima",
+    "Madrid - Lima - Madrid",
+    "Lima - Madrid - Lima",
+    "Lima - Buenos Aires - Lima",
+    "Buenos Aires - Lima - Buenos Aires",
+    "Lima - Santiago - Lima",
+    "Santiago - Lima - Santiago",
+    "Lima - Miami - Lima",
+    "Miami - Lima - Miami",
+    "Lima - New York - Lima",
+    "New York - Lima - New York",
+    "Lima - Cusco - Lima",
+    "Cusco - Lima - Cusco"
+]
+
+const INITIAL_FLIGHT_DETAILS: FlightDetails = {
+    ticket_one_way: false,
+    ticket_round_trip: false,
+    insurance_1m: false,
+    insurance_2m: false,
+    insurance_3m: false,
+    doc_invitation_letter: false,
+    doc_agency_managed: false,
+    svc_airport_assistance: false,
+    svc_return_activation: false,
+    hotel_3d_2n: false,
+    hotel_2d_1n: false,
+    baggage_1pc_23kg: false,
+    baggage_2pc_23kg: false,
+    baggage_1pc_10kg: false,
+    baggage_backpack: false,
+    special_note: ''
+}
 
 export default function FlightsPage() {
     const [flights, setFlights] = useState<Flight[]>([])
@@ -83,6 +165,7 @@ export default function FlightsPage() {
 
     // Docs Viewer State
     const [docsViewerFlight, setDocsViewerFlight] = useState<Flight | null>(null)
+    const [detailsViewerFlight, setDetailsViewerFlight] = useState<Flight | null>(null)
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1)
@@ -96,11 +179,23 @@ export default function FlightsPage() {
         travel_date: '',
         pnr: '',
         itinerary: '',
-        cost: '',
+        cost: '', // Now Neto
         on_account: '',
         balance: '',
         status: 'pending',
+        return_date: '',
+        sold_price: '',
+        fee_agv: '',
+        payment_method_it: '',
+        payment_method_pe: '',
     })
+
+    const [flightDetails, setFlightDetails] = useState(INITIAL_FLIGHT_DETAILS)
+
+    // Handle Detail Change
+    const handleDetailChange = (key: string, value: boolean | string) => {
+        setFlightDetails(prev => ({ ...prev, [key]: value }))
+    }
 
     // Dynamic Documents State
     const [documentInputs, setDocumentInputs] = useState<{ title: string, file: File | null }[]>(
@@ -113,6 +208,7 @@ export default function FlightsPage() {
     // Client Selector State
     const [clientSearch, setClientSearch] = useState('')
     const [showClientList, setShowClientList] = useState(false)
+    const [showItineraryList, setShowItineraryList] = useState(false)
 
     // Load Data
     const loadData = useCallback(async () => {
@@ -132,11 +228,14 @@ export default function FlightsPage() {
         
         const newFormData = { ...formData, [name]: value }
 
-        // Auto-calculate Balance if cost or on_account changes
-        if (name === 'cost' || name === 'on_account') {
-            const cost = parseFloat(name === 'cost' ? value : formData.cost) || 0
-            const onAccount = parseFloat(name === 'on_account' ? value : formData.on_account) || 0
-            newFormData.balance = (cost - onAccount).toFixed(2)
+        // Auto-calculate Balance and Fee
+        if (name === 'cost' || name === 'sold_price' || name === 'on_account') {
+            const neto = parseFloat(name === 'cost' ? value : formData.cost) || 0
+            const vendido = parseFloat(name === 'sold_price' ? value : formData.sold_price) || 0
+            const aCuenta = parseFloat(name === 'on_account' ? value : formData.on_account) || 0
+            
+            newFormData.balance = (vendido - aCuenta).toFixed(2) // Saldo = Vendido - A Cuenta
+            newFormData.fee_agv = (vendido - neto).toFixed(2)    // Fee = Vendido - Neto
         }
 
         setFormData(newFormData)
@@ -177,6 +276,11 @@ export default function FlightsPage() {
             on_account: '',
             balance: '',
             status: 'pending',
+            return_date: '',
+            sold_price: '',
+            fee_agv: '',
+            payment_method_it: '',
+            payment_method_pe: '',
         })
         const initialDocs = DOCUMENT_TYPES.map(type => ({ 
             title: type, 
@@ -186,6 +290,7 @@ export default function FlightsPage() {
         setExistingDocs([])
         setClientSearch('')
         setSelectedFlightId(null)
+        setFlightDetails(INITIAL_FLIGHT_DETAILS)
     }
 
     const handleEdit = (flight: Flight) => {
@@ -198,10 +303,15 @@ export default function FlightsPage() {
             travel_date: flight.travel_date,
             pnr: flight.pnr || '',
             itinerary: flight.itinerary || '',
-            cost: flight.cost.toString(),
-            on_account: flight.on_account.toString(),
-            balance: flight.balance.toString(),
+            cost: (flight.cost || 0).toString(),
+            on_account: (flight.on_account || 0).toString(),
+            balance: (flight.balance || 0).toString(),
             status: flight.status,
+            return_date: flight.return_date || '',
+            sold_price: (flight.sold_price || 0).toString(),
+            fee_agv: (flight.fee_agv || 0).toString(),
+            payment_method_it: flight.payment_method_it || '',
+            payment_method_pe: flight.payment_method_pe || '',
         })
         setClientSearch(`${flight.profiles.first_name} ${flight.profiles.last_name}`)
         setExistingDocs(flight.documents || [])
@@ -212,6 +322,17 @@ export default function FlightsPage() {
             file: null 
         }))
         setDocumentInputs(initialDocs)
+        
+        let details = flight.details
+        if (typeof details === 'string') {
+            try {
+                details = JSON.parse(details)
+            } catch (e) {
+                console.error("Error parsing details JSON:", e)
+                details = INITIAL_FLIGHT_DETAILS
+            }
+        }
+        setFlightDetails({ ...INITIAL_FLIGHT_DETAILS, ...(details || {}) })
         
         setSelectedFlightId(flight.id)
         setIsDialogOpen(true)
@@ -271,6 +392,9 @@ export default function FlightsPage() {
                 data.append(key, val)
             })
 
+            // Append Details
+            data.append('details', JSON.stringify(flightDetails))
+
             // Append Documents
             let uploadIndex = 0
             documentInputs.forEach((doc) => {
@@ -306,9 +430,12 @@ export default function FlightsPage() {
             Cliente: `${f.profiles?.first_name} ${f.profiles?.last_name}`,
             Email: f.profiles?.email,
             Itinerario: f.itinerary,
-            Costo: f.cost,
+            Neto: f.cost,
+            Vendido: f.sold_price || 0,
+            Fee_AGV: f.fee_agv || 0,
             A_Cuenta: f.on_account,
             Saldo: f.balance,
+            Metodo_Pago: f.payment_method_it ? `IT: ${f.payment_method_it}` : (f.payment_method_pe ? `PE: ${f.payment_method_pe}` : '-'),
             Estado: f.status === 'finished' ? 'Terminado' : 'Pendiente'
         }))
         const worksheet = XLSX.utils.json_to_sheet(dataToExport)
@@ -339,9 +466,9 @@ export default function FlightsPage() {
             // Text Search
             const lower = searchTerm.toLowerCase()
             const matchesSearch = !searchTerm || 
-                f.pnr?.toLowerCase().includes(lower) ||
-                f.profiles?.first_name?.toLowerCase().includes(lower) ||
-                f.profiles?.last_name?.toLowerCase().includes(lower)
+                (f.pnr || '').toLowerCase().includes(lower) ||
+                (f.profiles?.first_name || '').toLowerCase().includes(lower) ||
+                (f.profiles?.last_name || '').toLowerCase().includes(lower)
 
             // Status Filter
             const matchesStatus = statusFilter === 'all' || f.status === statusFilter
@@ -397,6 +524,53 @@ export default function FlightsPage() {
                             <div className="text-center py-6 text-slate-500 text-sm">
                                 No hay documentos adjuntos a este vuelo.
                             </div>
+                        )}
+                    </div>
+                </DialogContent>
+
+            </Dialog>
+
+            {/* Modal for Viewing Details */}
+            <Dialog open={!!detailsViewerFlight} onOpenChange={(open) => !open && setDetailsViewerFlight(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Detalles del Vuelo</DialogTitle>
+                        <DialogDescription>
+                            Servicios incluidos para {detailsViewerFlight?.profiles?.first_name}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                        {detailsViewerFlight?.details && (
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-bold text-chimipink">Incluye:</h4>
+                                <ul className="grid grid-cols-1 gap-2">
+                                    {Object.entries(detailsViewerFlight.details).map(([key, value]) => {
+                                        if (key === 'special_note' || !value) return null
+                                        return (
+                                            <li key={key} className="flex items-center gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded border border-slate-100">
+                                                <span className="text-green-500">✔</span>
+                                                {DETAILS_LABELS[key] || key}
+                                            </li>
+                                        )
+                                    })}
+                                </ul>
+                                
+                                {Object.values(detailsViewerFlight.details).filter(v => v === true).length === 0 && (
+                                    <p className="text-sm text-slate-400 italic">No hay servicios adicionales seleccionados.</p>
+                                )}
+
+                                {detailsViewerFlight.details.special_note && (
+                                    <div className="mt-4 pt-4 border-t border-slate-100">
+                                        <h4 className="text-sm font-bold text-slate-700 mb-1">Nota Especial:</h4>
+                                        <p className="text-sm text-slate-600 bg-yellow-50 p-3 rounded border border-yellow-100 italic">
+                                            &quot;{detailsViewerFlight.details.special_note}&quot;
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {!detailsViewerFlight?.details && (
+                            <p className="text-sm text-slate-500">Sin detalles registrados.</p>
                         )}
                     </div>
                 </DialogContent>
@@ -469,34 +643,233 @@ export default function FlightsPage() {
                                      <Input type="date" name="travel_date" value={formData.travel_date} onChange={handleInputChange} required />
                                 </div>
                                 <div className="grid gap-2">
+                                     <Label>Fecha de Retorno</Label>
+                                     <Input type="date" name="return_date" value={formData.return_date} onChange={handleInputChange} />
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid gap-2">
                                      <Label>PNR</Label>
                                      <Input name="pnr" value={formData.pnr} onChange={handleInputChange} placeholder="Código de reserva" />
                                 </div>
+                                <div className="grid gap-2 relative">
+                                    <Label>Itinerario</Label>
+                                    <Input 
+                                        name="itinerary"
+                                        value={formData.itinerary}
+                                        onChange={(e) => {
+                                            handleInputChange(e)
+                                            setShowItineraryList(true)
+                                        }}
+                                        onFocus={() => setShowItineraryList(true)}
+                                        onBlur={() => setTimeout(() => setShowItineraryList(false), 200)}
+                                        placeholder="Buscar itinerario..."
+                                        autoComplete="off"
+                                    />
+                                    {showItineraryList && (
+                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-lg rounded-md mt-1 max-h-40 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+                                            {ITINERARY_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.itinerary.toLowerCase())).map((opt, idx) => (
+                                                <div 
+                                                    key={idx}
+                                                    className="p-2 hover:bg-slate-50 cursor-pointer text-sm"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({ ...prev, itinerary: opt }))
+                                                        setShowItineraryList(false)
+                                                    }}
+                                                >
+                                                    {opt}
+                                                </div>
+                                            ))}
+                                            {ITINERARY_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.itinerary.toLowerCase())).length === 0 && (
+                                                <div className="p-2 text-xs text-slate-400 italic">No se encontraron coincidencias</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
-                            <div className="grid gap-2">
-                                <Label>Itinerario</Label>
-                                <Input 
-                                    name="itinerary"
-                                    value={formData.itinerary}
-                                    onChange={handleInputChange}
-                                    placeholder="Ej. EZE - MAD - EZE"
-                                />
+                            {/* Flight Details & Inclusions */}
+                            <div className="border rounded-md p-4 bg-slate-50 space-y-4">
+                                <Label className="font-bold text-chimipink flex items-center gap-2">
+                                    ✈️ TU VUELO INCLUYE
+                                </Label>
+                                
+                                {/* Pasajes */}
+                                <div>
+                                    <Label className="text-xs font-semibold text-slate-700 mb-2 block">🎟️ Pasajes</Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.ticket_one_way} onChange={(e) => handleDetailChange('ticket_one_way', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            Pasaje solo ida
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.ticket_round_trip} onChange={(e) => handleDetailChange('ticket_round_trip', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            Pasaje ida y vuelta
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Equipaje */}
+                                <div>
+                                    <Label className="text-xs font-semibold text-slate-700 mb-2 block">🧳 Equipaje</Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.baggage_1pc_23kg} onChange={(e) => handleDetailChange('baggage_1pc_23kg', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            1 pc 23kg
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.baggage_2pc_23kg} onChange={(e) => handleDetailChange('baggage_2pc_23kg', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            2 pc 23kg
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.baggage_1pc_10kg} onChange={(e) => handleDetailChange('baggage_1pc_10kg', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            1 pc 10kg
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.baggage_backpack} onChange={(e) => handleDetailChange('baggage_backpack', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            1 Mochila
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Seguro */}
+                                <div>
+                                    <Label className="text-xs font-semibold text-slate-700 mb-2 block">🛡️ Seguro de viaje</Label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.insurance_1m} onChange={(e) => handleDetailChange('insurance_1m', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            Seguro x 1 mes
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.insurance_2m} onChange={(e) => handleDetailChange('insurance_2m', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            Seguro x 2 meses
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.insurance_3m} onChange={(e) => handleDetailChange('insurance_3m', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            Seguro x 3 meses
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Documentación */}
+                                <div>
+                                    <Label className="text-xs font-semibold text-slate-700 mb-2 block">📄 Documentación</Label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.doc_invitation_letter} onChange={(e) => handleDetailChange('doc_invitation_letter', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            Redacción carta invitación
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.doc_agency_managed} onChange={(e) => handleDetailChange('doc_agency_managed', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            Carta inv. gestionada por agencia
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Servicios Adicionales */}
+                                <div>
+                                    <Label className="text-xs font-semibold text-slate-700 mb-2 block">🛄 Servicios adicionales</Label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.svc_airport_assistance} onChange={(e) => handleDetailChange('svc_airport_assistance', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            Asistencia aeroportuaria
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.svc_return_activation} onChange={(e) => handleDetailChange('svc_return_activation', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            Activación pasaje retorno
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Hotel */}
+                                <div>
+                                    <Label className="text-xs font-semibold text-slate-700 mb-2 block">🏨 Reserva de hotel</Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.hotel_3d_2n} onChange={(e) => handleDetailChange('hotel_3d_2n', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            3 días / 2 noches
+                                        </label>
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.hotel_2d_1n} onChange={(e) => handleDetailChange('hotel_2d_1n', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                            2 días / 1 noche
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Nota Especial */}
+                                <div>
+                                    <Label className="text-xs font-semibold text-slate-700 mb-2 block">📝 Nota especial</Label>
+                                    <Input 
+                                        value={flightDetails.special_note} 
+                                        onChange={(e) => handleDetailChange('special_note', e.target.value)} 
+                                        placeholder="Tu pasaje es especial..." 
+                                        className="bg-white"
+                                    />
+                                </div>
                             </div>
 
                             {/* Financials */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div className="grid gap-2">
-                                    <Label>Costo</Label>
-                                    <Input type="number" step="0.01" name="cost" value={formData.cost} onChange={handleInputChange} />
+                                    <Label>Neto</Label>
+                                    <Input type="number" step="0.01" name="cost" value={formData.cost} onChange={handleInputChange} placeholder="0.00" />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>Vendido</Label>
+                                    <Input type="number" step="0.01" name="sold_price" value={formData.sold_price} onChange={handleInputChange} placeholder="0.00" />
                                 </div>
                                 <div className="grid gap-2">
                                     <Label>A Cuenta</Label>
-                                    <Input type="number" step="0.01" name="on_account" value={formData.on_account} onChange={handleInputChange} />
+                                    <Input type="number" step="0.01" name="on_account" value={formData.on_account} onChange={handleInputChange} placeholder="0.00" />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-2 rounded">
+                                <div className="grid gap-2">
+                                    <Label>Saldo (Automático)</Label>
+                                    <Input type="number" step="0.01" name="balance" value={formData.balance} readOnly className="bg-slate-100 font-bold" />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label>Saldo</Label>
-                                    <Input type="number" step="0.01" name="balance" value={formData.balance} onChange={handleInputChange} />
+                                    <Label>FEE-AGV (Automático)</Label>
+                                    <Input type="number" step="0.01" name="fee_agv" value={formData.fee_agv} readOnly className="bg-slate-100 font-bold text-emerald-600" />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label>Método Pago IT</Label>
+                                    <select 
+                                        name="payment_method_it"
+                                        className="w-full border rounded-md p-2 text-sm bg-white"
+                                        value={formData.payment_method_it}
+                                        onChange={handleInputChange}
+                                    >
+                                        <option value="">Seleccionar...</option>
+                                        <option value="unicredit">Unicredit</option>
+                                        <option value="paypal">PayPal</option>
+                                        <option value="poste_pay">PostePay</option>
+                                        <option value="bonifico">Bonifico</option>
+                                        <option value="efectivo">Efectivo</option>
+                                    </select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>Método Pago PE</Label>
+                                    <select 
+                                        name="payment_method_pe"
+                                        className="w-full border rounded-md p-2 text-sm bg-white"
+                                        value={formData.payment_method_pe}
+                                        onChange={handleInputChange}
+                                    >
+                                        <option value="">Seleccionar...</option>
+                                        <option value="bcp">BCP</option>
+                                        <option value="interbank">Interbank</option>
+                                        <option value="bbva">BBVA</option>
+                                        <option value="scotiabank">Scotiabank</option>
+                                        <option value="yape">Yape</option>
+                                        <option value="plin">Plin</option>
+                                        <option value="efectivo">Efectivo</option>
+                                    </select>
                                 </div>
                             </div>
 
@@ -659,9 +1032,13 @@ export default function FlightsPage() {
                                     <th className="px-6 py-4 font-medium">PNR</th>
                                     <th className="px-6 py-4 font-medium">Cliente</th>
                                     <th className="px-6 py-4 font-medium">Itinerario</th>
-                                    <th className="px-6 py-4 font-medium">Costo</th>
+                                    <th className="px-6 py-4 font-medium text-center">Incluye</th>
+                                    <th className="px-6 py-4 font-medium">Neto</th>
+                                    <th className="px-6 py-4 font-medium">Vendido</th>
+                                    <th className="px-6 py-4 font-medium">Fee AGV</th>
                                     <th className="px-6 py-4 font-medium">A Cuenta</th>
                                     <th className="px-6 py-4 font-medium">Saldo</th>
+                                    <th className="px-6 py-4 font-medium">Pago</th>
                                     <th className="px-6 py-4 font-medium text-center">Docs</th>
                                     <th className="px-6 py-4 font-medium">Estado</th>
                                     <th className="px-6 py-4 font-medium text-right">Acciones</th>
@@ -687,7 +1064,18 @@ export default function FlightsPage() {
                                             <td className="px-6 py-4 max-w-[150px] truncate" title={flight.itinerary}>
                                                 {flight.itinerary || '-'}
                                             </td>
+                                            <td className="px-6 py-4 text-center">
+                                                {flight.details && (Object.values(flight.details).some(v => v === true || (typeof v === 'string' && v.length > 0))) ? (
+                                                    <Button size="sm" variant="ghost" className="text-chimipink hover:bg-pink-50" onClick={() => setDetailsViewerFlight(flight)}>
+                                                        <ListChecks className="h-5 w-5" />
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-slate-300">-</span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">S/ {flight.cost.toFixed(2)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">S/ {(flight.sold_price || 0).toFixed(2)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-emerald-600 font-semibold">S/ {(flight.fee_agv || 0).toFixed(2)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap">S/ {flight.on_account.toFixed(2)}</td>
                                             <td className="px-6 py-4 font-medium whitespace-nowrap">
                                                 {flight.balance > 0 ? (
@@ -695,6 +1083,19 @@ export default function FlightsPage() {
                                                 ) : (
                                                     <span className="text-emerald-600">Pagado</span>
                                                 )}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-xs">
+                                                {flight.payment_method_it ? (
+                                                    <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded border border-blue-200 block text-center mb-1">
+                                                        IT: {flight.payment_method_it}
+                                                    </span>
+                                                ) : null}
+                                                {flight.payment_method_pe ? (
+                                                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded border border-red-200 block text-center">
+                                                        PE: {flight.payment_method_pe}
+                                                    </span>
+                                                ) : null}
+                                                {!flight.payment_method_it && !flight.payment_method_pe && <span className="text-slate-300">-</span>}
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 {flight.documents && flight.documents.length > 0 ? (
