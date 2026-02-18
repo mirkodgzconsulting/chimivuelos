@@ -129,7 +129,13 @@ export async function getMyFlights() {
 
     const { data } = await supabase
         .from('flights')
-        .select('*')
+        .select(`
+            *,
+            profiles:client_id (
+                first_name,
+                last_name
+            )
+        `)
         .eq('client_id', user.id)
         .order('created_at', { ascending: false })
     

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plane, Calendar, ArrowRight, Banknote } from "lucide-react"
+import { Plane, Calendar, ArrowRight, Banknote, User } from "lucide-react"
 import { TermsGuard } from '@/components/client/TermsGuard'
 import { useRouter } from 'next/navigation'
 
@@ -22,6 +22,10 @@ export interface Flight {
     documents?: FlightDocument[]
     terms_accepted_at?: string
     balance?: number
+    profiles?: {
+        first_name: string
+        last_name: string
+    }
 }
 
 const formatCurrency = (amount: number | undefined) => {
@@ -91,6 +95,16 @@ export default function FlightList({ flights, termsContent, termsVersion }: { fl
                                         {flight.airline}
                                     </span>
                                 </div>
+
+                                {/* Passenger */}
+                                {flight.profiles && (
+                                    <div className="flex items-center gap-1.5 min-w-fit text-slate-500">
+                                        <User size={14} className="text-slate-400" />
+                                        <span className="text-xs font-bold uppercase tracking-wide">
+                                            {flight.profiles.first_name} {flight.profiles.last_name}
+                                        </span>
+                                    </div>
+                                )}
 
                                 {/* Route */}
                                 <div className="flex items-center gap-2 text-slate-800 text-lg font-bold">
