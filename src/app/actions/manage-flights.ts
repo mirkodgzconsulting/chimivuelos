@@ -1,6 +1,7 @@
 'use server'
 
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { uploadClientFile, deleteFileFromR2, deleteImageFromCloudflare, getFileUrl } from "@/lib/storage"
 
@@ -19,23 +20,36 @@ export interface FlightDocument {
 /**
  * Creates a new flight record
  */
+interface PaymentDetail {
+    sede_it: string
+    sede_pe: string
+    metodo_it: string
+    metodo_pe: string
+    cantidad: string
+    tipo_cambio: number
+    total: string
+    created_at?: string
+    updated_at?: string
+    proof_path?: string
+}
+
 export async function createFlight(formData: FormData) {
-    const supabase = supabaseAdmin
+    const supabase = await createClient()
+    const adminSupabase = supabaseAdmin
 
     try {
-        const client_id = formData.get('client_id') as string // UUID of the client
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
+        const client_id = formData.get('client_id') as string
         const travel_date = formData.get('travel_date') as string
         const pnr = formData.get('pnr') as string
         const itinerary = formData.get('itinerary') as string
         const cost = parseFloat(formData.get('cost') as string) || 0
-        const on_account = parseFloat(formData.get('on_account') as string) || 0
-        const balance = parseFloat(formData.get('balance') as string) || (cost - on_account)
         const status = formData.get('status') as string || 'pending'
         
-        // New Fields
         const return_date = formData.get('return_date') as string
         const sold_price = parseFloat(formData.get('sold_price') as string) || 0
-        const fee_agv = parseFloat(formData.get('fee_agv') as string) || 0
         const payment_method_it = formData.get('payment_method_it') as string
         const payment_method_pe = formData.get('payment_method_pe') as string
         
@@ -47,8 +61,40 @@ export async function createFlight(formData: FormData) {
             console.error('Error parsing details:', e)
         }
 
+        // Handle Payment Details
+        const payment_quantity_str = formData.get('payment_quantity') as string
+        const payment_quantity = parseFloat(payment_quantity_str) || 0
+        const payment_exchange_rate = parseFloat(formData.get('payment_exchange_rate') as string) || 1.0
+        const payment_total = parseFloat(formData.get('payment_total') as string) || 0
+        
+        // Handle Payment Proof
+        let payment_proof_path = null
+        const proofFile = formData.get('payment_proof_file') as File
+        if (proofFile && proofFile.size > 0) {
+            const uploadResult = await uploadClientFile(proofFile, client_id)
+            payment_proof_path = uploadResult.path
+        }
+
+        const payment_details: PaymentDetail[] = []
+        if (payment_quantity > 0) {
+            payment_details.push({
+                sede_it: formData.get('sede_it') as string,
+                sede_pe: formData.get('sede_pe') as string,
+                metodo_it: payment_method_it,
+                metodo_pe: payment_method_pe,
+                cantidad: payment_quantity.toString(),
+                tipo_cambio: payment_exchange_rate,
+                total: payment_total.toString(),
+                created_at: new Date().toISOString(),
+                proof_path: payment_proof_path || undefined
+            })
+        }
+
+        const on_account = payment_quantity
+        const balance = sold_price - on_account
+        const fee_agv = sold_price - cost
+
         // Handle Documents
-        // Since input fields are dynamic (title_0, file_0, title_1, file_1...), we loop
         const documents: FlightDocument[] = []
         let index = 0
         while (formData.has(`document_title_${index}`)) {
@@ -56,7 +102,6 @@ export async function createFlight(formData: FormData) {
             const file = formData.get(`document_file_${index}`) as File
 
             if (file && file.size > 0) {
-                // Upload reusing client logic
                 const uploadResult = await uploadClientFile(file, client_id)
                 documents.push({
                     title: title || file.name,
@@ -70,7 +115,7 @@ export async function createFlight(formData: FormData) {
             index++
         }
 
-        const { error } = await supabase.from('flights').insert({
+        const { error } = await adminSupabase.from('flights').insert({
             client_id,
             travel_date,
             pnr,
@@ -79,13 +124,16 @@ export async function createFlight(formData: FormData) {
             on_account,
             balance,
             status,
-
+            agent_id: user.id,
             details,
             return_date,
             sold_price,
             fee_agv,
             payment_method_it,
             payment_method_pe,
+            payment_details,
+            payment_proof_path,
+            exchange_rate: payment_exchange_rate,
             documents: documents as unknown
         })
 
@@ -105,27 +153,26 @@ export async function createFlight(formData: FormData) {
  * Updates an existing flight
  */
 export async function updateFlight(formData: FormData) {
-    const supabase = supabaseAdmin
-    const id = formData.get('id') as string // Fight ID
+    const supabase = await createClient()
+    const adminSupabase = supabaseAdmin
+    const id = formData.get('id') as string
 
     try {
-        // Fetch existing flight to merge documents
-        const { data: existingFlight } = await supabase.from('flights').select('documents, client_id').eq('id', id).single()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
+        const { data: existingFlight } = await adminSupabase.from('flights').select('*').eq('id', id).single()
         if (!existingFlight) throw new Error('Flight not found')
 
-        const client_id = existingFlight.client_id // Can't change client
+        const client_id = existingFlight.client_id
         const travel_date = formData.get('travel_date') as string
         const pnr = formData.get('pnr') as string
         const itinerary = formData.get('itinerary') as string
         const cost = parseFloat(formData.get('cost') as string) || 0
-        const on_account = parseFloat(formData.get('on_account') as string) || 0
-        const balance = parseFloat(formData.get('balance') as string) || (cost - on_account)
         const status = formData.get('status') as string
 
-        // New Fields
         const return_date = formData.get('return_date') as string
         const sold_price = parseFloat(formData.get('sold_price') as string) || 0
-        const fee_agv = parseFloat(formData.get('fee_agv') as string) || 0
         const payment_method_it = formData.get('payment_method_it') as string
         const payment_method_pe = formData.get('payment_method_pe') as string
 
@@ -137,14 +184,51 @@ export async function updateFlight(formData: FormData) {
             console.error('Error parsing details:', e)
         }
 
-        // Build new documents array (Start with existing ones that weren't deleted)
-        const currentDocuments: FlightDocument[] = (existingFlight.documents as unknown as FlightDocument[]) || []
+        // Handle Payment Details
+        const payment_quantity_str = formData.get('payment_quantity') as string
+        const payment_quantity = parseFloat(payment_quantity_str) || 0
+        const payment_exchange_rate = parseFloat(formData.get('payment_exchange_rate') as string) || 1.0
+        const payment_total = parseFloat(formData.get('payment_total') as string) || 0
+        
+        const currentPayments = (existingFlight.payment_details as PaymentDetail[]) || []
+        let totalOnAccount = 0
 
-        // Process NEW uploads
-        let index = 0
-        while (formData.has(`document_title_${index}`)) {
-            const title = formData.get(`document_title_${index}`) as string
-            const file = formData.get(`document_file_${index}`) as File
+        // Calculate sum of existing payments
+        currentPayments.forEach((p: PaymentDetail) => {
+            totalOnAccount += parseFloat(p.cantidad) || 0
+        })
+
+        // Handle Payment Proof (upload before creating payment entries)
+        let new_proof_path = null
+        const proofFile = formData.get('payment_proof_file') as File
+        if (proofFile && proofFile.size > 0) {
+            const uploadResult = await uploadClientFile(proofFile, client_id)
+            new_proof_path = uploadResult.path
+        }
+
+        if (payment_quantity > 0) {
+            const newPayment: PaymentDetail = {
+                sede_it: (formData.get('sede_it') as string) || '',
+                sede_pe: (formData.get('sede_pe') as string) || '',
+                metodo_it: (formData.get('payment_method_it') as string) || '',
+                metodo_pe: (formData.get('payment_method_pe') as string) || '',
+                cantidad: payment_quantity.toString(),
+                tipo_cambio: payment_exchange_rate,
+                total: payment_total.toString(),
+                created_at: new Date().toISOString(),
+                proof_path: new_proof_path || undefined
+            }
+            currentPayments.push(newPayment)
+            totalOnAccount += payment_quantity
+        }
+
+        const payment_proof_path = new_proof_path || existingFlight.payment_proof_path
+
+        const currentDocuments: FlightDocument[] = (existingFlight.documents as unknown as FlightDocument[]) || []
+        let docIndex = 0
+        while (formData.has(`document_title_${docIndex}`)) {
+            const title = formData.get(`document_title_${docIndex}`) as string
+            const file = formData.get(`document_file_${docIndex}`) as File
 
             if (file && file.size > 0) {
                  const uploadResult = await uploadClientFile(file, client_id)
@@ -157,10 +241,14 @@ export async function updateFlight(formData: FormData) {
                     storage: uploadResult.storage
                 })
             }
-            index++
+            docIndex++
         }
 
-        const { error } = await supabase.from('flights').update({
+        const on_account = totalOnAccount 
+        const balance = sold_price - on_account
+        const fee_agv = sold_price - cost
+
+        const { error } = await adminSupabase.from('flights').update({
             travel_date,
             pnr,
             itinerary,
@@ -168,14 +256,16 @@ export async function updateFlight(formData: FormData) {
             on_account,
             balance,
             status,
-
             details,
             return_date,
             sold_price,
             fee_agv,
             payment_method_it,
             payment_method_pe,
-            documents: currentDocuments as unknown // Cast for Supabase JSONB
+            payment_details: currentPayments,
+            payment_proof_path,
+            exchange_rate: payment_exchange_rate,
+            documents: currentDocuments as unknown
         }).eq('id', id)
 
         if (error) throw error
@@ -184,6 +274,7 @@ export async function updateFlight(formData: FormData) {
         return { success: true }
 
     } catch (error: unknown) {
+        console.error('Error updating flight:', error)
         const errorMessage = error instanceof Error ? error.message : 'Error updating flight'
         return { error: errorMessage }
     }
@@ -293,7 +384,7 @@ export async function getFlightDocumentUrl(path: string, storage: 'r2' | 'images
  */
 export async function getFlights() {
     const supabase = supabaseAdmin
-    // Join with profiles table to get client names
+    // Join with profiles table to get client names and agent names
     const { data, error } = await supabase
         .from('flights')
         .select(`
@@ -303,6 +394,10 @@ export async function getFlights() {
                 last_name,
                 email,
                 phone
+            ),
+            agent:agent_id (
+                first_name,
+                last_name
             )
         `)
         .order('created_at', { ascending: false })
@@ -325,4 +420,109 @@ export async function getClientsForDropdown() {
         .eq('role', 'client') // Assuming only clients
         .order('first_name', { ascending: true })
     return data || []
+}
+
+/**
+ * Deletes a specific payment from the payment_details array
+ */
+export async function deleteFlightPayment(flightId: string, paymentIndex: number) {
+    const adminSupabase = supabaseAdmin
+
+    try {
+        const { data: flight } = await adminSupabase.from('flights').select('*').eq('id', flightId).single()
+        if (!flight) throw new Error('Flight not found')
+
+        const payments = (flight.payment_details as PaymentDetail[]) || []
+        
+        // Safety check: index out of bounds
+        if (paymentIndex < 0 || paymentIndex >= payments.length) {
+            throw new Error('Payment index out of bounds')
+        }
+
+        // Remove the payment
+        payments.splice(paymentIndex, 1)
+
+        // Recalculate totals
+        let totalOnAccount = 0
+        payments.forEach(p => totalOnAccount += parseFloat(p.cantidad) || 0)
+
+        const on_account = totalOnAccount
+        const balance = (flight.sold_price || 0) - on_account
+
+        const { error } = await adminSupabase.from('flights').update({
+            payment_details: payments,
+            on_account,
+            balance
+        }).eq('id', flightId)
+
+        if (error) throw error
+        
+        revalidatePath('/chimi-vuelos')
+        return { success: true }
+    } catch (error) {
+        console.error('Error deleting payment:', error)
+        return { success: false, error: (error as Error).message }
+    }
+}
+
+/**
+ * Updates a specific payment in the payment_details array
+ */
+export async function updateFlightPayment(formData: FormData) {
+    const adminSupabase = supabaseAdmin
+    const flightId = formData.get('flightId') as string
+    const paymentIndex = parseInt(formData.get('paymentIndex') as string)
+    const proofFile = formData.get('proofFile') as File | null
+
+    try {
+        const { data: flight } = await adminSupabase.from('flights').select('*').eq('id', flightId).single()
+        if (!flight) throw new Error('Flight not found')
+
+        const payments = (flight.payment_details as PaymentDetail[]) || []
+        
+        if (paymentIndex < 0 || paymentIndex >= payments.length) {
+            throw new Error('Payment index out of bounds')
+        }
+
+        let proofPath = payments[paymentIndex].proof_path
+        if (proofFile && proofFile.size > 0) {
+            const uploadResult = await uploadClientFile(proofFile, flight.client_id)
+            proofPath = uploadResult.path
+        }
+
+        // Update the payment fields from formData
+        payments[paymentIndex] = {
+            ...payments[paymentIndex],
+            sede_it: formData.get('sede_it') as string,
+            sede_pe: formData.get('sede_pe') as string,
+            metodo_it: formData.get('metodo_it') as string,
+            metodo_pe: formData.get('metodo_pe') as string,
+            cantidad: formData.get('cantidad') as string,
+            tipo_cambio: parseFloat(formData.get('tipo_cambio') as string),
+            total: formData.get('total') as string,
+            proof_path: proofPath,
+            updated_at: new Date().toISOString()
+        }
+
+        // Recalculate totals
+        let totalOnAccount = 0
+        payments.forEach(p => totalOnAccount += parseFloat(p.cantidad) || 0)
+
+        const on_account = totalOnAccount
+        const balance = (flight.sold_price || 0) - on_account
+
+        const { error } = await adminSupabase.from('flights').update({
+            payment_details: payments,
+            on_account,
+            balance
+        }).eq('id', flightId)
+
+        if (error) throw error
+        
+        revalidatePath('/chimi-vuelos')
+        return { success: true }
+    } catch (error) {
+        console.error('Error updating payment:', error)
+        return { success: false, error: (error as Error).message }
+    }
 }

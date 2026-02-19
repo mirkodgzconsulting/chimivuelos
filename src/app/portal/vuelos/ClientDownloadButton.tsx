@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Download, Eye, FileText, Loader2 } from "lucide-react"
+import { Download, Eye, FileText, Loader2, AlertCircle } from "lucide-react"
 import { getFlightDocumentUrl } from '@/app/actions/manage-flights'
 import {
   Dialog,
@@ -101,15 +101,26 @@ export function FlightDocumentRow({ doc }: { doc: FlightDocument }) {
                                         </div>
                                     )}
                                     {isPdf && (
-                                        <iframe 
-                                            src={`${url}#toolbar=0`} 
-                                            className="w-full h-full rounded shadow-sm bg-white border border-slate-200"
-                                            title={doc.name}
-                                        />
+                                        <div className="w-full h-full overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch bg-white rounded shadow-sm border border-slate-200">
+                                            <object 
+                                                data={`${url}#view=FitH&toolbar=0`} 
+                                                type="application/pdf" 
+                                                className="w-full h-full min-h-[500px]"
+                                            >
+                                                <iframe 
+                                                    src={`${url}#view=FitH&toolbar=0`} 
+                                                    className="w-full h-full border-none"
+                                                    title={doc.name}
+                                                    style={{ width: '100%', height: '100%' }}
+                                                />
+                                            </object>
+                                        </div>
                                     )}
                                 </>
                             ) : (
-                                <div className="text-red-500 text-sm">Error cargando el archivo.</div>
+                                <div className="text-red-500 text-sm flex items-center gap-2">
+                                    <AlertCircle size={16} /> Error cargando el archivo.
+                                </div>
                             )}
                         </div>
 

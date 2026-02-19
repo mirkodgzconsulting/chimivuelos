@@ -78,7 +78,10 @@ export async function uploadClientFile(file: File, userId: string): Promise<Uplo
  * - Images: Returns the public delivery URL
  */
 export async function getFileUrl(path: string, storage: StorageType): Promise<string> {
-    if (storage === 'images') {
+    // Auto-detect storage if path looks like R2 (starts with clients/)
+    const effectiveStorage = path.startsWith('clients/') ? 'r2' : storage;
+
+    if (effectiveStorage === 'images') {
         // Construct Image Delivery URL
         // Format: https://imagedelivery.net/<account_hash>/<image_id>/<variant_name>
         // We assume 'public' variant for generic access

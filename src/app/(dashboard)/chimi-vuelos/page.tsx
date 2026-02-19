@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks } from 'lucide-react'
+import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { getFlights, getClientsForDropdown, createFlight, updateFlight, deleteFlight, deleteFlightDocument, updateFlightStatus, getFlightDocumentUrl } from '@/app/actions/manage-flights'
+import { getFlights, getClientsForDropdown, createFlight, updateFlight, deleteFlight, deleteFlightDocument, updateFlightStatus, getFlightDocumentUrl, deleteFlightPayment, updateFlightPayment } from '@/app/actions/manage-flights'
 
 interface FlightDocument {
     title: string
@@ -17,6 +17,19 @@ interface FlightDocument {
     type: string
     size: number
     storage: 'r2' | 'images'
+}
+
+interface PaymentDetail {
+    sede_it: string
+    sede_pe: string
+    metodo_it: string
+    metodo_pe: string
+    cantidad: string
+    tipo_cambio: number
+    total: string
+    created_at?: string
+    updated_at?: string
+    proof_path?: string
 }
 
 interface Flight {
@@ -44,6 +57,13 @@ interface Flight {
         email: string
         phone: string
     } | null
+    agent: {
+        first_name: string
+        last_name: string
+    } | null
+    payment_details: PaymentDetail[]
+    payment_proof_path: string | null
+    exchange_rate: number
 }
 
 interface ClientOption {
@@ -122,6 +142,11 @@ const ITINERARY_OPTIONS = [
     "Cusco - Lima - Cusco"
 ]
 
+const SEDE_IT_OPTIONS = ["Milano", "Roma", "Firenze", "Venezia", "Torino", "Genova"]
+const SEDE_PE_OPTIONS = ["Lima", "Cusco", "Arequipa", "Trujillo", "Piura", "Iquitos"]
+const PAYMENT_METHOD_IT_OPTIONS = ["Efectivo", "Transferencia IT", "Tarjeta", "PayPal"]
+const PAYMENT_METHOD_PE_OPTIONS = ["Efectivo", "Transferencia PE", "Yape/Plin", "Tarjeta"]
+
 const INITIAL_FLIGHT_DETAILS: FlightDetails = {
     ticket_one_way: false,
     ticket_round_trip: false,
@@ -165,6 +190,7 @@ export default function FlightsPage() {
 
     // Docs Viewer State
     const [docsViewerFlight, setDocsViewerFlight] = useState<Flight | null>(null)
+    const [paymentHistoryFlight, setPaymentHistoryFlight] = useState<Flight | null>(null)
     const [detailsViewerFlight, setDetailsViewerFlight] = useState<Flight | null>(null)
 
     // Pagination State
@@ -188,7 +214,16 @@ export default function FlightsPage() {
         fee_agv: '',
         payment_method_it: '',
         payment_method_pe: '',
+        // New Payment Fields
+        sede_it: '',
+        sede_pe: '',
+        payment_quantity: '',
+        payment_exchange_rate: '1.0',
+        payment_total: '',
     })
+
+    const [showPaymentFields, setShowPaymentFields] = useState(false)
+    const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
 
     const [flightDetails, setFlightDetails] = useState(INITIAL_FLIGHT_DETAILS)
 
@@ -209,6 +244,9 @@ export default function FlightsPage() {
     const [clientSearch, setClientSearch] = useState('')
     const [showClientList, setShowClientList] = useState(false)
     const [showItineraryList, setShowItineraryList] = useState(false)
+    const [showSedeITList, setShowSedeITList] = useState(false)
+    const [showSedePEList, setShowSedePEList] = useState(false)
+    const [baseOnAccount, setBaseOnAccount] = useState(0) // Track existing payments sum
 
     // Load Data
     const loadData = useCallback(async () => {
@@ -222,20 +260,52 @@ export default function FlightsPage() {
         loadData()
     }, [loadData])
 
+    // Sync Modals with data updates
+    useEffect(() => {
+        if (paymentHistoryFlight) {
+            const updated = flights.find(f => f.id === paymentHistoryFlight.id)
+            if (updated) setPaymentHistoryFlight(updated)
+            else setPaymentHistoryFlight(null)
+        }
+        if (docsViewerFlight) {
+            const updated = flights.find(f => f.id === docsViewerFlight.id)
+            if (updated) setDocsViewerFlight(updated)
+            else setDocsViewerFlight(null)
+        }
+    }, [flights, paymentHistoryFlight, docsViewerFlight])
+
     // Handle Input Change (Manual)
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target
         
         const newFormData = { ...formData, [name]: value }
 
+        // Logic for Payment Quantity -> A Cuenta
+        if (name === 'payment_quantity') {
+            newFormData.on_account = value
+        }
+
+        if (name === 'payment_quantity') {
+            const qty = parseFloat(value) || 0
+            const rate = parseFloat(newFormData.payment_exchange_rate) || 1
+            newFormData.payment_total = (qty * rate).toFixed(2)
+            newFormData.on_account = (baseOnAccount + qty).toString()
+        }
+
+        if (name === 'payment_exchange_rate') {
+            const rate = parseFloat(value) || 1
+            const qty = parseFloat(newFormData.payment_quantity) || 0
+            newFormData.payment_total = (qty * rate).toFixed(2)
+        }
+
         // Auto-calculate Balance and Fee
-        if (name === 'cost' || name === 'sold_price' || name === 'on_account') {
-            const neto = parseFloat(name === 'cost' ? value : formData.cost) || 0
-            const vendido = parseFloat(name === 'sold_price' ? value : formData.sold_price) || 0
-            const aCuenta = parseFloat(name === 'on_account' ? value : formData.on_account) || 0
+        if (name === 'cost' || name === 'sold_price' || name === 'on_account' || name === 'payment_quantity') {
+            const neto = parseFloat(newFormData.cost) || 0
+            const vendido = parseFloat(newFormData.sold_price) || 0
+            const aCuenta = parseFloat(newFormData.on_account) || 0
             
-            newFormData.balance = (vendido - aCuenta).toFixed(2) // Saldo = Vendido - A Cuenta
-            newFormData.fee_agv = (vendido - neto).toFixed(2)    // Fee = Vendido - Neto
+            newFormData.balance = (vendido - aCuenta).toFixed(2)
+            newFormData.fee_agv = (vendido - neto).toFixed(2)
         }
 
         setFormData(newFormData)
@@ -281,6 +351,11 @@ export default function FlightsPage() {
             fee_agv: '',
             payment_method_it: '',
             payment_method_pe: '',
+            sede_it: '',
+            sede_pe: '',
+            payment_quantity: '',
+            payment_exchange_rate: '1.0',
+            payment_total: '',
         })
         const initialDocs = DOCUMENT_TYPES.map(type => ({ 
             title: type, 
@@ -291,11 +366,14 @@ export default function FlightsPage() {
         setClientSearch('')
         setSelectedFlightId(null)
         setFlightDetails(INITIAL_FLIGHT_DETAILS)
+        setShowPaymentFields(false)
+        setPaymentProofFile(null)
+        setBaseOnAccount(0)
     }
 
     const handleEdit = (flight: Flight) => {
         if (!flight.profiles) return 
-        
+
         setFormData({
             client_id: flight.client_id,
             client_email: flight.profiles.email || '',
@@ -310,11 +388,19 @@ export default function FlightsPage() {
             return_date: flight.return_date || '',
             sold_price: (flight.sold_price || 0).toString(),
             fee_agv: (flight.fee_agv || 0).toString(),
-            payment_method_it: flight.payment_method_it || '',
-            payment_method_pe: flight.payment_method_pe || '',
+            payment_method_it: '',
+            payment_method_pe: '',
+            sede_it: '',
+            sede_pe: '',
+            payment_quantity: '',
+            payment_exchange_rate: (flight.exchange_rate || 1.0).toString(),
+            payment_total: '',
         })
+        setBaseOnAccount(flight.on_account || 0)
         setClientSearch(`${flight.profiles.first_name} ${flight.profiles.last_name}`)
         setExistingDocs(flight.documents || [])
+        setShowPaymentFields(false) 
+        setSelectedFlightId(flight.id)
         
         // Initialize with fixed list
         const initialDocs = DOCUMENT_TYPES.map(type => ({ 
@@ -333,8 +419,6 @@ export default function FlightsPage() {
             }
         }
         setFlightDetails({ ...INITIAL_FLIGHT_DETAILS, ...(details || {}) })
-        
-        setSelectedFlightId(flight.id)
         setIsDialogOpen(true)
     }
 
@@ -368,6 +452,52 @@ export default function FlightsPage() {
             window.open(result.url, '_blank')
         } else {
             alert('Error al abrir el documento. Intente nuevamente.')
+        }
+    }
+
+    const handleDeletePayment = async (flightId: string, originalIndex: number) => {
+        if (confirm('¿Eliminar este registro de pago? Se actualizará el saldo automáticamente.')) {
+            const res = await deleteFlightPayment(flightId, originalIndex)
+            if (res.success) {
+                await loadData()
+            } else {
+                alert('Error al eliminar el pago: ' + (res.error || ''))
+            }
+        }
+    }
+
+    const [editingPaymentIndex, setEditingPaymentIndex] = useState<number | null>(null)
+    const [editPaymentData, setEditPaymentData] = useState<PaymentDetail | null>(null)
+    const [showEditSedeITList, setShowEditSedeITList] = useState(false)
+    const [showEditSedePEList, setShowEditSedePEList] = useState(false)
+    const [editPaymentFile, setEditPaymentFile] = useState<File | null>(null)
+
+    const handleSaveEditPayment = async (flightId: string) => {
+        if (!editPaymentData || editingPaymentIndex === null) return
+        
+        const formData = new FormData()
+        formData.append('flightId', flightId)
+        formData.append('paymentIndex', editingPaymentIndex.toString())
+        formData.append('sede_it', editPaymentData.sede_it)
+        formData.append('sede_pe', editPaymentData.sede_pe)
+        formData.append('metodo_it', editPaymentData.metodo_it)
+        formData.append('metodo_pe', editPaymentData.metodo_pe)
+        formData.append('cantidad', editPaymentData.cantidad)
+        formData.append('tipo_cambio', editPaymentData.tipo_cambio.toString())
+        formData.append('total', editPaymentData.total)
+        
+        if (editPaymentFile) {
+            formData.append('proofFile', editPaymentFile)
+        }
+
+        const res = await updateFlightPayment(formData)
+        if (res.success) {
+            await loadData()
+            setEditingPaymentIndex(null)
+            setEditPaymentData(null)
+            setEditPaymentFile(null)
+        } else {
+            alert('Error al actualizar el pago: ' + (res.error || ''))
         }
     }
 
@@ -405,6 +535,11 @@ export default function FlightsPage() {
                  }
             })
 
+            // Append Payment Proof if exists
+            if (paymentProofFile) {
+                data.append('payment_proof_file', paymentProofFile)
+            }
+
             if (selectedFlightId) {
                  await updateFlight(data)
             } else {
@@ -426,15 +561,16 @@ export default function FlightsPage() {
         const dataToExport = filteredFlights.map(f => ({
             Fecha_Registro: new Date(f.created_at).toLocaleDateString('es-PE'),
             Fecha_Viaje: new Date(f.travel_date).toLocaleDateString('es-PE'),
+            Agente: f.agent ? `${f.agent.first_name} ${f.agent.last_name}` : '-',
             PNR: f.pnr,
             Cliente: `${f.profiles?.first_name} ${f.profiles?.last_name}`,
             Email: f.profiles?.email,
             Itinerario: f.itinerary,
-            Neto: f.cost,
-            Vendido: f.sold_price || 0,
-            Fee_AGV: f.fee_agv || 0,
-            A_Cuenta: f.on_account,
-            Saldo: f.balance,
+            Neto_EUR: f.cost,
+            Vendido_EUR: f.sold_price || 0,
+            Fee_AGV_EUR: f.fee_agv || 0,
+            A_Cuenta_EUR: f.on_account,
+            Saldo_EUR: f.balance,
             Metodo_Pago: f.payment_method_it ? `IT: ${f.payment_method_it}` : (f.payment_method_pe ? `PE: ${f.payment_method_pe}` : '-'),
             Estado: f.status === 'finished' ? 'Terminado' : 'Pendiente'
         }))
@@ -575,6 +711,91 @@ export default function FlightsPage() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Payment History Viewer Dialog */}
+            <Dialog open={!!paymentHistoryFlight} onOpenChange={(open) => !open && setPaymentHistoryFlight(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-chimipink">Historial de Pagos</DialogTitle>
+                        <DialogDescription>
+                            Registro de abonos para {paymentHistoryFlight?.profiles?.first_name} {paymentHistoryFlight?.profiles?.last_name}
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="py-4 space-y-4">
+                        <div className="space-y-2">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Detalle de Transacciones:</h4>
+                            <div className="space-y-2 pr-1">
+                                {paymentHistoryFlight?.payment_details && paymentHistoryFlight.payment_details.length > 0 ? (
+                                    [...paymentHistoryFlight.payment_details].reverse().map((payment, idx) => {
+                                        return (
+                                            <div key={idx} className="p-3 bg-slate-50 border border-slate-100 rounded-lg space-y-2 group relative transition-all">
+                                                <div className="flex justify-between items-center mb-1 border-b border-slate-200/50 pb-1">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                        Abono #{paymentHistoryFlight.payment_details!.length - idx}
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-y-1 gap-x-2 text-[11px]">
+                                                    <div className="flex items-center">
+                                                        <span className="text-slate-500 font-medium mr-1">Método:</span>
+                                                        <span className="font-bold text-slate-700">{payment.metodo_it || payment.metodo_pe || '-'}</span>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="text-slate-500 font-medium mr-1">Sede:</span>
+                                                        <span className="font-bold text-slate-700">{payment.sede_it || payment.sede_pe || '-'}</span>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="text-slate-500 font-medium mr-1">Cantidad:</span>
+                                                        <span className="font-bold text-chimipink">€ {parseFloat(payment.cantidad).toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <span className="text-slate-500 font-medium mr-1">Total:</span>
+                                                        <span className="font-bold text-slate-700">€ {payment.total}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-2 pt-2 border-t border-slate-200/50 flex justify-between items-center">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                        <Calendar className="h-3 w-3" /> {payment.created_at ? new Date(payment.created_at).toLocaleDateString() : '-'}
+                                                    </span>
+                                                    
+                                                    {payment.proof_path && (
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[10px] font-bold text-chimiteal hover:text-chimiteal hover:bg-teal-50 gap-1 px-2"
+                                                            onClick={() => handleDownload(payment.proof_path!, payment.proof_path?.startsWith('clients/') ? 'r2' : 'images')}
+                                                        >
+                                                            <FileText className="h-3 w-3" />
+                                                            Ver Comprobante
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                ) : (
+                                    <p className="text-sm text-slate-400 italic text-center py-4">No hay pagos registrados.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
+                            <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-center">
+                                <span className="text-[10px] text-emerald-600 font-bold block uppercase">Total Pagado</span>
+                                <span className="text-sm font-black text-emerald-700">€ {paymentHistoryFlight?.on_account.toFixed(2)}</span>
+                            </div>
+                            <div className="bg-red-50 p-2 rounded-lg border border-red-100 text-center">
+                                <span className="text-[10px] text-red-600 font-bold block uppercase">Saldo Pendiente</span>
+                                <span className="text-sm font-black text-red-700">€ {paymentHistoryFlight?.balance.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+
 
             <div className="flex justify-center">
                  <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -812,16 +1033,25 @@ export default function FlightsPage() {
                             {/* Financials */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div className="grid gap-2">
-                                    <Label>Neto</Label>
+                                    <Label>Neto (€)</Label>
                                     <Input type="number" step="0.01" name="cost" value={formData.cost} onChange={handleInputChange} placeholder="0.00" />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label>Vendido</Label>
+                                    <Label>Vendido (€)</Label>
                                     <Input type="number" step="0.01" name="sold_price" value={formData.sold_price} onChange={handleInputChange} placeholder="0.00" />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label>A Cuenta</Label>
-                                    <Input type="number" step="0.01" name="on_account" value={formData.on_account} onChange={handleInputChange} placeholder="0.00" />
+                                    <Label>A Cuenta (€)</Label>
+                                    <Input 
+                                        type="number" 
+                                        step="0.01" 
+                                        name="on_account" 
+                                        value={formData.on_account} 
+                                        onChange={handleInputChange} 
+                                        placeholder="0.00" 
+                                        readOnly
+                                        className="bg-slate-100 font-bold"
+                                    />
                                 </div>
                             </div>
 
@@ -836,42 +1066,336 @@ export default function FlightsPage() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="grid gap-2">
-                                    <Label>Método Pago IT</Label>
-                                    <select 
-                                        name="payment_method_it"
-                                        className="w-full border rounded-md p-2 text-sm bg-white"
-                                        value={formData.payment_method_it}
-                                        onChange={handleInputChange}
-                                    >
-                                        <option value="">Seleccionar...</option>
-                                        <option value="unicredit">Unicredit</option>
-                                        <option value="paypal">PayPal</option>
-                                        <option value="poste_pay">PostePay</option>
-                                        <option value="bonifico">Bonifico</option>
-                                        <option value="efectivo">Efectivo</option>
-                                    </select>
+                                {/* AGREGAR PAGO SECTION */}
+                                {selectedFlightId && flights.find(f => f.id === selectedFlightId)?.payment_details?.length ? (
+                                    <div className="border rounded-xl p-4 bg-emerald-50/20 space-y-3 border-emerald-100/50">
+                                        <div className="flex items-center gap-2">
+                                            <ListChecks className="h-4 w-4 text-emerald-600" />
+                                            <Label className="font-bold text-emerald-800 text-xs uppercase tracking-wider">
+                                                Historial de Pagos
+                                            </Label>
+                                        </div>
+                                        <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
+                                            {flights.find(f => f.id === selectedFlightId)?.payment_details.map((payment, idx) => {
+                                                const isEditing = editingPaymentIndex === idx;
+                                                return (
+                                                    <div key={idx} className={`p-3 rounded-lg border text-sm shadow-sm transition-all ${isEditing ? 'bg-blue-50/50 border-blue-200' : 'bg-white/80 border-emerald-100 hover:border-emerald-300'} group relative`}>
+                                                        {isEditing ? (
+                                                            <div className="animate-in fade-in zoom-in-95 duration-200 space-y-3">
+                                                                <div className="flex items-center justify-between border-b border-blue-100 pb-2">
+                                                                    <span className="font-bold text-blue-700 flex items-center gap-2">
+                                                                        <Edit className="h-3 w-3" /> Editando Abono #{idx + 1}
+                                                                    </span>
+                                                                    <div className="flex gap-1">
+                                                                        <Button 
+                                                                            size="sm" 
+                                                                            variant="ghost" 
+                                                                            className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                                            onClick={() => {
+                                                                                setEditingPaymentIndex(null)
+                                                                                setEditPaymentData(null)
+                                                                            }}
+                                                                        >
+                                                                            <X className="h-4 w-4" />
+                                                                        </Button>
+                                                                        <Button 
+                                                                            size="sm" 
+                                                                            variant="ghost" 
+                                                                            className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                                                            onClick={() => handleSaveEditPayment(selectedFlightId!)}
+                                                                        >
+                                                                            <Check className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+
+                                                                {editPaymentData && (
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+                                                                        <div className="grid gap-1 relative">
+                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Sede IT</Label>
+                                                                            <Input 
+                                                                                className="h-8 text-xs bg-white"
+                                                                                value={editPaymentData.sede_it}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value
+                                                                                    setEditPaymentData(prev => prev ? {...prev, sede_it: val} : null)
+                                                                                    setShowEditSedeITList(true)
+                                                                                }}
+                                                                                onFocus={() => setShowEditSedeITList(true)}
+                                                                                onBlur={() => setTimeout(() => setShowEditSedeITList(false), 200)}
+                                                                            />
+                                                                            {showEditSedeITList && (
+                                                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
+                                                                                    {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.sede_it.toLowerCase())).map((opt, sidx) => (
+                                                                                        <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
+                                                                                            setEditPaymentData(prev => prev ? {...prev, sede_it: opt} : null)
+                                                                                            setShowEditSedeITList(false)
+                                                                                        }}>{opt}</div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="grid gap-1 relative">
+                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Sede PE</Label>
+                                                                            <Input 
+                                                                                className="h-8 text-xs bg-white"
+                                                                                value={editPaymentData.sede_pe}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value
+                                                                                    setEditPaymentData(prev => prev ? {...prev, sede_pe: val} : null)
+                                                                                    setShowEditSedePEList(true)
+                                                                                }}
+                                                                                onFocus={() => setShowEditSedePEList(true)}
+                                                                                onBlur={() => setTimeout(() => setShowEditSedePEList(false), 200)}
+                                                                            />
+                                                                            {showEditSedePEList && (
+                                                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
+                                                                                    {SEDE_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.sede_pe.toLowerCase())).map((opt, sidx) => (
+                                                                                        <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
+                                                                                            setEditPaymentData(prev => prev ? {...prev, sede_pe: opt} : null)
+                                                                                            setShowEditSedePEList(false)
+                                                                                        }}>{opt}</div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="grid gap-1">
+                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Método IT</Label>
+                                                                            <select 
+                                                                                className="h-8 w-full border rounded-md px-2 text-xs bg-white"
+                                                                                value={editPaymentData.metodo_it}
+                                                                                onChange={(e) => setEditPaymentData(prev => prev ? {...prev, metodo_it: e.target.value} : null)}
+                                                                            >
+                                                                                <option value="">Seleccionar...</option>
+                                                                                {PAYMENT_METHOD_IT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                            </select>
+                                                                        </div>
+                                                                        <div className="grid gap-1">
+                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Método PE</Label>
+                                                                            <select 
+                                                                                className="h-8 w-full border rounded-md px-2 text-xs bg-white"
+                                                                                value={editPaymentData.metodo_pe}
+                                                                                onChange={(e) => setEditPaymentData(prev => prev ? {...prev, metodo_pe: e.target.value} : null)}
+                                                                            >
+                                                                                <option value="">Seleccionar...</option>
+                                                                                {PAYMENT_METHOD_PE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                            </select>
+                                                                        </div>
+                                                                        <div className="grid gap-1">
+                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Cantidad (€)</Label>
+                                                                            <Input 
+                                                                                type="number"
+                                                                                step="0.01"
+                                                                                className="h-8 text-xs font-bold bg-yellow-50/50 border-yellow-200"
+                                                                                value={editPaymentData.cantidad}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value
+                                                                                    setEditPaymentData(prev => {
+                                                                                        if (!prev) return null
+                                                                                        const total = (parseFloat(val) * (prev.tipo_cambio || 1)).toFixed(2)
+                                                                                        return {...prev, cantidad: val, total}
+                                                                                    })
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="grid gap-1">
+                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">T. Cambio</Label>
+                                                                            <Input 
+                                                                                type="number"
+                                                                                step="0.0001"
+                                                                                className="h-8 text-xs bg-white"
+                                                                                value={editPaymentData.tipo_cambio}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value
+                                                                                    setEditPaymentData(prev => {
+                                                                                        if (!prev) return null
+                                                                                        const total = (parseFloat(prev.cantidad) * parseFloat(val)).toFixed(2)
+                                                                                        return {...prev, tipo_cambio: parseFloat(val), total}
+                                                                                    })
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="grid gap-1">
+                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Total Procesado</Label>
+                                                                            <Input 
+                                                                                readOnly
+                                                                                className="h-8 text-xs font-bold bg-slate-100 text-emerald-700"
+                                                                                value={`€ ${editPaymentData.total}`}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="grid gap-1">
+                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Nuevo Comprobante</Label>
+                                                                            <Input 
+                                                                                type="file" 
+                                                                                accept="image/*" 
+                                                                                className="w-full text-[11px] cursor-pointer file:bg-blue-50 file:text-blue-700 file:border-0 file:rounded file:px-2 file:py-1 file:mr-2 file:text-[10px] file:font-semibold" 
+                                                                                onChange={(e) => setEditPaymentFile(e.target.files?.[0] || null)}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex justify-between items-center transition-all">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="grid gap-0.5">
+                                                                        <span className="font-bold text-slate-700 flex items-center gap-2">
+                                                                            <span className="w-5 h-5 flex items-center justify-center bg-emerald-100 text-emerald-700 rounded-full text-[10px] shrink-0 font-black">
+                                                                                {idx + 1}
+                                                                            </span>
+                                                                            {payment.metodo_it || payment.metodo_pe || 'Otros'}
+                                                                        </span>
+                                                                        <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium italic">
+                                                                            <Calendar className="h-2.5 w-2.5" /> {payment.created_at ? new Date(payment.created_at).toLocaleDateString() : 'Pendiente'} • <Building2 className="h-2.5 w-2.5" /> {payment.sede_it || payment.sede_pe || 'S/D'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="text-right">
+                                                                        <span className="font-bold text-emerald-600 text-base leading-none block">€ {parseFloat(payment.cantidad).toFixed(2)}</span>
+                                                                        <span className="text-[9px] text-slate-400 uppercase tracking-tighter">Procesado: € {payment.total}</span>
+                                                                        {payment.proof_path && (
+                                                                            <button 
+                                                                                type="button"
+                                                                                onClick={() => handleDownload(payment.proof_path!, payment.proof_path?.startsWith('clients/') ? 'r2' : 'images')}
+                                                                                className="text-[9px] font-bold text-chimiteal hover:underline flex items-center gap-1 mt-0.5 justify-end w-full"
+                                                                            >
+                                                                                <FileText className="h-2 w-2" /> Ver Comprobante
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setEditingPaymentIndex(idx)
+                                                                                setEditPaymentData(payment)
+                                                                            }}
+                                                                            className="text-slate-300 hover:text-chimiteal transition-colors p-1"
+                                                                            title="Editar Pago"
+                                                                        >
+                                                                            <Edit className="h-3.5 w-3.5" />
+                                                                        </button>
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={() => handleDeletePayment(selectedFlightId!, idx)}
+                                                                            className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                                                                            title="Eliminar Pago"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                <div className="border rounded-xl p-4 bg-slate-50/50 space-y-4 border-dashed border-slate-300 relative">
+                                    <div className="flex justify-between items-center">
+                                        <Label className="font-bold text-slate-700 flex items-center gap-2 text-xs uppercase tracking-wide">
+                                            💰 Registrar Nuevo Pago
+                                        </Label>
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            size="sm"
+                                            onClick={() => setShowPaymentFields(!showPaymentFields)}
+                                            className={showPaymentFields ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" : "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"}
+                                        >
+                                            {showPaymentFields ? "Cerrar" : "+ Agregar Pago"}
+                                        </Button>
+                                    </div>
+
+                                    {showPaymentFields && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 border-t pt-4 border-slate-200">
+                                            <div className="grid gap-2 relative">
+                                                <Label className="text-xs">Sede IT</Label>
+                                                <Input 
+                                                    name="sede_it" 
+                                                    value={formData.sede_it} 
+                                                    onChange={(e) => {
+                                                        handleInputChange(e)
+                                                        setShowSedeITList(true)
+                                                    }}
+                                                    onFocus={() => setShowSedeITList(true)}
+                                                    onBlur={() => setTimeout(() => setShowSedeITList(false), 200)}
+                                                    placeholder="Buscar sede IT..."
+                                                    autoComplete="off"
+                                                />
+                                                {showSedeITList && (
+                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                        {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.sede_it.toLowerCase())).map((opt, idx) => (
+                                                            <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                setFormData(p => ({ ...p, sede_it: opt }))
+                                                                setShowSedeITList(false)
+                                                            }}>{opt}</div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="grid gap-2 relative">
+                                                <Label className="text-xs">Sede PE</Label>
+                                                <Input 
+                                                    name="sede_pe" 
+                                                    value={formData.sede_pe} 
+                                                    onChange={(e) => {
+                                                        handleInputChange(e)
+                                                        setShowSedePEList(true)
+                                                    }}
+                                                    onFocus={() => setShowSedePEList(true)}
+                                                    onBlur={() => setTimeout(() => setShowSedePEList(false), 200)}
+                                                    placeholder="Buscar sede PE..."
+                                                    autoComplete="off"
+                                                />
+                                                {showSedePEList && (
+                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                        {SEDE_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.sede_pe.toLowerCase())).map((opt, idx) => (
+                                                            <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                setFormData(p => ({ ...p, sede_pe: opt }))
+                                                                setShowSedePEList(false)
+                                                            }}>{opt}</div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">Método Pago IT</Label>
+                                                <select name="payment_method_it" value={formData.payment_method_it} onChange={handleInputChange} className="w-full border rounded-md p-2 text-sm bg-white focus:ring-chimiteal">
+                                                    <option value="">Seleccionar...</option>
+                                                    {PAYMENT_METHOD_IT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">Método Pago PE</Label>
+                                                <select name="payment_method_pe" value={formData.payment_method_pe} onChange={handleInputChange} className="w-full border rounded-md p-2 text-sm bg-white focus:ring-chimiteal">
+                                                    <option value="">Seleccionar...</option>
+                                                    {PAYMENT_METHOD_PE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs font-bold text-slate-700">Cantidad (Paga Cliente)</Label>
+                                                <Input type="number" step="0.01" name="payment_quantity" value={formData.payment_quantity} onChange={handleInputChange} placeholder="0.00" className="bg-yellow-50 border-yellow-200 focus:ring-yellow-500 font-bold" />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">Tipo de Cambio</Label>
+                                                <Input type="number" step="0.0001" name="payment_exchange_rate" value={formData.payment_exchange_rate} onChange={handleInputChange} placeholder="1.00" />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">Total Procesado</Label>
+                                                <Input type="number" step="0.01" name="payment_total" value={formData.payment_total} readOnly className="bg-slate-100 font-bold text-emerald-700" />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs font-semibold">Foto de Comprobante (Opcional)</Label>
+                                                <Input type="file" accept="image/*" onChange={(e) => setPaymentProofFile(e.target.files?.[0] || null)} className="text-xs cursor-pointer file:bg-emerald-50 file:text-emerald-700 file:border-0 file:rounded-md file:px-2 file:py-1 file:mr-2" />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="grid gap-2">
-                                    <Label>Método Pago PE</Label>
-                                    <select 
-                                        name="payment_method_pe"
-                                        className="w-full border rounded-md p-2 text-sm bg-white"
-                                        value={formData.payment_method_pe}
-                                        onChange={handleInputChange}
-                                    >
-                                        <option value="">Seleccionar...</option>
-                                        <option value="bcp">BCP</option>
-                                        <option value="interbank">Interbank</option>
-                                        <option value="bbva">BBVA</option>
-                                        <option value="scotiabank">Scotiabank</option>
-                                        <option value="yape">Yape</option>
-                                        <option value="plin">Plin</option>
-                                        <option value="efectivo">Efectivo</option>
-                                    </select>
-                                </div>
-                            </div>
 
                             <div className="grid gap-2">
                                 <Label>Estado de Viaje</Label>
@@ -1031,6 +1555,7 @@ export default function FlightsPage() {
                                     <th className="px-6 py-4 font-medium">Fecha Viaje</th>
                                     <th className="px-6 py-4 font-medium">PNR</th>
                                     <th className="px-6 py-4 font-medium">Cliente</th>
+                                    <th className="px-6 py-4 font-medium">Agente</th>
                                     <th className="px-6 py-4 font-medium">Itinerario</th>
                                     <th className="px-6 py-4 font-medium text-center">Incluye</th>
                                     <th className="px-6 py-4 font-medium">Neto</th>
@@ -1061,6 +1586,11 @@ export default function FlightsPage() {
                                                 <div className="font-medium text-slate-900">{flight.profiles?.first_name} {flight.profiles?.last_name}</div>
                                                 <div className="text-xs text-slate-500">{flight.profiles?.email}</div>
                                             </td>
+                                            <td className="px-6 py-4">
+                                                <div className="text-xs text-slate-600 font-medium">
+                                                    {flight.agent ? `${flight.agent.first_name} ${flight.agent.last_name}` : '-'}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 max-w-[150px] truncate" title={flight.itinerary}>
                                                 {flight.itinerary || '-'}
                                             </td>
@@ -1073,29 +1603,31 @@ export default function FlightsPage() {
                                                     <span className="text-slate-300">-</span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">S/ {flight.cost.toFixed(2)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap">S/ {(flight.sold_price || 0).toFixed(2)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-emerald-600 font-semibold">S/ {(flight.fee_agv || 0).toFixed(2)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap">S/ {flight.on_account.toFixed(2)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">€ {flight.cost.toFixed(2)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">€ {(flight.sold_price || 0).toFixed(2)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-emerald-600 font-semibold">€ {(flight.fee_agv || 0).toFixed(2)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">€ {flight.on_account.toFixed(2)}</td>
                                             <td className="px-6 py-4 font-medium whitespace-nowrap">
                                                 {flight.balance > 0 ? (
-                                                    <span className="text-red-600">S/ {flight.balance.toFixed(2)}</span>
+                                                    <span className="text-red-600">€ {flight.balance.toFixed(2)}</span>
                                                 ) : (
                                                     <span className="text-emerald-600">Pagado</span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-xs">
-                                                {flight.payment_method_it ? (
-                                                    <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded border border-blue-200 block text-center mb-1">
-                                                        IT: {flight.payment_method_it}
+                                            <td className="px-6 py-4 text-center">
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="ghost" 
+                                                    className="group relative flex flex-col items-center gap-1 hover:bg-emerald-50 transition-all duration-300 rounded-xl py-2 px-3"
+                                                    onClick={() => setPaymentHistoryFlight(flight)}
+                                                >
+                                                    <div className="bg-emerald-100 text-emerald-700 p-1.5 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors shadow-sm">
+                                                        <Wallet className="h-4 w-4" />
+                                                    </div>
+                                                    <span className="text-[9px] font-bold text-slate-400 group-hover:text-emerald-600 uppercase tracking-tighter">
+                                                        {flight.payment_details?.length || 0} pagos
                                                     </span>
-                                                ) : null}
-                                                {flight.payment_method_pe ? (
-                                                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded border border-red-200 block text-center">
-                                                        PE: {flight.payment_method_pe}
-                                                    </span>
-                                                ) : null}
-                                                {!flight.payment_method_it && !flight.payment_method_pe && <span className="text-slate-300">-</span>}
+                                                </Button>
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 {flight.documents && flight.documents.length > 0 ? (

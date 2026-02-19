@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 import type { Metadata } from 'next';
 
 import { getClientUser } from "@/app/actions/client-portal";
@@ -39,6 +40,9 @@ export default async function ClientLayout({
         <footer className="py-6 px-8 border-t border-slate-200/60 text-center text-sm text-slate-500 bg-transparent">
           © {new Date().getFullYear()} Chimivuelos S.A.C. - Portal de Clientes
         </footer>
+      
+        {/* Chat Widget */}
+        <ChatWidget />
       </div>
     </div>
   );

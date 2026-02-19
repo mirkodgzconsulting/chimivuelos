@@ -1,7 +1,7 @@
 
 "use client";
 import * as React from 'react';
-import { Search, LogOut, ChevronDown, User } from 'lucide-react';
+import { LogOut, ChevronDown, User } from 'lucide-react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -36,17 +36,7 @@ export function Header({ user, role }: HeaderProps) {
         <MobileSidebar role={role} />
       </div>
 
-      {/* Search Bar - Expanded */}
-      <div className="flex flex-1 items-center max-w-lg">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Buscar..."
-            className="h-10 w-full rounded-md border border-slate-200/50 bg-white/60 pl-10 pr-4 text-sm font-medium text-slate-800 placeholder-slate-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-chimicyan/50 transition-all shadow-sm"
-          />
-        </div>
-      </div>
+      <div className="flex flex-1" />
 
       {/* Right Actions */}
       <div className="flex items-center gap-4">

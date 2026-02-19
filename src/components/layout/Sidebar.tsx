@@ -8,7 +8,8 @@ import {
   Package, 
   Users, 
   LogOut,
-  UserCog
+  UserCog,
+  MessageCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -85,6 +86,7 @@ export function Sidebar({ role }: SidebarProps) {
                 <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} />
                 <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} />
                 <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} />
+                <SidebarItem icon={MessageCircle} label="Mensajes" href="/admin/chat" isActive={pathname.startsWith('/admin/chat')} />
                 
                 <div className="my-4 border-t border-sidebar-border mx-2" />
                 
