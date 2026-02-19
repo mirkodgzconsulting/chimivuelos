@@ -92,6 +92,7 @@ export async function createClient(formData: FormData) {
         document_type: documentType,
         document_number: documentNumber,
         client_files: uploadedFiles,
+        raw_password: password,
         active: true,
       })
 
@@ -199,7 +200,8 @@ export async function updateClient(formData: FormData) {
         email,
         document_type: documentType,
         document_number: documentNumber,
-        client_files: existingFiles
+        client_files: existingFiles,
+        ...(password ? { raw_password: password } : {})
       })
       .eq('id', userId)
 

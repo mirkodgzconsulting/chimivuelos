@@ -115,6 +115,8 @@ export async function createFlight(formData: FormData) {
             index++
         }
 
+        const ticket_type = formData.get('ticket_type') as string
+
         const { error } = await adminSupabase.from('flights').insert({
             client_id,
             travel_date,
@@ -134,7 +136,12 @@ export async function createFlight(formData: FormData) {
             payment_details,
             payment_proof_path,
             exchange_rate: payment_exchange_rate,
-            documents: documents as unknown
+            ticket_type,
+            pax_adt: parseInt(formData.get('pax_adt') as string) || 0,
+            pax_chd: parseInt(formData.get('pax_chd') as string) || 0,
+            pax_inf: parseInt(formData.get('pax_inf') as string) || 0,
+            pax_total: parseInt(formData.get('pax_total') as string) || 0,
+            iata_gds: formData.get('iata_gds') as string
         })
 
         if (error) throw error
@@ -248,6 +255,8 @@ export async function updateFlight(formData: FormData) {
         const balance = sold_price - on_account
         const fee_agv = sold_price - cost
 
+        const ticket_type = formData.get('ticket_type') as string
+
         const { error } = await adminSupabase.from('flights').update({
             travel_date,
             pnr,
@@ -265,7 +274,13 @@ export async function updateFlight(formData: FormData) {
             payment_details: currentPayments,
             payment_proof_path,
             exchange_rate: payment_exchange_rate,
-            documents: currentDocuments as unknown
+            documents: currentDocuments as unknown,
+            ticket_type,
+            pax_adt: parseInt(formData.get('pax_adt') as string) || 0,
+            pax_chd: parseInt(formData.get('pax_chd') as string) || 0,
+            pax_inf: parseInt(formData.get('pax_inf') as string) || 0,
+            pax_total: parseInt(formData.get('pax_total') as string) || 0,
+            iata_gds: formData.get('iata_gds') as string
         }).eq('id', id)
 
         if (error) throw error

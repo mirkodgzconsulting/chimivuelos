@@ -46,20 +46,25 @@ export function ChatWidget() {
 
     // 2. Realtime Subscription
     useEffect(() => {
-        if (!isClientPortal) return
+        if (!isClientPortal || !conversationId) return
+
+        let mounted = true
 
         const channel = supabase
-            .channel('global-chat-channel')
+            .channel(`client-chat-${conversationId}`)
             .on(
                 'postgres_changes',
                 {
                     event: 'INSERT',
                     schema: 'public',
                     table: 'messages',
+                    filter: `conversation_id=eq.${conversationId}`
                 },
-                (payload) => {
+                async (payload) => {
                     const newMsg = payload.new as Message
                     
+                    if (!mounted) return
+
                     setMessages((prev) => {
                         // 1. If it's already there (by ID), skip
                         if (prev.some(m => m.id === newMsg.id)) return prev
@@ -81,16 +86,23 @@ export function ChatWidget() {
                     })
                     
                     if (newMsg.is_admin) {
-                         setUnreadCount(prev => prev + 1)
+                         if (isOpen) {
+                             // If chat is open, mark as read immediately
+                             await markAsRead(conversationId)
+                             setUnreadCount(0)
+                         } else {
+                             setUnreadCount(prev => prev + 1)
+                         }
                     }
                 }
             )
             .subscribe()
 
         return () => {
+            mounted = false
             supabase.removeChannel(channel)
         }
-    }, [isClientPortal, supabase])
+    }, [isClientPortal, supabase, conversationId, isOpen])
 
     // Auto-scroll
     useEffect(() => {

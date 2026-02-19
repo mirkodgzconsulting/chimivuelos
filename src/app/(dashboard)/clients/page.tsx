@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { ChevronLeft, ChevronRight, FileSpreadsheet, Plus, Search, Trash2, UserCog, FileText, X, Download, FolderOpen } from "lucide-react"
+import { ChevronLeft, ChevronRight, FileSpreadsheet, Plus, Search, Trash2, UserCog, FileText, X, Download, FolderOpen, Copy, Check } from "lucide-react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,7 @@ interface ClientProfile {
   document_number: string | null
   client_files: ClientFile[] | null
   active: boolean | null
+  raw_password?: string | null
   created_at?: string
 }
 
@@ -43,6 +44,9 @@ export default function ClientsPage() {
   
   // Docs Viewer State
   const [docsViewerClient, setDocsViewerClient] = useState<ClientProfile | null>(null)
+  
+  // Copy Feedback State
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     first_name: "",
@@ -73,7 +77,10 @@ export default function ClientsPage() {
 
   const refreshClients = async () => {
     const { data, error } = await getClientsList()
-    if (!error && data) {
+    if (error) {
+        console.error("Error al cargar clientes:", error)
+        alert("Error de conexión con la base de datos: " + error.message)
+    } else if (data) {
         setClients(data as unknown as ClientProfile[])
     }
   }
@@ -81,8 +88,13 @@ export default function ClientsPage() {
   useEffect(() => {
     let mounted = true
     getClientsList().then(({ data, error }) => {
-      if (mounted && !error && data) {
-        setClients(data as unknown as ClientProfile[])
+      if (mounted) {
+        if (error) {
+            console.error("Error inicial de carga:", error)
+            alert("No se pudieron cargar los clientes: " + error.message)
+        } else if (data) {
+            setClients(data as unknown as ClientProfile[])
+        }
       }
     })
     return () => { mounted = false }
@@ -214,6 +226,16 @@ export default function ClientsPage() {
         console.error("Error viewing file:", e);
         alert("Error al abrir el archivo.");
     }
+  }
+
+  const handleCopyLogins = (client: ClientProfile) => {
+    const password = client.raw_password || "(contraseña no disponible)"
+    const message = `Hola ${client.first_name}, ¿qué tal? 😊\n\nAcabamos de crear tu cuenta con el correo que nos enviaste.\n\n✉️ Usuario: ${client.email}\n🔑 Contraseña: ${password}\n\n🔗 Link de acceso:\n👉 https://chimivuelos.pe/clienti`
+    navigator.clipboard.writeText(message)
+    
+    // Set feedback state
+    setCopiedId(client.id)
+    setTimeout(() => setCopiedId(null), 2000)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -486,6 +508,7 @@ export default function ClientsPage() {
                   <th className="px-6 py-4 font-medium">Documento</th>
                   <th className="px-6 py-4 font-medium">Celular</th>
                   <th className="px-6 py-4 font-medium text-center">Docs</th>
+                  <th className="px-6 py-4 font-medium text-center">Accesos</th>
                   <th className="px-6 py-4 font-medium text-right">Acciones</th>
                 </tr>
               </thead>
@@ -518,6 +541,31 @@ export default function ClientsPage() {
                             <span className="text-slate-300">-</span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <Button 
+                        size="sm" 
+                        variant={copiedId === client.id ? "secondary" : "outline"}
+                        className={`transition-all duration-300 gap-2 font-semibold h-8 min-w-[120px] ${
+                          copiedId === client.id 
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-200" 
+                          : "text-chimiteal border-chimiteal/20 hover:bg-teal-50 hover:text-chimiteal"
+                        }`} 
+                        onClick={() => handleCopyLogins(client)}
+                        disabled={copiedId === client.id}
+                      >
+                        {copiedId === client.id ? (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            <span className="text-[10px] uppercase">¡Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            <span className="text-[10px] uppercase">Copiar para WA</span>
+                          </>
+                        )}
+                      </Button>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">

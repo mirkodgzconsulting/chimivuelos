@@ -64,6 +64,12 @@ interface Flight {
     payment_details: PaymentDetail[]
     payment_proof_path: string | null
     exchange_rate: number
+    ticket_type?: string
+    pax_adt?: number
+    pax_chd?: number
+    pax_inf?: number
+    pax_total?: number
+    iata_gds?: string
 }
 
 interface ClientOption {
@@ -90,6 +96,15 @@ interface FlightDetails {
     baggage_2pc_23kg: boolean
     baggage_1pc_10kg: boolean
     baggage_backpack: boolean
+    insurance_tourism_date_from: string
+    insurance_tourism_date_to: string
+    insurance_tourism_active: boolean
+    insurance_migratory: boolean
+    svc_stewardess_um: boolean
+    svc_pet_travel: boolean
+    hotel_custom_active: boolean
+    hotel_custom_days: string
+    hotel_custom_nights: string
     special_note: string
 }
 
@@ -99,16 +114,21 @@ const DETAILS_LABELS: Record<string, string> = {
     insurance_1m: "Seguro x 1 mes",
     insurance_2m: "Seguro x 2 meses",
     insurance_3m: "Seguro x 3 meses",
-    doc_invitation_letter: "Redacción carta invitación",
+    doc_invitation_letter: "Redacción carta de invitación con documentos del anfitrión (El cliente envía copia del documento de identidad o Permesso di soggiorno y Tessera sanitaria del familiar en Italia.)",
     doc_agency_managed: "Carta inv. gestionada por agencia",
     svc_airport_assistance: "Asistencia aeroportuaria",
     svc_return_activation: "Activación pasaje retorno",
-    hotel_3d_2n: "Hotel 3 días / 2 noches",
+    hotel_3d_2n: "Hotel 3 días / 2 noches (Utilizable 1 día)",
+    hotel_custom_active: "Hotel personalizado",
     hotel_2d_1n: "Hotel 2 días / 1 noche",
     baggage_1pc_23kg: "1 pc 23kg",
     baggage_2pc_23kg: "2 pc 23kg",
     baggage_1pc_10kg: "1 pc 10kg",
     baggage_backpack: "1 Mochila",
+    insurance_tourism_active: "Seguro (Turista / Schengen)",
+    insurance_migratory: "Seguro migratorio",
+    svc_stewardess_um: "solicitud de servizio de azafata menor de edad (UMNR)- (pago por servicio 225 euro)",
+    svc_pet_travel: "Viaja con mascota",
 }
 
 const DOCUMENT_TYPES = [
@@ -142,10 +162,50 @@ const ITINERARY_OPTIONS = [
     "Cusco - Lima - Cusco"
 ]
 
+const TICKET_TYPE_OPTIONS = [
+    "Exprés migratorio — Italia",
+    "Exprés turismo — Italia",
+    "Exprés migratorio — Europa",
+    "Exprés turismo — Mundo",
+    "Étnico — solo ida",
+    "Étnico — ida y vuelta",
+    "Exprés con documento",
+    "Pasaje low cost (económico, servicios básicos)"
+]
+
+const IATA_OPTIONS = [
+    "sabre suema",
+    "dolar continental",
+    "otro 1",
+    "otro 2"
+]
+
 const SEDE_IT_OPTIONS = ["Milano", "Roma", "Firenze", "Venezia", "Torino", "Genova"]
 const SEDE_PE_OPTIONS = ["Lima", "Cusco", "Arequipa", "Trujillo", "Piura", "Iquitos"]
-const PAYMENT_METHOD_IT_OPTIONS = ["Efectivo", "Transferencia IT", "Tarjeta", "PayPal"]
-const PAYMENT_METHOD_PE_OPTIONS = ["Efectivo", "Transferencia PE", "Yape/Plin", "Tarjeta"]
+const PAYMENT_METHOD_IT_OPTIONS = [
+    "EFEC TURRO — MILANO",
+    "EFEC CORSICO — MILANO",
+    "EFEC ROMA",
+    "UNICREDIT CHIMI",
+    "BANK WISE",
+    "BONIFICO SUEMA",
+    "POS — UNICREDIT CHIMI",
+    "WESTERN UNION",
+    "RIA",
+    "OTRO GIRO"
+]
+const PAYMENT_METHOD_PE_OPTIONS = [
+    "EFEC LIMA SOL",
+    "EFEC LIMA EURO",
+    "EFEC LIMA DOLAR",
+    "BCP SOLES CHIMI",
+    "BCP DOLAR",
+    "BANCA EURO PERÚ",
+    "POS / LINK — BCP CHIMI",
+    "WESTERN UNION",
+    "RIA",
+    "OTRO GIRO"
+]
 
 const INITIAL_FLIGHT_DETAILS: FlightDetails = {
     ticket_one_way: false,
@@ -163,6 +223,15 @@ const INITIAL_FLIGHT_DETAILS: FlightDetails = {
     baggage_2pc_23kg: false,
     baggage_1pc_10kg: false,
     baggage_backpack: false,
+    insurance_tourism_date_from: '',
+    insurance_tourism_date_to: '',
+    insurance_tourism_active: false,
+    insurance_migratory: false,
+    svc_stewardess_um: false,
+    svc_pet_travel: false,
+    hotel_custom_active: false,
+    hotel_custom_days: '',
+    hotel_custom_nights: '',
     special_note: ''
 }
 
@@ -220,6 +289,12 @@ export default function FlightsPage() {
         payment_quantity: '',
         payment_exchange_rate: '1.0',
         payment_total: '',
+        ticket_type: '',
+        pax_adt: '1',
+        pax_chd: '0',
+        pax_inf: '0',
+        pax_total: '1',
+        iata_gds: 'sabre suema',
     })
 
     const [showPaymentFields, setShowPaymentFields] = useState(false)
@@ -246,6 +321,10 @@ export default function FlightsPage() {
     const [showItineraryList, setShowItineraryList] = useState(false)
     const [showSedeITList, setShowSedeITList] = useState(false)
     const [showSedePEList, setShowSedePEList] = useState(false)
+    const [showMetodoITList, setShowMetodoITList] = useState(false)
+    const [showMetodoPEList, setShowMetodoPEList] = useState(false)
+    const [showTicketTypeList, setShowTicketTypeList] = useState(false)
+    const [showIATAOptions, setShowIATAOptions] = useState(false)
     const [baseOnAccount, setBaseOnAccount] = useState(0) // Track existing payments sum
 
     // Load Data
@@ -308,6 +387,14 @@ export default function FlightsPage() {
             newFormData.fee_agv = (vendido - neto).toFixed(2)
         }
 
+        // Logic for PAX Total calculation
+        if (name === 'pax_adt' || name === 'pax_chd' || name === 'pax_inf') {
+            const adt = parseInt(name === 'pax_adt' ? value : newFormData.pax_adt) || 0
+            const chd = parseInt(name === 'pax_chd' ? value : newFormData.pax_chd) || 0
+            const inf = parseInt(name === 'pax_inf' ? value : newFormData.pax_inf) || 0
+            newFormData.pax_total = (adt + chd + inf).toString()
+        }
+
         setFormData(newFormData)
     }
 
@@ -356,6 +443,12 @@ export default function FlightsPage() {
             payment_quantity: '',
             payment_exchange_rate: '1.0',
             payment_total: '',
+            ticket_type: '',
+            pax_adt: '1',
+            pax_chd: '0',
+            pax_inf: '0',
+            pax_total: '1',
+            iata_gds: 'sabre suema',
         })
         const initialDocs = DOCUMENT_TYPES.map(type => ({ 
             title: type, 
@@ -395,6 +488,12 @@ export default function FlightsPage() {
             payment_quantity: '',
             payment_exchange_rate: (flight.exchange_rate || 1.0).toString(),
             payment_total: '',
+            ticket_type: flight.ticket_type || '',
+            pax_adt: (flight.pax_adt || 1).toString(),
+            pax_chd: (flight.pax_chd || 0).toString(),
+            pax_inf: (flight.pax_inf || 0).toString(),
+            pax_total: (flight.pax_total || 1).toString(),
+            iata_gds: flight.iata_gds || 'sabre suema',
         })
         setBaseOnAccount(flight.on_account || 0)
         setClientSearch(`${flight.profiles.first_name} ${flight.profiles.last_name}`)
@@ -470,6 +569,8 @@ export default function FlightsPage() {
     const [editPaymentData, setEditPaymentData] = useState<PaymentDetail | null>(null)
     const [showEditSedeITList, setShowEditSedeITList] = useState(false)
     const [showEditSedePEList, setShowEditSedePEList] = useState(false)
+    const [showEditMetodoITList, setShowEditMetodoITList] = useState(false)
+    const [showEditMetodoPEList, setShowEditMetodoPEList] = useState(false)
     const [editPaymentFile, setEditPaymentFile] = useState<File | null>(null)
 
     const handleSaveEditPayment = async (flightId: string) => {
@@ -572,6 +673,12 @@ export default function FlightsPage() {
             A_Cuenta_EUR: f.on_account,
             Saldo_EUR: f.balance,
             Metodo_Pago: f.payment_method_it ? `IT: ${f.payment_method_it}` : (f.payment_method_pe ? `PE: ${f.payment_method_pe}` : '-'),
+            Tipo_Pasaje: f.ticket_type || '-',
+            IATA_GDS: f.iata_gds || '-',
+            PAX_ADT: f.pax_adt || 0,
+            PAX_CHD: f.pax_chd || 0,
+            PAX_INF: f.pax_inf || 0,
+            PAX_Total: f.pax_total || 0,
             Estado: f.status === 'finished' ? 'Terminado' : 'Pendiente'
         }))
         const worksheet = XLSX.utils.json_to_sheet(dataToExport)
@@ -676,16 +783,71 @@ export default function FlightsPage() {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4 space-y-4">
+                        {detailsViewerFlight && (
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-3">
+                                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">Resumen de Viaje</span>
+                                    <span className="bg-chimipink/10 text-chimipink px-2 py-0.5 rounded text-[10px] font-bold uppercase">
+                                        {detailsViewerFlight.ticket_type || 'Estándar'}
+                                    </span>
+                                    <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">
+                                        {detailsViewerFlight.iata_gds || 'S/D'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest block">Total Pax</span>
+                                        <span className="text-lg font-bold text-slate-700">{detailsViewerFlight.pax_total || 1} Personas</span>
+                                    </div>
+                                    <div className="flex gap-2 items-center justify-end">
+                                        <div className="text-center px-2">
+                                            <span className="text-[8px] text-slate-400 uppercase block">ADT</span>
+                                            <span className="font-bold text-slate-600">{detailsViewerFlight.pax_adt || 1}</span>
+                                        </div>
+                                        <div className="text-center px-2 border-l border-slate-200">
+                                            <span className="text-[8px] text-slate-400 uppercase block">CHD</span>
+                                            <span className="font-bold text-slate-600">{detailsViewerFlight.pax_chd || 0}</span>
+                                        </div>
+                                        <div className="text-center px-2 border-l border-slate-200">
+                                            <span className="text-[8px] text-slate-400 uppercase block">INF</span>
+                                            <span className="font-bold text-slate-600">{detailsViewerFlight.pax_inf || 0}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {detailsViewerFlight?.details && (
                             <div className="space-y-2">
-                                <h4 className="text-sm font-bold text-chimipink">Incluye:</h4>
+                                <h4 className="text-sm font-bold text-chimipink">Servicios Incluidos:</h4>
                                 <ul className="grid grid-cols-1 gap-2">
                                     {Object.entries(detailsViewerFlight.details).map(([key, value]) => {
-                                        if (key === 'special_note' || !value) return null
+                                        if (key === 'hotel_custom_days' || key === 'hotel_custom_nights' || key === 'special_note' || key.startsWith('insurance_tourism_date') || !value) return null
+                                        
+                                        let label = DETAILS_LABELS[key] || key;
+                                        
+                                        // Specific formatting for dates if it's the tourism insurance
+                                        if (key === 'insurance_tourism_active') {
+                                            const from = detailsViewerFlight.details?.insurance_tourism_date_from;
+                                            const to = detailsViewerFlight.details?.insurance_tourism_date_to;
+                                            if (from && to) {
+                                                const fromFormatted = new Date(from).toLocaleDateString('es-PE');
+                                                const toFormatted = new Date(to).toLocaleDateString('es-PE');
+                                                label = `Seguro desde ${fromFormatted} hasta ${toFormatted} (turista / Schengen)`;
+                                            }
+                                        }
+
+                                        // Custom hotel text
+                                        if (key === 'hotel_custom_active') {
+                                            const days = detailsViewerFlight.details?.hotel_custom_days || '__';
+                                            const nights = detailsViewerFlight.details?.hotel_custom_nights || '__';
+                                            label = `Hotel — ${days} días / ${nights} noches`;
+                                        }
+
                                         return (
                                             <li key={key} className="flex items-center gap-2 text-sm text-slate-700 bg-slate-50 p-2 rounded border border-slate-100">
                                                 <span className="text-green-500">✔</span>
-                                                {DETAILS_LABELS[key] || key}
+                                                {label}
                                             </li>
                                         )
                                     })}
@@ -870,6 +1032,128 @@ export default function FlightsPage() {
                             </div>
                             
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid gap-2 relative">
+                                    <Label className="font-semibold text-slate-700">Tipo de Pasaje</Label>
+                                    <Input 
+                                        name="ticket_type"
+                                        value={formData.ticket_type}
+                                        onChange={(e) => {
+                                            handleInputChange(e)
+                                            setShowTicketTypeList(true)
+                                        }}
+                                        onFocus={() => setShowTicketTypeList(true)}
+                                        onBlur={() => setTimeout(() => setShowTicketTypeList(false), 200)}
+                                        placeholder="Seleccione o busque el tipo de pasaje..."
+                                        autoComplete="off"
+                                        className="border-slate-300 focus:ring-chimiteal"
+                                    />
+                                    {showTicketTypeList && (
+                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-48 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+                                            {TICKET_TYPE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.ticket_type.toLowerCase())).map((opt, idx) => (
+                                                <div 
+                                                    key={idx}
+                                                    className="p-3 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({ ...prev, ticket_type: opt }))
+                                                        setShowTicketTypeList(false)
+                                                    }}
+                                                >
+                                                    {opt}
+                                                </div>
+                                            ))}
+                                            {TICKET_TYPE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.ticket_type.toLowerCase())).length === 0 && (
+                                                <div className="p-3 text-xs text-slate-400 italic">No se encontraron coincidencias</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="grid gap-2 relative">
+                                    <Label className="font-semibold text-slate-700">IATA / GDS</Label>
+                                    <Input 
+                                        name="iata_gds"
+                                        value={formData.iata_gds}
+                                        onChange={(e) => {
+                                            handleInputChange(e)
+                                            setShowIATAOptions(true)
+                                        }}
+                                        onFocus={() => setShowIATAOptions(true)}
+                                        onBlur={() => setTimeout(() => setShowIATAOptions(false), 200)}
+                                        placeholder="Buscar..."
+                                        autoComplete="off"
+                                        className="border-slate-300 focus:ring-chimiteal"
+                                    />
+                                    {showIATAOptions && (
+                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-48 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+                                            {IATA_OPTIONS.filter(opt => {
+                                                // Si el texto es el valor por defecto, mostrar todas las opciones
+                                                if (formData.iata_gds === 'sabre suema') return true;
+                                                // Si no, filtrar por lo que el usuario escriba
+                                                return opt.toLowerCase().includes(formData.iata_gds.toLowerCase());
+                                            }).map((opt, idx) => (
+                                                <div 
+                                                    key={idx}
+                                                    className="p-3 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({ ...prev, iata_gds: opt }))
+                                                        setShowIATAOptions(false)
+                                                    }}
+                                                >
+                                                    {opt}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-3">
+                                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                                    <Label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                        👥 TOTAL PAX: <span className="text-chimipink text-lg">{formData.pax_total}</span>
+                                    </Label>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4 text-center">
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center justify-center gap-1">👤 ADT</Label>
+                                        <Input 
+                                            type="number" 
+                                            min="0"
+                                            name="pax_adt" 
+                                            value={formData.pax_adt} 
+                                            onChange={handleInputChange} 
+                                            className="h-9 text-center font-bold border-slate-200 focus:ring-chimiteal"
+                                        />
+                                        <span className="text-[9px] text-slate-400">Adultos</span>
+                                    </div>
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center justify-center gap-1">🧒 CHD</Label>
+                                        <Input 
+                                            type="number" 
+                                            min="0"
+                                            name="pax_chd" 
+                                            value={formData.pax_chd} 
+                                            onChange={handleInputChange} 
+                                            className="h-9 text-center font-bold border-slate-200 focus:ring-chimiteal"
+                                        />
+                                        <span className="text-[9px] text-slate-400">Niños</span>
+                                    </div>
+                                    <div className="grid gap-1.5">
+                                        <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center justify-center gap-1">👶 INF</Label>
+                                        <Input 
+                                            type="number" 
+                                            min="0"
+                                            name="pax_inf" 
+                                            value={formData.pax_inf} 
+                                            onChange={handleInputChange} 
+                                            className="h-9 text-center font-bold border-slate-200 focus:ring-chimiteal"
+                                        />
+                                        <span className="text-[9px] text-slate-400">Bebés</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                      <Label>PNR</Label>
                                      <Input name="pnr" value={formData.pnr} onChange={handleInputChange} placeholder="Código de reserva" />
@@ -971,15 +1255,61 @@ export default function FlightsPage() {
                                             Seguro x 3 meses
                                         </label>
                                     </div>
+
+                                    {/* New Insurance Options */}
+                                    <div className="mt-3 space-y-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-2 bg-slate-50 border border-dashed border-slate-200 rounded-lg">
+                                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={flightDetails.insurance_tourism_active} 
+                                                    onChange={(e) => handleDetailChange('insurance_tourism_active', e.target.checked)} 
+                                                    className="rounded border-slate-300 text-chimipink focus:ring-chimipink" 
+                                                />
+                                                <span className="font-medium">Seguro desde</span>
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <input 
+                                                    type="date" 
+                                                    value={flightDetails.insurance_tourism_date_from}
+                                                    onChange={(e) => handleDetailChange('insurance_tourism_date_from', e.target.value)}
+                                                    className="text-xs border rounded p-1 focus:ring-1 focus:ring-chimipink outline-none"
+                                                />
+                                                <span className="text-xs text-slate-500">hasta</span>
+                                                <input 
+                                                    type="date" 
+                                                    value={flightDetails.insurance_tourism_date_to}
+                                                    onChange={(e) => handleDetailChange('insurance_tourism_date_to', e.target.value)}
+                                                    className="text-xs border rounded p-1 focus:ring-1 focus:ring-chimipink outline-none"
+                                                />
+                                            </div>
+                                            <span className="text-xs text-slate-400 italic">(turista / Schengen)</span>
+                                        </div>
+
+                                        <label className="flex items-center gap-2 text-sm cursor-pointer p-2 hover:bg-slate-100 rounded-lg transition-colors border border-transparent hover:border-slate-200">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={flightDetails.insurance_migratory} 
+                                                onChange={(e) => handleDetailChange('insurance_migratory', e.target.checked)} 
+                                                className="rounded border-slate-300 text-chimipink focus:ring-chimipink" 
+                                            />
+                                            <span className="font-medium text-slate-700">Seguro migratorio (solo para control migratorio)</span>
+                                        </label>
+                                    </div>
                                 </div>
 
                                 {/* Documentación */}
                                 <div>
                                     <Label className="text-xs font-semibold text-slate-700 mb-2 block">📄 Documentación</Label>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
-                                            <input type="checkbox" checked={flightDetails.doc_invitation_letter} onChange={(e) => handleDetailChange('doc_invitation_letter', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
-                                            Redacción carta invitación
+                                        <label className="flex items-start gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                            <input type="checkbox" checked={flightDetails.doc_invitation_letter} onChange={(e) => handleDetailChange('doc_invitation_letter', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink mt-1" />
+                                            <div className="flex flex-col">
+                                                <span className="font-medium">Redacción carta de invitación con documentos del anfitrión</span>
+                                                <span className="text-[10px] text-slate-500 leading-tight">
+                                                    (El cliente envía copia del documento de identidad o Permesso di soggiorno y Tessera sanitaria del familiar en Italia.)
+                                                </span>
+                                            </div>
                                         </label>
                                         <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
                                             <input type="checkbox" checked={flightDetails.doc_agency_managed} onChange={(e) => handleDetailChange('doc_agency_managed', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
@@ -991,43 +1321,87 @@ export default function FlightsPage() {
                                 {/* Servicios Adicionales */}
                                 <div>
                                     <Label className="text-xs font-semibold text-slate-700 mb-2 block">🛄 Servicios adicionales</Label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
-                                            <input type="checkbox" checked={flightDetails.svc_airport_assistance} onChange={(e) => handleDetailChange('svc_airport_assistance', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
-                                            Asistencia aeroportuaria
-                                        </label>
-                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
-                                            <input type="checkbox" checked={flightDetails.svc_return_activation} onChange={(e) => handleDetailChange('svc_return_activation', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
-                                            Activación pasaje retorno
-                                        </label>
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                                <input type="checkbox" checked={flightDetails.svc_airport_assistance} onChange={(e) => handleDetailChange('svc_airport_assistance', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                                Asistencia aeroportuaria
+                                            </label>
+                                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                                <input type="checkbox" checked={flightDetails.svc_return_activation} onChange={(e) => handleDetailChange('svc_return_activation', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                                Activación pasaje retorno
+                                            </label>
+                                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                                <input type="checkbox" checked={flightDetails.svc_stewardess_um} onChange={(e) => handleDetailChange('svc_stewardess_um', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                                solicitud de servizio de azafata menor de edad (UMNR)- (pago por servicio 225 euro)
+                                            </label>
+                                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                                <input type="checkbox" checked={flightDetails.svc_pet_travel} onChange={(e) => handleDetailChange('svc_pet_travel', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                                Viaja con mascota
+                                            </label>
+                                        </div>
+
+                                        {/* Viaje Especial inside Additional Services */}
+                                        <div className="pt-1">
+                                            <Label className="text-[11px] font-bold text-slate-500 mb-1.5 block uppercase tracking-tight">📝 Viaje especial (Observaciones)</Label>
+                                            <Input 
+                                                value={flightDetails.special_note} 
+                                                onChange={(e) => handleDetailChange('special_note', e.target.value)} 
+                                                placeholder="Ej: Viaja con silla de ruedas, requiere comida especial..." 
+                                                className="bg-white h-9 text-sm border-slate-200 focus:ring-chimipink"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Hotel */}
                                 <div>
                                     <Label className="text-xs font-semibold text-slate-700 mb-2 block">🏨 Reserva de hotel</Label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
-                                            <input type="checkbox" checked={flightDetails.hotel_3d_2n} onChange={(e) => handleDetailChange('hotel_3d_2n', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
-                                            3 días / 2 noches
-                                        </label>
-                                        <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
-                                            <input type="checkbox" checked={flightDetails.hotel_2d_1n} onChange={(e) => handleDetailChange('hotel_2d_1n', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
-                                            2 días / 1 noche
-                                        </label>
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                                <input type="checkbox" checked={flightDetails.hotel_3d_2n} onChange={(e) => handleDetailChange('hotel_3d_2n', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                                3 días / 2 noches <span className="text-[10px] text-slate-500 font-normal ml-0.5">(Utilizable 1 día)</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
+                                                <input type="checkbox" checked={flightDetails.hotel_2d_1n} onChange={(e) => handleDetailChange('hotel_2d_1n', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
+                                                2 días / 1 noche
+                                            </label>
+                                        </div>
+
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 bg-slate-50 border border-dashed border-slate-200 rounded-lg">
+                                            <label className="flex items-center gap-2 text-sm cursor-pointer whitespace-nowrap">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={flightDetails.hotel_custom_active} 
+                                                    onChange={(e) => handleDetailChange('hotel_custom_active', e.target.checked)} 
+                                                    className="rounded border-slate-300 text-chimipink focus:ring-chimipink" 
+                                                />
+                                                <span className="font-medium">Hotel —</span>
+                                            </label>
+                                            <div className="flex items-center gap-1.5 flex-1">
+                                                <Input 
+                                                    type="number"
+                                                    value={flightDetails.hotel_custom_days}
+                                                    onChange={(e) => handleDetailChange('hotel_custom_days', e.target.value)}
+                                                    placeholder="0"
+                                                    className="h-7 w-12 text-center text-xs border-slate-200 focus:ring-chimipink bg-white p-0"
+                                                />
+                                                <span className="text-[10px] text-slate-500 font-medium">días /</span>
+                                                <Input 
+                                                    type="number"
+                                                    value={flightDetails.hotel_custom_nights}
+                                                    onChange={(e) => handleDetailChange('hotel_custom_nights', e.target.value)}
+                                                    placeholder="0"
+                                                    className="h-7 w-12 text-center text-xs border-slate-200 focus:ring-chimipink bg-white p-0"
+                                                />
+                                                <span className="text-[10px] text-slate-500 font-medium">noches</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Nota Especial */}
-                                <div>
-                                    <Label className="text-xs font-semibold text-slate-700 mb-2 block">📝 Nota especial</Label>
-                                    <Input 
-                                        value={flightDetails.special_note} 
-                                        onChange={(e) => handleDetailChange('special_note', e.target.value)} 
-                                        placeholder="Tu pasaje es especial..." 
-                                        className="bg-white"
-                                    />
-                                </div>
+
                             </div>
 
                             {/* Financials */}
@@ -1112,9 +1486,9 @@ export default function FlightsPage() {
                                                                 {editPaymentData && (
                                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                                                                         <div className="grid gap-1 relative">
-                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Sede IT</Label>
+                                                                            <Label className="text-[10px] uppercase font-bold text-blue-600 flex items-center gap-1">🇮🇹 Sede IT</Label>
                                                                             <Input 
-                                                                                className="h-8 text-xs bg-white"
+                                                                                className="h-8 text-xs bg-blue-50/50 border-blue-200"
                                                                                 value={editPaymentData.sede_it}
                                                                                 onChange={(e) => {
                                                                                     const val = e.target.value
@@ -1136,9 +1510,9 @@ export default function FlightsPage() {
                                                                             )}
                                                                         </div>
                                                                         <div className="grid gap-1 relative">
-                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Sede PE</Label>
+                                                                            <Label className="text-[10px] uppercase font-bold text-rose-600 flex items-center gap-1">🇵🇪 Sede PE</Label>
                                                                             <Input 
-                                                                                className="h-8 text-xs bg-white"
+                                                                                className="h-8 text-xs bg-rose-50/50 border-rose-200"
                                                                                 value={editPaymentData.sede_pe}
                                                                                 onChange={(e) => {
                                                                                     const val = e.target.value
@@ -1159,27 +1533,55 @@ export default function FlightsPage() {
                                                                                 </div>
                                                                             )}
                                                                         </div>
-                                                                        <div className="grid gap-1">
-                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Método IT</Label>
-                                                                            <select 
-                                                                                className="h-8 w-full border rounded-md px-2 text-xs bg-white"
+                                                                        <div className="grid gap-1 relative">
+                                                                            <Label className="text-[10px] uppercase font-bold text-blue-600 flex items-center gap-1">🇮🇹 Método IT</Label>
+                                                                            <Input 
+                                                                                className="h-8 text-xs bg-blue-50/50 border-blue-200"
                                                                                 value={editPaymentData.metodo_it}
-                                                                                onChange={(e) => setEditPaymentData(prev => prev ? {...prev, metodo_it: e.target.value} : null)}
-                                                                            >
-                                                                                <option value="">Seleccionar...</option>
-                                                                                {PAYMENT_METHOD_IT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                                            </select>
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value
+                                                                                    setEditPaymentData(prev => prev ? {...prev, metodo_it: val} : null)
+                                                                                    setShowEditMetodoITList(true)
+                                                                                }}
+                                                                                onFocus={() => setShowEditMetodoITList(true)}
+                                                                                onBlur={() => setTimeout(() => setShowEditMetodoITList(false), 200)}
+                                                                                placeholder="Buscar método..."
+                                                                            />
+                                                                            {showEditMetodoITList && (
+                                                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
+                                                                                    {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.metodo_it.toLowerCase())).map((opt, sidx) => (
+                                                                                        <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
+                                                                                            setEditPaymentData(prev => prev ? {...prev, metodo_it: opt} : null)
+                                                                                            setShowEditMetodoITList(false)
+                                                                                        }}>{opt}</div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            )}
                                                                         </div>
-                                                                        <div className="grid gap-1">
-                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Método PE</Label>
-                                                                            <select 
-                                                                                className="h-8 w-full border rounded-md px-2 text-xs bg-white"
+                                                                        <div className="grid gap-1 relative">
+                                                                            <Label className="text-[10px] uppercase font-bold text-rose-600 flex items-center gap-1">🇵🇪 Método PE</Label>
+                                                                            <Input 
+                                                                                className="h-8 text-xs bg-rose-50/50 border-rose-200"
                                                                                 value={editPaymentData.metodo_pe}
-                                                                                onChange={(e) => setEditPaymentData(prev => prev ? {...prev, metodo_pe: e.target.value} : null)}
-                                                                            >
-                                                                                <option value="">Seleccionar...</option>
-                                                                                {PAYMENT_METHOD_PE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                                            </select>
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value
+                                                                                    setEditPaymentData(prev => prev ? {...prev, metodo_pe: val} : null)
+                                                                                    setShowEditMetodoPEList(true)
+                                                                                }}
+                                                                                onFocus={() => setShowEditMetodoPEList(true)}
+                                                                                onBlur={() => setTimeout(() => setShowEditMetodoPEList(false), 200)}
+                                                                                placeholder="Buscar método..."
+                                                                            />
+                                                                            {showEditMetodoPEList && (
+                                                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
+                                                                                    {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.metodo_pe.toLowerCase())).map((opt, sidx) => (
+                                                                                        <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
+                                                                                            setEditPaymentData(prev => prev ? {...prev, metodo_pe: opt} : null)
+                                                                                            setShowEditMetodoPEList(false)
+                                                                                        }}>{opt}</div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                         <div className="grid gap-1">
                                                                             <Label className="text-[10px] uppercase font-bold text-slate-500">Cantidad (€)</Label>
@@ -1314,7 +1716,7 @@ export default function FlightsPage() {
                                     {showPaymentFields && (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 border-t pt-4 border-slate-200">
                                             <div className="grid gap-2 relative">
-                                                <Label className="text-xs">Sede IT</Label>
+                                                <Label className="text-xs flex items-center gap-1.5 font-bold text-blue-700">🇮🇹 Sede IT</Label>
                                                 <Input 
                                                     name="sede_it" 
                                                     value={formData.sede_it} 
@@ -1326,6 +1728,7 @@ export default function FlightsPage() {
                                                     onBlur={() => setTimeout(() => setShowSedeITList(false), 200)}
                                                     placeholder="Buscar sede IT..."
                                                     autoComplete="off"
+                                                    className="bg-blue-50/50 border-blue-200 focus:ring-blue-500"
                                                 />
                                                 {showSedeITList && (
                                                     <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
@@ -1339,7 +1742,7 @@ export default function FlightsPage() {
                                                 )}
                                             </div>
                                             <div className="grid gap-2 relative">
-                                                <Label className="text-xs">Sede PE</Label>
+                                                <Label className="text-xs flex items-center gap-1.5 font-bold text-rose-700">🇵🇪 Sede PE</Label>
                                                 <Input 
                                                     name="sede_pe" 
                                                     value={formData.sede_pe} 
@@ -1351,6 +1754,7 @@ export default function FlightsPage() {
                                                     onBlur={() => setTimeout(() => setShowSedePEList(false), 200)}
                                                     placeholder="Buscar sede PE..."
                                                     autoComplete="off"
+                                                    className="bg-rose-50/50 border-rose-200 focus:ring-rose-500"
                                                 />
                                                 {showSedePEList && (
                                                     <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
@@ -1363,19 +1767,57 @@ export default function FlightsPage() {
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs">Método Pago IT</Label>
-                                                <select name="payment_method_it" value={formData.payment_method_it} onChange={handleInputChange} className="w-full border rounded-md p-2 text-sm bg-white focus:ring-chimiteal">
-                                                    <option value="">Seleccionar...</option>
-                                                    {PAYMENT_METHOD_IT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                </select>
+                                            <div className="grid gap-2 relative">
+                                                <Label className="text-xs flex items-center gap-1.5 font-bold text-blue-700">🇮🇹 Método Pago IT</Label>
+                                                <Input 
+                                                    name="payment_method_it" 
+                                                    value={formData.payment_method_it} 
+                                                    onChange={(e) => {
+                                                        handleInputChange(e)
+                                                        setShowMetodoITList(true)
+                                                    }}
+                                                    onFocus={() => setShowMetodoITList(true)}
+                                                    onBlur={() => setTimeout(() => setShowMetodoITList(false), 200)}
+                                                    placeholder="Buscar método..."
+                                                    autoComplete="off"
+                                                    className="bg-blue-50/50 border-blue-200 focus:ring-blue-500"
+                                                />
+                                                {showMetodoITList && (
+                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                        {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase())).map((opt, idx) => (
+                                                            <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                setFormData(p => ({ ...p, payment_method_it: opt }))
+                                                                setShowMetodoITList(false)
+                                                            }}>{opt}</div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs">Método Pago PE</Label>
-                                                <select name="payment_method_pe" value={formData.payment_method_pe} onChange={handleInputChange} className="w-full border rounded-md p-2 text-sm bg-white focus:ring-chimiteal">
-                                                    <option value="">Seleccionar...</option>
-                                                    {PAYMENT_METHOD_PE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                </select>
+                                            <div className="grid gap-2 relative">
+                                                <Label className="text-xs flex items-center gap-1.5 font-bold text-rose-700">🇵🇪 Método Pago PE</Label>
+                                                <Input 
+                                                    name="payment_method_pe" 
+                                                    value={formData.payment_method_pe} 
+                                                    onChange={(e) => {
+                                                        handleInputChange(e)
+                                                        setShowMetodoPEList(true)
+                                                    }}
+                                                    onFocus={() => setShowMetodoPEList(true)}
+                                                    onBlur={() => setTimeout(() => setShowMetodoPEList(false), 200)}
+                                                    placeholder="Buscar método..."
+                                                    autoComplete="off"
+                                                    className="bg-rose-50/50 border-rose-200 focus:ring-rose-500"
+                                                />
+                                                {showMetodoPEList && (
+                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                        {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase())).map((opt, idx) => (
+                                                            <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                setFormData(p => ({ ...p, payment_method_pe: opt }))
+                                                                setShowMetodoPEList(false)
+                                                            }}>{opt}</div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="grid gap-2">
                                                 <Label className="text-xs font-bold text-slate-700">Cantidad (Paga Cliente)</Label>
@@ -1557,6 +1999,9 @@ export default function FlightsPage() {
                                     <th className="px-6 py-4 font-medium">Cliente</th>
                                     <th className="px-6 py-4 font-medium">Agente</th>
                                     <th className="px-6 py-4 font-medium">Itinerario</th>
+                                    <th className="px-6 py-4 font-medium">Tipo Pasaje</th>
+                                    <th className="px-6 py-4 font-medium">IATA / GDS</th>
+                                    <th className="px-6 py-4 font-medium text-center">PAX</th>
                                     <th className="px-6 py-4 font-medium text-center">Incluye</th>
                                     <th className="px-6 py-4 font-medium">Neto</th>
                                     <th className="px-6 py-4 font-medium">Vendido</th>
@@ -1593,6 +2038,19 @@ export default function FlightsPage() {
                                             </td>
                                             <td className="px-6 py-4 max-w-[150px] truncate" title={flight.itinerary}>
                                                 {flight.itinerary || '-'}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded font-medium inline-block whitespace-nowrap">
+                                                    {flight.ticket_type || '-'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-[10px] text-chimiteal font-bold uppercase whitespace-nowrap">
+                                                    {flight.iata_gds || '-'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <span className="text-sm font-bold text-slate-700">{flight.pax_total || 1}</span>
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 {flight.details && (Object.values(flight.details).some(v => v === true || (typeof v === 'string' && v.length > 0))) ? (

@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminConversations, getAdminConversationDetails, sendAdminMessage, markAdminMessagesAsRead, type Message, type Conversation } from '@/app/actions/chat'
 import { Search, Send, User, MessageCircle } from 'lucide-react'
@@ -17,35 +17,47 @@ export default function AdminChatPage() {
     const [newMessage, setNewMessage] = useState('')
     const [searchTerm, setSearchTerm] = useState('')
     const [loading, setLoading] = useState(true)
+    const [isInitialLoadDone, setIsInitialLoadDone] = useState(false)
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const supabase = useMemo(() => createClient(), [])
 
     // Load Conversations List
-    useEffect(() => {
-        let isMounted = true;
-        const loadConversations = async () => {
-             const result = await getAdminConversations()
-             if (isMounted) {
-                if (result) setConversations(result)
-                setLoading(false)
-             }
-        }
-        loadConversations()
+    const loadConversations = useCallback(async () => {
+        const result = await getAdminConversations()
+        if (result) setConversations(result)
+        setLoading(false)
+    }, [])
 
-        // Realtime Subscription for NEW conversations or updates
+    useEffect(() => {
+        if (!isInitialLoadDone) {
+            const timer = setTimeout(() => {
+                loadConversations()
+                setIsInitialLoadDone(true)
+            }, 0)
+            return () => clearTimeout(timer)
+        }
+    }, [loadConversations, isInitialLoadDone])
+
+    useEffect(() => {
         const channel = supabase
             .channel('admin-chat-list')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'conversations' 
+            }, (payload) => {
+                console.log('--- ADMIN DEBUG: Conversation list change:', payload)
                 loadConversations()
             })
-            .subscribe()
+            .subscribe((status) => {
+                console.log('--- ADMIN DEBUG: List subscription status:', status)
+            })
 
         return () => { 
-            isMounted = false
             supabase.removeChannel(channel) 
         }
-    }, [supabase])
+    }, [supabase, loadConversations])
 
     // Load Selected Conversation Messages
     useEffect(() => {
@@ -60,28 +72,38 @@ export default function AdminChatPage() {
 
             if (data && data.messages) {
                 setMessages(data.messages)
-                // Mark as read
+                // Mark as read immediately in DB
                 if (data.unread_admin_count > 0) {
                     await markAdminMessagesAsRead(selectedConvId)
+                    // Update local state for immediate feedback
+                    setConversations(prev => prev.map(c => 
+                        c.id === selectedConvId ? { ...c, unread_admin_count: 0 } : c
+                    ))
                 }
             }
         }
         loadDetails()
 
         // Realtime for Messages in ACTIVE chat
-        console.log('--- ADMIN DEBUG: Subscribing to messages for:', selectedConvId);
         const msgChannel = supabase
-            .channel(`admin-chat-${selectedConvId}`)
+            .channel(`admin-chat-messages-${selectedConvId}`)
             .on(
                 'postgres_changes', 
-                { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${selectedConvId}` },
-                (payload) => {
-                    console.log('--- ADMIN DEBUG: New message received via Realtime:', payload.new);
+                { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'messages', 
+                    filter: `conversation_id=eq.${selectedConvId}` 
+                },
+                async (payload) => {
                     const newMsg = payload.new as Message
+                    
+                    if (!mounted) return;
+
                     setMessages(prev => {
                         if (prev.some(m => m.id === newMsg.id)) return prev
                         
-                        // If it's from Admin, replace optimistic
+                        // Handle optimistic message replacement
                         if (newMsg.is_admin) {
                             const optIdx = prev.findIndex(m => m.isOptimistic && m.content === newMsg.content)
                             if (optIdx !== -1) {
@@ -92,15 +114,21 @@ export default function AdminChatPage() {
                         }
                         return [...prev, newMsg]
                     })
+
+                    // If a message arrives while we ARE in this chat, mark it as read automatically
+                    if (!newMsg.is_admin) {
+                        await markAdminMessagesAsRead(selectedConvId)
+                        // Ensure local list also clears
+                        setConversations(prev => prev.map(c => 
+                            c.id === selectedConvId ? { ...c, unread_admin_count: 0 } : c
+                        ))
+                    }
                 }
             )
-            .subscribe((status) => {
-                console.log('--- ADMIN DEBUG: Subscription status:', status);
-            })
+            .subscribe()
 
         return () => { 
             mounted = false
-            console.log('--- ADMIN DEBUG: Unsubscribing from:', selectedConvId);
             supabase.removeChannel(msgChannel) 
         }
     }, [selectedConvId, supabase])
