@@ -48,7 +48,7 @@ export async function createFlight(formData: FormData) {
         const pnr = formData.get('pnr') as string
         const itinerary = formData.get('itinerary') as string
         const cost = parseFloat(formData.get('cost') as string) || 0
-        const status = formData.get('status') as string || 'pending'
+        const status = formData.get('status') as string || 'Programado'
         
         const return_date = formData.get('return_date') as string
         const sold_price = parseFloat(formData.get('sold_price') as string) || 0
@@ -153,7 +153,7 @@ export async function createFlight(formData: FormData) {
 
         if (error) throw error
 
-        revalidatePath('/flights')
+        revalidatePath('/chimi-vuelos')
         return { success: true }
 
     } catch (error: unknown) {
@@ -297,7 +297,7 @@ export async function updateFlight(formData: FormData) {
 
         if (error) throw error
 
-        revalidatePath('/flights')
+        revalidatePath('/chimi-vuelos')
         return { success: true }
 
     } catch (error: unknown) {
@@ -315,7 +315,7 @@ export async function updateFlightStatus(id: string, status: string) {
     try {
         const { error } = await supabase.from('flights').update({ status }).eq('id', id)
         if (error) throw error
-        revalidatePath('/flights')
+        revalidatePath('/chimi-vuelos')
         return { success: true }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error updating status'
@@ -351,7 +351,7 @@ export async function deleteFlight(id: string) {
         const { error } = await supabase.from('flights').delete().eq('id', id)
         if (error) throw error
 
-        revalidatePath('/flights')
+        revalidatePath('/chimi-vuelos')
         return { success: true }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error deleting flight'
@@ -385,7 +385,7 @@ export async function deleteFlightDocument(flightId: string, docPath: string) {
              await supabase.from('flights').update({ documents: docs as unknown }).eq('id', flightId)
         }
 
-        revalidatePath('/flights')
+        revalidatePath('/chimi-vuelos')
         return { success: true }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error deleting document'

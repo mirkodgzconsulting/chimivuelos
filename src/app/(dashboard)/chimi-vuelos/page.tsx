@@ -45,7 +45,7 @@ interface Flight {
     on_account: number
     balance: number
 
-    status: 'pending' | 'finished'
+    status: string
     return_date?: string
     sold_price: number
     fee_agv: number
@@ -208,6 +208,18 @@ const PAYMENT_METHOD_PE_OPTIONS = [
     "OTRO GIRO"
 ]
 
+const FLIGHT_STATUSES = [
+    "Programado",
+    "En tránsito",
+    "Reprogramado",
+    "Cambio de horario",
+    "Cancelado",
+    "No-show (no se presentó)",
+    "En migración",
+    "Deportado",
+    "Finalizado"
+]
+
 const INITIAL_FLIGHT_DETAILS: FlightDetails = {
     ticket_one_way: false,
     ticket_round_trip: false,
@@ -244,7 +256,7 @@ export default function FlightsPage() {
     const [searchTerm, setSearchTerm] = useState('')
 
     // Filters State
-    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'finished'>('all')
+    const [statusFilter, setStatusFilter] = useState<string>('all')
     
     // Initialize dates to current month (Local Time Safe)
     const [dateFrom, setDateFrom] = useState(() => {
@@ -278,7 +290,7 @@ export default function FlightsPage() {
         cost: '', // Now Neto
         on_account: '',
         balance: '',
-        status: 'pending',
+        status: 'Programado',
         return_date: '',
         sold_price: '',
         fee_agv: '',
@@ -2094,8 +2106,9 @@ export default function FlightsPage() {
                                     value={formData.status}
                                     onChange={handleInputChange}
                                 >
-                                    <option value="pending">Pendiente</option>
-                                    <option value="finished">Terminado</option>
+                                    {FLIGHT_STATUSES.map(s => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
                                 </select>
                             </div>
                             
@@ -2197,11 +2210,12 @@ export default function FlightsPage() {
                         <select 
                             className="h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chimiteal cursor-pointer"
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'finished')}
+                            onChange={(e) => setStatusFilter(e.target.value)}
                         >
-                            <option value="all">Todos</option>
-                            <option value="pending">Pendiente</option>
-                            <option value="finished">Terminado</option>
+                            <option value="all">Todos los Estados</option>
+                            {FLIGHT_STATUSES.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
                         </select>
 
                         <div className="flex items-center gap-2 bg-white rounded-md border border-slate-200 px-2 h-10 relative pr-8">
@@ -2374,13 +2388,20 @@ export default function FlightsPage() {
                                                         value={flight.status}
                                                         onChange={(e) => handleStatusChange(flight.id, e.target.value)}
                                                         className={`appearance-none px-3 py-1 pr-8 rounded-full text-xs font-semibold border-0 cursor-pointer focus:ring-2 focus:ring-offset-1 transition-colors ${
-                                                            flight.status === 'finished' 
+                                                        flight.status === 'Finalizado' 
                                                             ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 focus:ring-emerald-500' 
+                                                            : flight.status === 'Cancelado' || flight.status === 'Deportado'
+                                                            ? 'bg-red-100 text-red-700 hover:bg-red-200 focus:ring-red-500'
+                                                            : flight.status === 'En tránsito' || flight.status === 'En migración'
+                                                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 focus:ring-blue-500'
+                                                            : flight.status === 'No-show (no se presentó)'
+                                                            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 focus:ring-slate-500'
                                                             : 'bg-amber-100 text-amber-700 hover:bg-amber-200 focus:ring-amber-500'
                                                         }`}
                                                     >
-                                                        <option value="pending">Pendiente</option>
-                                                        <option value="finished">Terminado</option>
+                                                        {FLIGHT_STATUSES.map(s => (
+                                                            <option key={s} value={s}>{s}</option>
+                                                        ))}
                                                     </select>
                                                 </div>
                                             </td>
