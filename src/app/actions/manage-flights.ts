@@ -25,9 +25,11 @@ interface PaymentDetail {
     sede_pe: string
     metodo_it: string
     metodo_pe: string
-    cantidad: string
-    tipo_cambio: number
-    total: string
+    cantidad: string       // EUR amount (affects accounting)
+    tipo_cambio: number    // Exchange rate used
+    total: string          // Formatted original amount (e.g. "S/ 400.00")
+    moneda?: string        // 'EUR', 'PEN', 'USD'
+    monto_original?: string
     created_at?: string
     updated_at?: string
     proof_path?: string
@@ -77,6 +79,9 @@ export async function createFlight(formData: FormData) {
 
         const payment_details: PaymentDetail[] = []
         if (payment_quantity > 0) {
+            const currency = formData.get('payment_currency') as string || 'EUR'
+            const original_amount = formData.get('payment_original_amount') as string || payment_quantity_str
+            
             payment_details.push({
                 sede_it: formData.get('sede_it') as string,
                 sede_pe: formData.get('sede_pe') as string,
@@ -84,7 +89,9 @@ export async function createFlight(formData: FormData) {
                 metodo_pe: payment_method_pe,
                 cantidad: payment_quantity.toString(),
                 tipo_cambio: payment_exchange_rate,
-                total: payment_total.toString(),
+                total: formData.get('payment_total_display') as string || `${currency} ${original_amount}`,
+                moneda: currency,
+                monto_original: original_amount,
                 created_at: new Date().toISOString(),
                 proof_path: payment_proof_path || undefined
             })
@@ -214,6 +221,9 @@ export async function updateFlight(formData: FormData) {
         }
 
         if (payment_quantity > 0) {
+            const currency = formData.get('payment_currency') as string || 'EUR'
+            const original_amount = formData.get('payment_original_amount') as string || payment_quantity_str
+
             const newPayment: PaymentDetail = {
                 sede_it: (formData.get('sede_it') as string) || '',
                 sede_pe: (formData.get('sede_pe') as string) || '',
@@ -221,7 +231,9 @@ export async function updateFlight(formData: FormData) {
                 metodo_pe: (formData.get('payment_method_pe') as string) || '',
                 cantidad: payment_quantity.toString(),
                 tipo_cambio: payment_exchange_rate,
-                total: payment_total.toString(),
+                total: formData.get('payment_total_display') as string || `${currency} ${original_amount}`,
+                moneda: currency,
+                monto_original: original_amount,
                 created_at: new Date().toISOString(),
                 proof_path: new_proof_path || undefined
             }
@@ -506,15 +518,20 @@ export async function updateFlightPayment(formData: FormData) {
         }
 
         // Update the payment fields from formData
+        const currency = formData.get('moneda') as string || payments[paymentIndex].moneda || 'EUR'
+        const original_amount = formData.get('monto_original') as string || formData.get('cantidad_original') as string || payments[paymentIndex].monto_original || payments[paymentIndex].cantidad
+
         payments[paymentIndex] = {
             ...payments[paymentIndex],
             sede_it: formData.get('sede_it') as string,
             sede_pe: formData.get('sede_pe') as string,
             metodo_it: formData.get('metodo_it') as string,
             metodo_pe: formData.get('metodo_pe') as string,
-            cantidad: formData.get('cantidad') as string,
+            cantidad: formData.get('cantidad') as string, // This is expected to be EUR
             tipo_cambio: parseFloat(formData.get('tipo_cambio') as string),
-            total: formData.get('total') as string,
+            total: formData.get('total_display') as string || `${currency} ${original_amount}`,
+            moneda: currency,
+            monto_original: original_amount,
             proof_path: proofPath,
             updated_at: new Date().toISOString()
         }

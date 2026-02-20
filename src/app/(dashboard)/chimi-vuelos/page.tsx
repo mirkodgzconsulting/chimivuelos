@@ -24,9 +24,11 @@ interface PaymentDetail {
     sede_pe: string
     metodo_it: string
     metodo_pe: string
-    cantidad: string
-    tipo_cambio: number
-    total: string
+    cantidad: string     // Amount in EUR (the one that affects accounting)
+    tipo_cambio: number  // Exchange rate (Moneda/EUR)
+    total: string        // Formatted original amount (e.g., "S/ 400.00")
+    moneda?: string
+    monto_original?: string
     created_at?: string
     updated_at?: string
     proof_path?: string
@@ -285,6 +287,7 @@ export default function FlightsPage() {
         // New Payment Fields
         sede_it: '',
         sede_pe: '',
+        payment_currency: 'EUR',
         payment_quantity: '',
         payment_exchange_rate: '1.0',
         payment_total: '',
@@ -357,22 +360,32 @@ export default function FlightsPage() {
         
         const newFormData = { ...formData, [name]: value }
 
-        // Logic for Payment Quantity -> A Cuenta
-        if (name === 'payment_quantity') {
-            newFormData.on_account = value
-        }
+        // Logic for Payment Quantity and Currency -> A Cuenta
+        if (name === 'payment_quantity' || name === 'payment_exchange_rate' || name === 'payment_currency') {
+            const currency = name === 'payment_currency' ? value : newFormData.payment_currency
+            
+            // Do not suggest values as exchange rates fluctuate constantly
+            let currentRate = parseFloat(name === 'payment_exchange_rate' ? value : newFormData.payment_exchange_rate) || 1
+            if (name === 'payment_currency' && value === 'EUR') {
+                currentRate = 1.0
+                newFormData.payment_exchange_rate = '1.0'
+            }
 
-        if (name === 'payment_quantity') {
-            const qty = parseFloat(value) || 0
-            const rate = parseFloat(newFormData.payment_exchange_rate) || 1
-            newFormData.payment_total = (qty * rate).toFixed(2)
-            newFormData.on_account = (baseOnAccount + qty).toString()
-        }
+            const qty = parseFloat(name === 'payment_quantity' ? value : newFormData.payment_quantity) || 0
+            const rate = currentRate
 
-        if (name === 'payment_exchange_rate') {
-            const rate = parseFloat(value) || 1
-            const qty = parseFloat(newFormData.payment_quantity) || 0
-            newFormData.payment_total = (qty * rate).toFixed(2)
+            let amount_eur = 0
+            if (currency === 'EUR') {
+                amount_eur = qty
+                newFormData.payment_exchange_rate = '1.0'
+            } else {
+                // Multiplication logic (matches Google's direct rate): Foreign Amount * (Value of 1 unit in EUR)
+                // If Google says 1 USD = 0.85 EUR, then: 500 USD * 0.85 = 425 EUR
+                amount_eur = qty * rate
+            }
+
+            newFormData.payment_total = amount_eur.toFixed(2)
+            newFormData.on_account = (baseOnAccount + amount_eur).toFixed(2)
         }
 
         // Auto-calculate Balance and Fee
@@ -438,6 +451,7 @@ export default function FlightsPage() {
             payment_method_pe: '',
             sede_it: '',
             sede_pe: '',
+            payment_currency: 'EUR',
             payment_quantity: '',
             payment_exchange_rate: '1.0',
             payment_total: '',
@@ -483,6 +497,7 @@ export default function FlightsPage() {
             payment_method_pe: '',
             sede_it: '',
             sede_pe: '',
+            payment_currency: 'EUR',
             payment_quantity: '',
             payment_exchange_rate: (flight.exchange_rate || 1.0).toString(),
             payment_total: '',
@@ -583,6 +598,12 @@ export default function FlightsPage() {
         formData.append('cantidad', editPaymentData.cantidad)
         formData.append('tipo_cambio', editPaymentData.tipo_cambio.toString())
         formData.append('total', editPaymentData.total)
+        if (editPaymentData.moneda) formData.append('moneda', editPaymentData.moneda)
+        if (editPaymentData.monto_original) formData.append('monto_original', editPaymentData.monto_original)
+        if (editPaymentData.moneda && editPaymentData.monto_original) {
+            const sym = editPaymentData.moneda === 'EUR' ? '€' : editPaymentData.moneda === 'PEN' ? 'S/' : '$'
+            formData.append('total_display', `${sym} ${parseFloat(editPaymentData.monto_original).toFixed(2)}`)
+        }
         
         if (editPaymentFile) {
             formData.append('proofFile', editPaymentFile)
@@ -617,8 +638,20 @@ export default function FlightsPage() {
             
             // Append main fields
             Object.entries(formData).forEach(([key, val]) => {
-                data.append(key, val)
+                if (key === 'payment_quantity') {
+                    // Send the EUR equivalent for accounting
+                    data.append(key, formData.payment_total || '0')
+                } else {
+                    data.append(key, val)
+                }
             })
+
+            // Meta-data for the new multi-currency payment details
+            const pCurrency = formData.payment_currency || 'EUR'
+            const symbol = pCurrency === 'EUR' ? '€' : pCurrency === 'PEN' ? 'S/' : '$'
+            data.append('payment_original_amount', formData.payment_quantity)
+            data.append('payment_total_display', `${symbol} ${parseFloat(formData.payment_quantity || '0').toFixed(2)}`)
+            data.append('payment_currency', pCurrency)
 
             // Append Details
             data.append('details', JSON.stringify(flightDetails))
@@ -1654,19 +1687,47 @@ export default function FlightsPage() {
                                                                                 )}
                                                                             </div>
                                                                             <div className="grid gap-1">
-                                                                                <Label className="text-[10px] uppercase font-bold text-slate-500">Cantidad (€)</Label>
+                                                                                <Label className="text-[10px] uppercase font-bold text-slate-500">Cantidad ({editPaymentData.moneda || 'EUR'} {editPaymentData.moneda === 'EUR' ? '€' : editPaymentData.moneda === 'PEN' ? 'S/' : '$'})</Label>
                                                                                 <Input 
                                                                                     type="number"
                                                                                     step="0.01"
                                                                                     className="h-8 text-xs font-bold bg-yellow-50/50 border-yellow-200"
-                                                                                    value={editPaymentData.cantidad}
+                                                                                    value={editPaymentData.monto_original || editPaymentData.cantidad}
                                                                                     onChange={(e) => {
                                                                                         const val = e.target.value
                                                                                         setEditPaymentData(prev => {
                                                                                             if (!prev) return null
-                                                                                            const total = (parseFloat(val) * (prev.tipo_cambio || 1)).toFixed(2)
-                                                                                            return {...prev, cantidad: val, total}
+                                                                                            const rate = prev.tipo_cambio || 1
+                                                                                            const currency = prev.moneda || 'EUR'
+                                                                                            
+                                                                                            let amount_eur = 0
+                                                                                            if (currency === 'EUR') {
+                                                                                                amount_eur = parseFloat(val) || 0
+                                                                                            } else {
+                                                                                                amount_eur = (parseFloat(val) || 0) * rate
+                                                                                            }
+                                                                                            
+                                                                                            const sym = currency === 'EUR' ? '€' : currency === 'PEN' ? 'S/' : '$'
+                                                                                            return {
+                                                                                                ...prev, 
+                                                                                                monto_original: val, 
+                                                                                                cantidad: amount_eur.toFixed(2),
+                                                                                                total: `${sym} ${parseFloat(val || '0').toFixed(2)}`
+                                                                                            }
                                                                                         })
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+                                                                            <div className="grid gap-1">
+                                                                                <Label className="text-[10px] uppercase font-bold text-slate-500">Equiv. EUR (€)</Label>
+                                                                                <Input 
+                                                                                    type="number"
+                                                                                    step="0.01"
+                                                                                    className="h-8 text-xs font-bold bg-emerald-50 text-emerald-700 border-emerald-100"
+                                                                                    value={editPaymentData.cantidad}
+                                                                                    onChange={(e) => {
+                                                                                        const val = e.target.value
+                                                                                        setEditPaymentData(prev => prev ? {...prev, cantidad: val} : null)
                                                                                     }}
                                                                                 />
                                                                             </div>
@@ -1674,25 +1735,33 @@ export default function FlightsPage() {
                                                                                 <Label className="text-[10px] uppercase font-bold text-slate-500">T. Cambio</Label>
                                                                                 <Input 
                                                                                     type="number"
-                                                                                    step="0.0001"
+                                                                                    step="0.01"
                                                                                     className="h-8 text-xs bg-white"
                                                                                     value={editPaymentData.tipo_cambio}
                                                                                     onChange={(e) => {
                                                                                         const val = e.target.value
                                                                                         setEditPaymentData(prev => {
                                                                                             if (!prev) return null
-                                                                                            const total = (parseFloat(prev.cantidad) * parseFloat(val)).toFixed(2)
-                                                                                            return {...prev, tipo_cambio: parseFloat(val), total}
+                                                                                            const amt = parseFloat(prev.monto_original || prev.cantidad)
+                                                                                            const rate = parseFloat(val) || 1
+                                                                                            const amount_eur = amt * rate
+                                                                                            const sym = prev.moneda === 'EUR' ? '€' : prev.moneda === 'PEN' ? 'S/' : '$'
+                                                                                            return {
+                                                                                                ...prev, 
+                                                                                                tipo_cambio: rate, 
+                                                                                                cantidad: amount_eur.toFixed(2),
+                                                                                                total: `${sym} ${amt.toFixed(2)}`
+                                                                                            }
                                                                                         })
                                                                                     }}
                                                                                 />
                                                                             </div>
                                                                             <div className="grid gap-1">
-                                                                                <Label className="text-[10px] uppercase font-bold text-slate-500">Total Procesado</Label>
+                                                                                <Label className="text-[10px] uppercase font-bold text-slate-500 italic">Pagaría Total</Label>
                                                                                 <Input 
                                                                                     readOnly
-                                                                                    className="h-8 text-xs font-bold bg-slate-100 text-emerald-700"
-                                                                                    value={`€ ${editPaymentData.total}`}
+                                                                                    className="h-8 text-xs font-medium bg-slate-50 text-slate-500"
+                                                                                    value={editPaymentData.total}
                                                                                 />
                                                                             </div>
                                                                             <div className="grid gap-1">
@@ -1725,8 +1794,13 @@ export default function FlightsPage() {
                                                                 </div>
                                                                 <div className="flex items-center gap-3">
                                                                     <div className="text-right">
-                                                                        <span className="font-bold text-emerald-600 text-base leading-none block">€ {parseFloat(payment.cantidad).toFixed(2)}</span>
-                                                                        <span className="text-[9px] text-slate-400 uppercase tracking-tighter">Procesado: € {payment.total}</span>
+                                                                        <span className="font-bold text-emerald-600 text-base leading-none block">€ {parseFloat(payment.cantidad || '0').toFixed(2)}</span>
+                                                                        <span className="text-[9px] text-slate-400 uppercase tracking-tighter">
+                                                                            {payment.moneda && payment.moneda !== 'EUR' 
+                                                                                ? `Original: ${payment.total} (TC: ${payment.tipo_cambio})`
+                                                                                : `Procesado: € ${parseFloat(payment.cantidad || '0').toFixed(2)}`
+                                                                            }
+                                                                        </span>
                                                                         {payment.proof_path && (
                                                                             <button 
                                                                                 type="button"
@@ -1742,7 +1816,14 @@ export default function FlightsPage() {
                                                                             type="button"
                                                                             onClick={() => {
                                                                                 setEditingPaymentIndex(idx)
-                                                                                setEditPaymentData(payment)
+                                                                                // Ensure we have correct fields for multicurrency editing
+                                                                                setEditPaymentData({
+                                                                                    ...payment,
+                                                                                    moneda: payment.moneda || 'EUR',
+                                                                                    monto_original: payment.monto_original || payment.cantidad,
+                                                                                    tipo_cambio: payment.tipo_cambio || 1.0,
+                                                                                    total: payment.total || `€ ${payment.cantidad}`
+                                                                                })
                                                                             }}
                                                                             className="text-slate-300 hover:text-chimiteal transition-colors p-1"
                                                                             title="Editar Pago"
@@ -1911,7 +1992,35 @@ export default function FlightsPage() {
 
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
                                                 <div className="grid gap-2">
-                                                    <Label className="text-xs font-bold text-slate-700">Cantidad (Paga Cliente)</Label>
+                                                    <Label className="text-xs font-bold text-slate-700">Moneda de Pago</Label>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {['EUR', 'PEN', 'USD'].map(curr => (
+                                                            <Button
+                                                                key={curr}
+                                                                type="button"
+                                                                variant={formData.payment_currency === curr ? 'primary' : 'outline'}
+                                                                className={`h-9 text-[10px] font-bold transition-all ${
+                                                                    formData.payment_currency === curr 
+                                                                    ? 'text-white shadow-sm' 
+                                                                    : 'bg-white text-slate-500 hover:bg-slate-50 border-slate-200'
+                                                                }`}
+                                                                onClick={() => {
+                                                                    const fakeEvent = {
+                                                                        target: { name: 'payment_currency', value: curr }
+                                                                    } as React.ChangeEvent<HTMLInputElement>;
+                                                                    handleInputChange(fakeEvent);
+                                                                }}
+                                                            >
+                                                                {curr === 'EUR' ? '€ EUR' : curr === 'PEN' ? 'S/ PEN' : '$ USD'}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs font-bold text-slate-700">
+                                                        {formData.payment_currency === 'EUR' ? 'Cantidad (EUR €)' : 
+                                                         formData.payment_currency === 'PEN' ? 'Cantidad (Soles S/)' : 'Cantidad (Dólares $)'}
+                                                    </Label>
                                                     <Input 
                                                         type="number" 
                                                         step="0.01"
@@ -1922,29 +2031,47 @@ export default function FlightsPage() {
                                                         placeholder="0.00"
                                                     />
                                                 </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
                                                 <div className="grid gap-2">
-                                                    <Label className="text-xs font-bold text-slate-700">Tipo de Cambio</Label>
+                                                    <Label className="text-xs font-bold text-slate-700 flex justify-between">
+                                                        <span>Tipo de Cambio</span>
+                                                        <span className="text-[10px] font-normal text-slate-400">
+                                                            {formData.payment_currency !== 'EUR' ? `1 ${formData.payment_currency === 'PEN' ? 'S/' : '$'} = ${formData.payment_exchange_rate} €` : 'Base EUR'}
+                                                        </span>
+                                                    </Label>
                                                     <Input 
                                                         type="number" 
                                                         step="0.01" 
                                                         name="payment_exchange_rate" 
                                                         value={formData.payment_exchange_rate} 
                                                         onChange={handleInputChange} 
-                                                        className="bg-white"
+                                                        disabled={formData.payment_currency === 'EUR'}
+                                                        className={formData.payment_currency === 'EUR' ? "bg-slate-50 opacity-60" : "bg-white border-blue-100 focus:ring-blue-500"}
                                                     />
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs font-bold text-emerald-700">Equivalente a Abonar (EUR €)</Label>
+                                                    <div className="relative">
+                                                        <Input 
+                                                            type="number"
+                                                            step="0.01"
+                                                            name="payment_total" 
+                                                            value={formData.payment_total} 
+                                                            onChange={handleInputChange}
+                                                            className="bg-emerald-50 text-emerald-700 font-black border-emerald-100 flex items-center"
+                                                        />
+                                                        {formData.payment_currency !== 'EUR' && (
+                                                            <div className="text-[9px] text-emerald-600 mt-1 italic">
+                                                                Sugerido: {formData.payment_quantity} {formData.payment_currency} × {formData.payment_exchange_rate} = € {(parseFloat(formData.payment_quantity) * parseFloat(formData.payment_exchange_rate)).toFixed(2)}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-                                                <div className="grid gap-2">
-                                                    <Label className="text-xs font-bold text-slate-700">Total Procesado</Label>
-                                                    <Input 
-                                                        name="payment_total" 
-                                                        value={formData.payment_total ? `€ ${formData.payment_total}` : ''} 
-                                                        readOnly 
-                                                        className="bg-slate-100 text-emerald-700 font-black border-slate-200"
-                                                    />
-                                                </div>
+                                            
+                                            <div className="grid grid-cols-1 gap-4 mt-3">
                                                 <div className="grid gap-2">
                                                     <Label className="text-xs font-bold text-slate-700">Foto de Comprobante (Opcional)</Label>
                                                     <Input 
