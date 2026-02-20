@@ -180,8 +180,7 @@ const IATA_OPTIONS = [
     "otro 2"
 ]
 
-const SEDE_IT_OPTIONS = ["Milano", "Roma", "Firenze", "Venezia", "Torino", "Genova"]
-const SEDE_PE_OPTIONS = ["Lima", "Cusco", "Arequipa", "Trujillo", "Piura", "Iquitos"]
+const SEDE_IT_OPTIONS = ["turro milano", "corsico milano", "roma", "lima"]
 const PAYMENT_METHOD_IT_OPTIONS = [
     "EFEC TURRO — MILANO",
     "EFEC CORSICO — MILANO",
@@ -320,7 +319,6 @@ export default function FlightsPage() {
     const [showClientList, setShowClientList] = useState(false)
     const [showItineraryList, setShowItineraryList] = useState(false)
     const [showSedeITList, setShowSedeITList] = useState(false)
-    const [showSedePEList, setShowSedePEList] = useState(false)
     const [showMetodoITList, setShowMetodoITList] = useState(false)
     const [showMetodoPEList, setShowMetodoPEList] = useState(false)
     const [showTicketTypeList, setShowTicketTypeList] = useState(false)
@@ -568,7 +566,6 @@ export default function FlightsPage() {
     const [editingPaymentIndex, setEditingPaymentIndex] = useState<number | null>(null)
     const [editPaymentData, setEditPaymentData] = useState<PaymentDetail | null>(null)
     const [showEditSedeITList, setShowEditSedeITList] = useState(false)
-    const [showEditSedePEList, setShowEditSedePEList] = useState(false)
     const [showEditMetodoITList, setShowEditMetodoITList] = useState(false)
     const [showEditMetodoPEList, setShowEditMetodoPEList] = useState(false)
     const [editPaymentFile, setEditPaymentFile] = useState<File | null>(null)
@@ -979,18 +976,32 @@ export default function FlightsPage() {
                             {/* Client Search */}
                             <div className="grid gap-2 relative">
                                 <Label>Cliente <span className="text-red-500">*</span></Label>
-                                <Input 
-                                    placeholder="Buscar cliente..." 
-                                    value={clientSearch}
-                                    onChange={(e) => {
-                                        setClientSearch(e.target.value)
-                                        setShowClientList(true)
-                                    }}
-                                    onFocus={() => setShowClientList(true)}
-                                    onBlur={() => setTimeout(() => setShowClientList(false), 200)}
-                                    // Disable search if editing to lock client? (Optional, user didn't specify edit lock. Assume editable but careful)
-                                    disabled={!!selectedFlightId} 
-                                />
+                                <div className="relative">
+                                    <Input 
+                                        placeholder="Buscar cliente..." 
+                                        value={clientSearch}
+                                        onChange={(e) => {
+                                            setClientSearch(e.target.value)
+                                            setShowClientList(true)
+                                        }}
+                                        onFocus={() => setShowClientList(true)}
+                                        onBlur={() => setTimeout(() => setShowClientList(false), 200)}
+                                        disabled={!!selectedFlightId} 
+                                        className="pr-8"
+                                    />
+                                    {clientSearch && !selectedFlightId && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => {
+                                                setClientSearch('')
+                                                setFormData(prev => ({ ...prev, client_id: '', client_email: '', client_phone: '' }))
+                                            }}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
                                 {showClientList && filteredClients.length > 0 && !selectedFlightId && (
                                     <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-lg rounded-md mt-1 max-h-40 overflow-y-auto [&::-webkit-scrollbar]:hidden">
                                         {filteredClients.map(client => (
@@ -1034,19 +1045,30 @@ export default function FlightsPage() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2 relative">
                                     <Label className="font-semibold text-slate-700">Tipo de Pasaje</Label>
-                                    <Input 
-                                        name="ticket_type"
-                                        value={formData.ticket_type}
-                                        onChange={(e) => {
-                                            handleInputChange(e)
-                                            setShowTicketTypeList(true)
-                                        }}
-                                        onFocus={() => setShowTicketTypeList(true)}
-                                        onBlur={() => setTimeout(() => setShowTicketTypeList(false), 200)}
-                                        placeholder="Seleccione o busque el tipo de pasaje..."
-                                        autoComplete="off"
-                                        className="border-slate-300 focus:ring-chimiteal"
-                                    />
+                                    <div className="relative">
+                                        <Input 
+                                            name="ticket_type"
+                                            value={formData.ticket_type}
+                                            onChange={(e) => {
+                                                handleInputChange(e)
+                                                setShowTicketTypeList(true)
+                                            }}
+                                            onFocus={() => setShowTicketTypeList(true)}
+                                            onBlur={() => setTimeout(() => setShowTicketTypeList(false), 200)}
+                                            placeholder="Seleccione o busque el tipo de pasaje..."
+                                            autoComplete="off"
+                                            className="border-slate-300 focus:ring-chimiteal pr-8"
+                                        />
+                                        {formData.ticket_type && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, ticket_type: '' }))}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                     {showTicketTypeList && (
                                         <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-48 overflow-y-auto [&::-webkit-scrollbar]:hidden">
                                             {TICKET_TYPE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.ticket_type.toLowerCase())).map((opt, idx) => (
@@ -1070,19 +1092,30 @@ export default function FlightsPage() {
 
                                 <div className="grid gap-2 relative">
                                     <Label className="font-semibold text-slate-700">IATA / GDS</Label>
-                                    <Input 
-                                        name="iata_gds"
-                                        value={formData.iata_gds}
-                                        onChange={(e) => {
-                                            handleInputChange(e)
-                                            setShowIATAOptions(true)
-                                        }}
-                                        onFocus={() => setShowIATAOptions(true)}
-                                        onBlur={() => setTimeout(() => setShowIATAOptions(false), 200)}
-                                        placeholder="Buscar..."
-                                        autoComplete="off"
-                                        className="border-slate-300 focus:ring-chimiteal"
-                                    />
+                                    <div className="relative">
+                                        <Input 
+                                            name="iata_gds"
+                                            value={formData.iata_gds}
+                                            onChange={(e) => {
+                                                handleInputChange(e)
+                                                setShowIATAOptions(true)
+                                            }}
+                                            onFocus={() => setShowIATAOptions(true)}
+                                            onBlur={() => setTimeout(() => setShowIATAOptions(false), 200)}
+                                            placeholder="Buscar..."
+                                            autoComplete="off"
+                                            className="border-slate-300 focus:ring-chimiteal pr-8"
+                                        />
+                                        {formData.iata_gds && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, iata_gds: '' }))}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                     {showIATAOptions && (
                                         <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-48 overflow-y-auto [&::-webkit-scrollbar]:hidden">
                                             {IATA_OPTIONS.filter(opt => {
@@ -1116,38 +1149,44 @@ export default function FlightsPage() {
                                 <div className="grid grid-cols-3 gap-4 text-center">
                                     <div className="grid gap-1.5">
                                         <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center justify-center gap-1">👤 ADT</Label>
-                                        <Input 
-                                            type="number" 
-                                            min="0"
+                                        <select 
                                             name="pax_adt" 
                                             value={formData.pax_adt} 
                                             onChange={handleInputChange} 
-                                            className="h-9 text-center font-bold border-slate-200 focus:ring-chimiteal"
-                                        />
+                                            className="h-9 w-full text-center font-bold border border-slate-200 rounded-md focus:ring-2 focus:ring-chimiteal/20 focus:outline-none bg-white text-sm appearance-none cursor-pointer hover:border-slate-300 transition-colors"
+                                        >
+                                            {[1, 2, 3, 4, 5].map(n => (
+                                                <option key={n} value={n}>{n}</option>
+                                            ))}
+                                        </select>
                                         <span className="text-[9px] text-slate-400">Adultos</span>
                                     </div>
                                     <div className="grid gap-1.5">
                                         <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center justify-center gap-1">🧒 CHD</Label>
-                                        <Input 
-                                            type="number" 
-                                            min="0"
+                                        <select 
                                             name="pax_chd" 
                                             value={formData.pax_chd} 
                                             onChange={handleInputChange} 
-                                            className="h-9 text-center font-bold border-slate-200 focus:ring-chimiteal"
-                                        />
+                                            className="h-9 w-full text-center font-bold border border-slate-200 rounded-md focus:ring-2 focus:ring-chimiteal/20 focus:outline-none bg-white text-sm appearance-none cursor-pointer hover:border-slate-300 transition-colors"
+                                        >
+                                            {[0, 1, 2, 3, 4, 5].map(n => (
+                                                <option key={n} value={n}>{n}</option>
+                                            ))}
+                                        </select>
                                         <span className="text-[9px] text-slate-400">Niños</span>
                                     </div>
                                     <div className="grid gap-1.5">
                                         <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center justify-center gap-1">👶 INF</Label>
-                                        <Input 
-                                            type="number" 
-                                            min="0"
+                                        <select 
                                             name="pax_inf" 
                                             value={formData.pax_inf} 
                                             onChange={handleInputChange} 
-                                            className="h-9 text-center font-bold border-slate-200 focus:ring-chimiteal"
-                                        />
+                                            className="h-9 w-full text-center font-bold border border-slate-200 rounded-md focus:ring-2 focus:ring-chimiteal/20 focus:outline-none bg-white text-sm appearance-none cursor-pointer hover:border-slate-300 transition-colors"
+                                        >
+                                            {[0, 1, 2, 3, 4, 5].map(n => (
+                                                <option key={n} value={n}>{n}</option>
+                                            ))}
+                                        </select>
                                         <span className="text-[9px] text-slate-400">Bebés</span>
                                     </div>
                                 </div>
@@ -1160,18 +1199,30 @@ export default function FlightsPage() {
                                 </div>
                                 <div className="grid gap-2 relative">
                                     <Label>Itinerario</Label>
-                                    <Input 
-                                        name="itinerary"
-                                        value={formData.itinerary}
-                                        onChange={(e) => {
-                                            handleInputChange(e)
-                                            setShowItineraryList(true)
-                                        }}
-                                        onFocus={() => setShowItineraryList(true)}
-                                        onBlur={() => setTimeout(() => setShowItineraryList(false), 200)}
-                                        placeholder="Buscar itinerario..."
-                                        autoComplete="off"
-                                    />
+                                    <div className="relative">
+                                        <Input 
+                                            name="itinerary"
+                                            value={formData.itinerary}
+                                            onChange={(e) => {
+                                                handleInputChange(e)
+                                                setShowItineraryList(true)
+                                            }}
+                                            onFocus={() => setShowItineraryList(true)}
+                                            onBlur={() => setTimeout(() => setShowItineraryList(false), 200)}
+                                            placeholder="Buscar itinerario..."
+                                            autoComplete="off"
+                                            className="pr-8"
+                                        />
+                                        {formData.itinerary && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, itinerary: '' }))}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                     {showItineraryList && (
                                         <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-lg rounded-md mt-1 max-h-40 overflow-y-auto [&::-webkit-scrollbar]:hidden">
                                             {ITINERARY_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.itinerary.toLowerCase())).map((opt, idx) => (
@@ -1484,157 +1535,177 @@ export default function FlightsPage() {
                                                                 </div>
 
                                                                 {editPaymentData && (
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-                                                                        <div className="grid gap-1 relative">
-                                                                            <Label className="text-[10px] uppercase font-bold text-blue-600 flex items-center gap-1">🇮🇹 Sede IT</Label>
-                                                                            <Input 
-                                                                                className="h-8 text-xs bg-blue-50/50 border-blue-200"
-                                                                                value={editPaymentData.sede_it}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value
-                                                                                    setEditPaymentData(prev => prev ? {...prev, sede_it: val} : null)
-                                                                                    setShowEditSedeITList(true)
-                                                                                }}
-                                                                                onFocus={() => setShowEditSedeITList(true)}
-                                                                                onBlur={() => setTimeout(() => setShowEditSedeITList(false), 200)}
-                                                                            />
-                                                                            {showEditSedeITList && (
-                                                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
-                                                                                    {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.sede_it.toLowerCase())).map((opt, sidx) => (
-                                                                                        <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
-                                                                                            setEditPaymentData(prev => prev ? {...prev, sede_it: opt} : null)
-                                                                                            setShowEditSedeITList(false)
-                                                                                        }}>{opt}</div>
-                                                                                    ))}
+                                                                    <>
+                                                                        <div className="grid grid-cols-1 gap-y-3">
+                                                                            <div className="grid gap-1 relative">
+                                                                                <Label className="text-[10px] uppercase font-bold text-slate-600 flex items-center gap-1">🏢 Sedes</Label>
+                                                                                <div className="relative">
+                                                                                    <Input 
+                                                                                        className="h-8 text-xs bg-slate-50 border-slate-200 pr-8"
+                                                                                        value={editPaymentData.sede_it}
+                                                                                        onChange={(e) => {
+                                                                                            const val = e.target.value
+                                                                                            setEditPaymentData(prev => prev ? {...prev, sede_it: val} : null)
+                                                                                            setShowEditSedeITList(true)
+                                                                                        }}
+                                                                                        onFocus={() => setShowEditSedeITList(true)}
+                                                                                        onBlur={() => setTimeout(() => setShowEditSedeITList(false), 200)}
+                                                                                    />
+                                                                                    {editPaymentData.sede_it && (
+                                                                                        <button 
+                                                                                            type="button" 
+                                                                                            onClick={() => setEditPaymentData(prev => prev ? {...prev, sede_it: ''} : null)}
+                                                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                                                        >
+                                                                                            <X size={12} />
+                                                                                        </button>
+                                                                                    )}
                                                                                 </div>
-                                                                            )}
+                                                                                {showEditSedeITList && (
+                                                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
+                                                                                        {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.sede_it.toLowerCase())).map((opt, sidx) => (
+                                                                                            <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-[11px] border-b last:border-0" onClick={() => {
+                                                                                                setEditPaymentData(prev => prev ? {...prev, sede_it: opt} : null)
+                                                                                                setShowEditSedeITList(false)
+                                                                                            }}>{opt}</div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="grid gap-1 relative">
-                                                                            <Label className="text-[10px] uppercase font-bold text-rose-600 flex items-center gap-1">🇵🇪 Sede PE</Label>
-                                                                            <Input 
-                                                                                className="h-8 text-xs bg-rose-50/50 border-rose-200"
-                                                                                value={editPaymentData.sede_pe}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value
-                                                                                    setEditPaymentData(prev => prev ? {...prev, sede_pe: val} : null)
-                                                                                    setShowEditSedePEList(true)
-                                                                                }}
-                                                                                onFocus={() => setShowEditSedePEList(true)}
-                                                                                onBlur={() => setTimeout(() => setShowEditSedePEList(false), 200)}
-                                                                            />
-                                                                            {showEditSedePEList && (
-                                                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
-                                                                                    {SEDE_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.sede_pe.toLowerCase())).map((opt, sidx) => (
-                                                                                        <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
-                                                                                            setEditPaymentData(prev => prev ? {...prev, sede_pe: opt} : null)
-                                                                                            setShowEditSedePEList(false)
-                                                                                        }}>{opt}</div>
-                                                                                    ))}
+
+                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 mt-3">
+                                                                            <div className="grid gap-1 relative">
+                                                                                    <Label className="text-[10px] uppercase font-bold text-blue-600 flex items-center gap-1">
+                                                                                    <img src="https://flagcdn.com/w20/it.png" width="14" alt="italia" className="rounded-sm inline-block" />
+                                                                                    Método Pago IT
+                                                                                </Label>
+                                                                                <div className="relative">
+                                                                                    <Input 
+                                                                                        className="h-8 text-xs bg-blue-50/50 border-blue-200 pr-8"
+                                                                                        value={editPaymentData.metodo_it}
+                                                                                        onChange={(e) => {
+                                                                                            const val = e.target.value
+                                                                                            setEditPaymentData(prev => prev ? {...prev, metodo_it: val} : null)
+                                                                                            setShowEditMetodoITList(true)
+                                                                                        }}
+                                                                                        onFocus={() => setShowEditMetodoITList(true)}
+                                                                                        onBlur={() => setTimeout(() => setShowEditMetodoITList(false), 200)}
+                                                                                        placeholder="Buscar método..."
+                                                                                    />
+                                                                                    {editPaymentData.metodo_it && (
+                                                                                        <button 
+                                                                                            type="button" 
+                                                                                            onClick={() => setEditPaymentData(prev => prev ? {...prev, metodo_it: ''} : null)}
+                                                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                                                        >
+                                                                                            <X size={12} />
+                                                                                        </button>
+                                                                                    )}
                                                                                 </div>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="grid gap-1 relative">
-                                                                            <Label className="text-[10px] uppercase font-bold text-blue-600 flex items-center gap-1">🇮🇹 Método IT</Label>
-                                                                            <Input 
-                                                                                className="h-8 text-xs bg-blue-50/50 border-blue-200"
-                                                                                value={editPaymentData.metodo_it}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value
-                                                                                    setEditPaymentData(prev => prev ? {...prev, metodo_it: val} : null)
-                                                                                    setShowEditMetodoITList(true)
-                                                                                }}
-                                                                                onFocus={() => setShowEditMetodoITList(true)}
-                                                                                onBlur={() => setTimeout(() => setShowEditMetodoITList(false), 200)}
-                                                                                placeholder="Buscar método..."
-                                                                            />
-                                                                            {showEditMetodoITList && (
-                                                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
-                                                                                    {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.metodo_it.toLowerCase())).map((opt, sidx) => (
-                                                                                        <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
-                                                                                            setEditPaymentData(prev => prev ? {...prev, metodo_it: opt} : null)
-                                                                                            setShowEditMetodoITList(false)
-                                                                                        }}>{opt}</div>
-                                                                                    ))}
+                                                                                {showEditMetodoITList && (
+                                                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
+                                                                                        {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.metodo_it.toLowerCase())).map((opt, sidx) => (
+                                                                                            <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
+                                                                                                setEditPaymentData(prev => prev ? {...prev, metodo_it: opt} : null)
+                                                                                                setShowEditMetodoITList(false)
+                                                                                            }}>{opt}</div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="grid gap-1 relative">
+                                                                                    <Label className="text-[10px] uppercase font-bold text-rose-600 flex items-center gap-1">
+                                                                                    <img src="https://flagcdn.com/w20/pe.png" width="14" alt="peru" className="rounded-sm inline-block" />
+                                                                                    Método Pago PE
+                                                                                </Label>
+                                                                                <div className="relative">
+                                                                                    <Input 
+                                                                                        className="h-8 text-xs bg-rose-50/50 border-rose-200 pr-8"
+                                                                                        value={editPaymentData.metodo_pe}
+                                                                                        onChange={(e) => {
+                                                                                            const val = e.target.value
+                                                                                            setEditPaymentData(prev => prev ? {...prev, metodo_pe: val} : null)
+                                                                                            setShowEditMetodoPEList(true)
+                                                                                        }}
+                                                                                        onFocus={() => setShowEditMetodoPEList(true)}
+                                                                                        onBlur={() => setTimeout(() => setShowEditMetodoPEList(false), 200)}
+                                                                                        placeholder="Buscar método..."
+                                                                                    />
+                                                                                    {editPaymentData.metodo_pe && (
+                                                                                        <button 
+                                                                                            type="button" 
+                                                                                            onClick={() => setEditPaymentData(prev => prev ? {...prev, metodo_pe: ''} : null)}
+                                                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                                                        >
+                                                                                            <X size={12} />
+                                                                                        </button>
+                                                                                    )}
                                                                                 </div>
-                                                                            )}
+                                                                                {showEditMetodoPEList && (
+                                                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
+                                                                                        {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.metodo_pe.toLowerCase())).map((opt, sidx) => (
+                                                                                            <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
+                                                                                                setEditPaymentData(prev => prev ? {...prev, metodo_pe: opt} : null)
+                                                                                                setShowEditMetodoPEList(false)
+                                                                                            }}>{opt}</div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="grid gap-1">
+                                                                                <Label className="text-[10px] uppercase font-bold text-slate-500">Cantidad (€)</Label>
+                                                                                <Input 
+                                                                                    type="number"
+                                                                                    step="0.01"
+                                                                                    className="h-8 text-xs font-bold bg-yellow-50/50 border-yellow-200"
+                                                                                    value={editPaymentData.cantidad}
+                                                                                    onChange={(e) => {
+                                                                                        const val = e.target.value
+                                                                                        setEditPaymentData(prev => {
+                                                                                            if (!prev) return null
+                                                                                            const total = (parseFloat(val) * (prev.tipo_cambio || 1)).toFixed(2)
+                                                                                            return {...prev, cantidad: val, total}
+                                                                                        })
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+                                                                            <div className="grid gap-1">
+                                                                                <Label className="text-[10px] uppercase font-bold text-slate-500">T. Cambio</Label>
+                                                                                <Input 
+                                                                                    type="number"
+                                                                                    step="0.0001"
+                                                                                    className="h-8 text-xs bg-white"
+                                                                                    value={editPaymentData.tipo_cambio}
+                                                                                    onChange={(e) => {
+                                                                                        const val = e.target.value
+                                                                                        setEditPaymentData(prev => {
+                                                                                            if (!prev) return null
+                                                                                            const total = (parseFloat(prev.cantidad) * parseFloat(val)).toFixed(2)
+                                                                                            return {...prev, tipo_cambio: parseFloat(val), total}
+                                                                                        })
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+                                                                            <div className="grid gap-1">
+                                                                                <Label className="text-[10px] uppercase font-bold text-slate-500">Total Procesado</Label>
+                                                                                <Input 
+                                                                                    readOnly
+                                                                                    className="h-8 text-xs font-bold bg-slate-100 text-emerald-700"
+                                                                                    value={`€ ${editPaymentData.total}`}
+                                                                                />
+                                                                            </div>
+                                                                            <div className="grid gap-1">
+                                                                                <Label className="text-[10px] uppercase font-bold text-slate-500">Nuevo Comprobante</Label>
+                                                                                <Input 
+                                                                                    type="file" 
+                                                                                    accept="image/*" 
+                                                                                    className="w-full text-[11px] cursor-pointer file:bg-blue-50 file:text-blue-700 file:border-0 file:rounded file:px-2 file:py-1 file:mr-2 file:text-[10px] file:font-semibold" 
+                                                                                    onChange={(e) => setEditPaymentFile(e.target.files?.[0] || null)}
+                                                                                />
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="grid gap-1 relative">
-                                                                            <Label className="text-[10px] uppercase font-bold text-rose-600 flex items-center gap-1">🇵🇪 Método PE</Label>
-                                                                            <Input 
-                                                                                className="h-8 text-xs bg-rose-50/50 border-rose-200"
-                                                                                value={editPaymentData.metodo_pe}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value
-                                                                                    setEditPaymentData(prev => prev ? {...prev, metodo_pe: val} : null)
-                                                                                    setShowEditMetodoPEList(true)
-                                                                                }}
-                                                                                onFocus={() => setShowEditMetodoPEList(true)}
-                                                                                onBlur={() => setTimeout(() => setShowEditMetodoPEList(false), 200)}
-                                                                                placeholder="Buscar método..."
-                                                                            />
-                                                                            {showEditMetodoPEList && (
-                                                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-32 overflow-y-auto">
-                                                                                    {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(editPaymentData.metodo_pe.toLowerCase())).map((opt, sidx) => (
-                                                                                        <div key={sidx} className="p-2 hover:bg-slate-50 cursor-pointer text-xs" onClick={() => {
-                                                                                            setEditPaymentData(prev => prev ? {...prev, metodo_pe: opt} : null)
-                                                                                            setShowEditMetodoPEList(false)
-                                                                                        }}>{opt}</div>
-                                                                                    ))}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="grid gap-1">
-                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Cantidad (€)</Label>
-                                                                            <Input 
-                                                                                type="number"
-                                                                                step="0.01"
-                                                                                className="h-8 text-xs font-bold bg-yellow-50/50 border-yellow-200"
-                                                                                value={editPaymentData.cantidad}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value
-                                                                                    setEditPaymentData(prev => {
-                                                                                        if (!prev) return null
-                                                                                        const total = (parseFloat(val) * (prev.tipo_cambio || 1)).toFixed(2)
-                                                                                        return {...prev, cantidad: val, total}
-                                                                                    })
-                                                                                }}
-                                                                            />
-                                                                        </div>
-                                                                        <div className="grid gap-1">
-                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">T. Cambio</Label>
-                                                                            <Input 
-                                                                                type="number"
-                                                                                step="0.0001"
-                                                                                className="h-8 text-xs bg-white"
-                                                                                value={editPaymentData.tipo_cambio}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value
-                                                                                    setEditPaymentData(prev => {
-                                                                                        if (!prev) return null
-                                                                                        const total = (parseFloat(prev.cantidad) * parseFloat(val)).toFixed(2)
-                                                                                        return {...prev, tipo_cambio: parseFloat(val), total}
-                                                                                    })
-                                                                                }}
-                                                                            />
-                                                                        </div>
-                                                                        <div className="grid gap-1">
-                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Total Procesado</Label>
-                                                                            <Input 
-                                                                                readOnly
-                                                                                className="h-8 text-xs font-bold bg-slate-100 text-emerald-700"
-                                                                                value={`€ ${editPaymentData.total}`}
-                                                                            />
-                                                                        </div>
-                                                                        <div className="grid gap-1">
-                                                                            <Label className="text-[10px] uppercase font-bold text-slate-500">Nuevo Comprobante</Label>
-                                                                            <Input 
-                                                                                type="file" 
-                                                                                accept="image/*" 
-                                                                                className="w-full text-[11px] cursor-pointer file:bg-blue-50 file:text-blue-700 file:border-0 file:rounded file:px-2 file:py-1 file:mr-2 file:text-[10px] file:font-semibold" 
-                                                                                onChange={(e) => setEditPaymentFile(e.target.files?.[0] || null)}
-                                                                            />
-                                                                        </div>
-                                                                    </div>
+                                                                    </>
                                                                 )}
                                                             </div>
                                                         ) : (
@@ -1714,128 +1785,177 @@ export default function FlightsPage() {
                                     </div>
 
                                     {showPaymentFields && (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 border-t pt-4 border-slate-200">
-                                            <div className="grid gap-2 relative">
-                                                <Label className="text-xs flex items-center gap-1.5 font-bold text-blue-700">🇮🇹 Sede IT</Label>
-                                                <Input 
-                                                    name="sede_it" 
-                                                    value={formData.sede_it} 
-                                                    onChange={(e) => {
-                                                        handleInputChange(e)
-                                                        setShowSedeITList(true)
-                                                    }}
-                                                    onFocus={() => setShowSedeITList(true)}
-                                                    onBlur={() => setTimeout(() => setShowSedeITList(false), 200)}
-                                                    placeholder="Buscar sede IT..."
-                                                    autoComplete="off"
-                                                    className="bg-blue-50/50 border-blue-200 focus:ring-blue-500"
-                                                />
-                                                {showSedeITList && (
-                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                        {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.sede_it.toLowerCase())).map((opt, idx) => (
-                                                            <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
-                                                                setFormData(p => ({ ...p, sede_it: opt }))
-                                                                setShowSedeITList(false)
-                                                            }}>{opt}</div>
-                                                        ))}
+                                        <>
+                                            <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-2 border-t pt-4 border-slate-200">
+                                                <div className="grid gap-2 relative">
+                                                    <Label className="text-xs flex items-center gap-1.5 font-bold text-slate-700">🏢 Sedes</Label>
+                                                    <div className="relative">
+                                                        <Input 
+                                                            name="sede_it" 
+                                                            value={formData.sede_it} 
+                                                            onChange={(e) => {
+                                                                handleInputChange(e)
+                                                                setShowSedeITList(true)
+                                                            }}
+                                                            onFocus={() => setShowSedeITList(true)}
+                                                            onBlur={() => setTimeout(() => setShowSedeITList(false), 200)}
+                                                            placeholder="Buscar sede..."
+                                                            autoComplete="off"
+                                                            className="bg-slate-50 border-slate-200 focus:ring-slate-500 pr-8"
+                                                        />
+                                                        {formData.sede_it && (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setFormData(p => ({ ...p, sede_it: '' }))}
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                )}
+                                                    {showSedeITList && (
+                                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                            {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.sede_it.toLowerCase())).map((opt, idx) => (
+                                                                <div key={idx} className="p-2 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                    setFormData(p => ({ ...p, sede_it: opt }))
+                                                                    setShowSedeITList(false)
+                                                                }}>{opt}</div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="grid gap-2 relative">
-                                                <Label className="text-xs flex items-center gap-1.5 font-bold text-rose-700">🇵🇪 Sede PE</Label>
-                                                <Input 
-                                                    name="sede_pe" 
-                                                    value={formData.sede_pe} 
-                                                    onChange={(e) => {
-                                                        handleInputChange(e)
-                                                        setShowSedePEList(true)
-                                                    }}
-                                                    onFocus={() => setShowSedePEList(true)}
-                                                    onBlur={() => setTimeout(() => setShowSedePEList(false), 200)}
-                                                    placeholder="Buscar sede PE..."
-                                                    autoComplete="off"
-                                                    className="bg-rose-50/50 border-rose-200 focus:ring-rose-500"
-                                                />
-                                                {showSedePEList && (
-                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                        {SEDE_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.sede_pe.toLowerCase())).map((opt, idx) => (
-                                                            <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
-                                                                setFormData(p => ({ ...p, sede_pe: opt }))
-                                                                setShowSedePEList(false)
-                                                            }}>{opt}</div>
-                                                        ))}
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+                                                <div className="grid gap-2 relative">
+                                                    <Label className="text-xs flex items-center gap-1.5 font-bold text-blue-700">
+                                                        <img src="https://flagcdn.com/w20/it.png" width="16" alt="italia" className="rounded-sm inline-block shadow-sm" />
+                                                        Método Pago IT
+                                                    </Label>
+                                                    <div className="relative">
+                                                        <Input 
+                                                            name="payment_method_it" 
+                                                            value={formData.payment_method_it} 
+                                                            onChange={(e) => {
+                                                                handleInputChange(e)
+                                                                setShowMetodoITList(true)
+                                                            }}
+                                                            onFocus={() => setShowMetodoITList(true)}
+                                                            onBlur={() => setTimeout(() => setShowMetodoITList(false), 200)}
+                                                            placeholder="Buscar método..."
+                                                            autoComplete="off"
+                                                            className="bg-blue-50/50 border-blue-200 focus:ring-blue-500 pr-8"
+                                                        />
+                                                        {formData.payment_method_it && (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setFormData(p => ({ ...p, payment_method_it: '' }))}
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </div>
-                                            <div className="grid gap-2 relative">
-                                                <Label className="text-xs flex items-center gap-1.5 font-bold text-blue-700">🇮🇹 Método Pago IT</Label>
-                                                <Input 
-                                                    name="payment_method_it" 
-                                                    value={formData.payment_method_it} 
-                                                    onChange={(e) => {
-                                                        handleInputChange(e)
-                                                        setShowMetodoITList(true)
-                                                    }}
-                                                    onFocus={() => setShowMetodoITList(true)}
-                                                    onBlur={() => setTimeout(() => setShowMetodoITList(false), 200)}
-                                                    placeholder="Buscar método..."
-                                                    autoComplete="off"
-                                                    className="bg-blue-50/50 border-blue-200 focus:ring-blue-500"
-                                                />
-                                                {showMetodoITList && (
-                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                        {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase())).map((opt, idx) => (
-                                                            <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
-                                                                setFormData(p => ({ ...p, payment_method_it: opt }))
-                                                                setShowMetodoITList(false)
-                                                            }}>{opt}</div>
-                                                        ))}
+                                                    {showMetodoITList && (
+                                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                            {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase())).map((opt, idx) => (
+                                                                <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                    setFormData(p => ({ ...p, payment_method_it: opt }))
+                                                                    setShowMetodoITList(false)
+                                                                }}>{opt}</div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="grid gap-2 relative">
+                                                    <Label className="text-xs flex items-center gap-1.5 font-bold text-rose-700">
+                                                        <img src="https://flagcdn.com/w20/pe.png" width="16" alt="peru" className="rounded-sm inline-block shadow-sm" />
+                                                        Método Pago PE
+                                                    </Label>
+                                                    <div className="relative">
+                                                        <Input 
+                                                            name="payment_method_pe" 
+                                                            value={formData.payment_method_pe} 
+                                                            onChange={(e) => {
+                                                                handleInputChange(e)
+                                                                setShowMetodoPEList(true)
+                                                            }}
+                                                            onFocus={() => setShowMetodoPEList(true)}
+                                                            onBlur={() => setTimeout(() => setShowMetodoPEList(false), 200)}
+                                                            placeholder="Buscar método..."
+                                                            autoComplete="off"
+                                                            className="bg-rose-50/50 border-rose-200 focus:ring-rose-500 pr-8"
+                                                        />
+                                                        {formData.payment_method_pe && (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setFormData(p => ({ ...p, payment_method_pe: '' }))}
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                )}
+                                                    {showMetodoPEList && (
+                                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                            {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase())).map((opt, idx) => (
+                                                                <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                    setFormData(p => ({ ...p, payment_method_pe: opt }))
+                                                                    setShowMetodoPEList(false)
+                                                                }}>{opt}</div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="grid gap-2 relative">
-                                                <Label className="text-xs flex items-center gap-1.5 font-bold text-rose-700">🇵🇪 Método Pago PE</Label>
-                                                <Input 
-                                                    name="payment_method_pe" 
-                                                    value={formData.payment_method_pe} 
-                                                    onChange={(e) => {
-                                                        handleInputChange(e)
-                                                        setShowMetodoPEList(true)
-                                                    }}
-                                                    onFocus={() => setShowMetodoPEList(true)}
-                                                    onBlur={() => setTimeout(() => setShowMetodoPEList(false), 200)}
-                                                    placeholder="Buscar método..."
-                                                    autoComplete="off"
-                                                    className="bg-rose-50/50 border-rose-200 focus:ring-rose-500"
-                                                />
-                                                {showMetodoPEList && (
-                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                        {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase())).map((opt, idx) => (
-                                                            <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
-                                                                setFormData(p => ({ ...p, payment_method_pe: opt }))
-                                                                setShowMetodoPEList(false)
-                                                            }}>{opt}</div>
-                                                        ))}
-                                                    </div>
-                                                )}
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs font-bold text-slate-700">Cantidad (Paga Cliente)</Label>
+                                                    <Input 
+                                                        type="number" 
+                                                        step="0.01"
+                                                        name="payment_quantity" 
+                                                        value={formData.payment_quantity} 
+                                                        onChange={handleInputChange} 
+                                                        className="bg-yellow-50/50 border-yellow-200 focus:ring-yellow-500 font-bold"
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs font-bold text-slate-700">Tipo de Cambio</Label>
+                                                    <Input 
+                                                        type="number" 
+                                                        step="0.01" 
+                                                        name="payment_exchange_rate" 
+                                                        value={formData.payment_exchange_rate} 
+                                                        onChange={handleInputChange} 
+                                                        className="bg-white"
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs font-bold text-slate-700">Cantidad (Paga Cliente)</Label>
-                                                <Input type="number" step="0.01" name="payment_quantity" value={formData.payment_quantity} onChange={handleInputChange} placeholder="0.00" className="bg-yellow-50 border-yellow-200 focus:ring-yellow-500 font-bold" />
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs font-bold text-slate-700">Total Procesado</Label>
+                                                    <Input 
+                                                        name="payment_total" 
+                                                        value={formData.payment_total ? `€ ${formData.payment_total}` : ''} 
+                                                        readOnly 
+                                                        className="bg-slate-100 text-emerald-700 font-black border-slate-200"
+                                                    />
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs font-bold text-slate-700">Foto de Comprobante (Opcional)</Label>
+                                                    <Input 
+                                                        type="file" 
+                                                        accept="image/*" 
+                                                        onChange={(e) => setPaymentProofFile(e.target.files?.[0] || null)}
+                                                        className="cursor-pointer file:bg-chimiteal/10 file:text-chimiteal file:border-0 file:rounded file:px-2 file:py-1 file:mr-2 file:text-xs file:font-semibold"
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs">Tipo de Cambio</Label>
-                                                <Input type="number" step="0.0001" name="payment_exchange_rate" value={formData.payment_exchange_rate} onChange={handleInputChange} placeholder="1.00" />
-                                            </div>
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs">Total Procesado</Label>
-                                                <Input type="number" step="0.01" name="payment_total" value={formData.payment_total} readOnly className="bg-slate-100 font-bold text-emerald-700" />
-                                            </div>
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs font-semibold">Foto de Comprobante (Opcional)</Label>
-                                                <Input type="file" accept="image/*" onChange={(e) => setPaymentProofFile(e.target.files?.[0] || null)} className="text-xs cursor-pointer file:bg-emerald-50 file:text-emerald-700 file:border-0 file:rounded-md file:px-2 file:py-1 file:mr-2" />
-                                            </div>
-                                        </div>
+                                        </>
                                     )}
                                 </div>
 
@@ -1926,17 +2046,25 @@ export default function FlightsPage() {
                     
                     {/* Filters Group */}
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-1">
-                        <div className="relative min-w-[200px] flex-1">
+                        <div className="relative min-w-[200px] flex-1 group">
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             <Input 
                                 placeholder="Buscar por PNR o nombre..." 
-                                className="pl-10 border-slate-200 bg-white focus:ring-chimiteal"
+                                className="pl-10 pr-10 border-slate-200 bg-white focus:ring-chimiteal"
                                 value={searchTerm}
                                 onChange={(e) => {
                                     setSearchTerm(e.target.value)
                                     setCurrentPage(1) 
                                 }}
                             />
+                            {searchTerm && (
+                                <button 
+                                    onClick={() => {setSearchTerm(''); setCurrentPage(1);}}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
                         </div>
                         
                         <select 
@@ -1949,7 +2077,7 @@ export default function FlightsPage() {
                             <option value="finished">Terminado</option>
                         </select>
 
-                        <div className="flex items-center gap-2 bg-white rounded-md border border-slate-200 px-2 h-10">
+                        <div className="flex items-center gap-2 bg-white rounded-md border border-slate-200 px-2 h-10 relative pr-8">
                             <input 
                                 type="date" 
                                 className="text-sm border-none focus:ring-0 p-0 text-slate-700 w-full outline-none"
@@ -1957,9 +2085,17 @@ export default function FlightsPage() {
                                 onChange={(e) => setDateFrom(e.target.value)}
                                 title="Fecha Desde"
                             />
+                            {dateFrom && (
+                                <button 
+                                    onClick={() => setDateFrom('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
                         </div>
 
-                        <div className="flex items-center gap-2 bg-white rounded-md border border-slate-200 px-2 h-10">
+                        <div className="flex items-center gap-2 bg-white rounded-md border border-slate-200 px-2 h-10 relative pr-8">
                             <input 
                                 type="date" 
                                 className="text-sm border-none focus:ring-0 p-0 text-slate-700 w-full outline-none"
@@ -1967,6 +2103,14 @@ export default function FlightsPage() {
                                 onChange={(e) => setDateTo(e.target.value)}
                                 title="Fecha Hasta"
                             />
+                            {dateTo && (
+                                <button 
+                                    onClick={() => setDateTo('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -2011,17 +2155,17 @@ export default function FlightsPage() {
                                     <th className="px-6 py-4 font-medium">Pago</th>
                                     <th className="px-6 py-4 font-medium text-center">Docs</th>
                                     <th className="px-6 py-4 font-medium">Estado</th>
-                                    <th className="px-6 py-4 font-medium text-right">Acciones</th>
+                                    <th className="px-6 py-4 font-medium text-right sticky right-0 bg-pink-100/90 backdrop-blur-sm z-20 border-l border-pink-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] text-pink-700">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {currentFlights.length === 0 ? (
                                     <tr>
-                                        <td colSpan={10} className="px-6 py-8 text-center text-slate-500">No se encontraron vuelos.</td>
+                                        <td colSpan={19} className="px-6 py-8 text-center text-slate-500">No se encontraron vuelos.</td>
                                     </tr>
                                 ) : (
                                     currentFlights.map((flight) => (
-                                        <tr key={flight.id} className="bg-white hover:bg-slate-50/50">
+                                        <tr key={flight.id} className="bg-white hover:bg-slate-50/50 group">
                                             <td className="px-6 py-4 text-xs text-slate-500">
                                                 {new Date(flight.created_at).toLocaleDateString('es-PE')}
                                             </td>
@@ -2113,14 +2257,14 @@ export default function FlightsPage() {
                                                     </select>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
                                                 <div className="flex items-center justify-end gap-2">
                                                     <Button variant="ghost" size="sm" onClick={() => handleEdit(flight)}>
                                                         <Edit className="h-4 w-4 text-slate-400" />
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(flight.id)}>
+                                                    {/* <Button variant="ghost" size="sm" onClick={() => handleDelete(flight.id)}>
                                                         <Trash2 className="h-4 w-4 text-red-400" />
-                                                    </Button>
+                                                    </Button> */}
                                                 </div>
                                             </td>
                                         </tr>

@@ -11,7 +11,8 @@ import {
   LogOut,
   UserCog,
   Menu,
-  X
+  X,
+  MessageCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -121,6 +122,7 @@ export function MobileSidebar({ role }: MobileSidebarProps) {
                     <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} onClick={() => setIsOpen(false)} />
                     <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} onClick={() => setIsOpen(false)} />
                     <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={MessageCircle} label="Mensajes" href="/admin/chat" isActive={pathname.startsWith('/admin/chat')} onClick={() => setIsOpen(false)} />
                     
                     <div className="my-4 border-t border-sidebar-border mx-2" />
                     

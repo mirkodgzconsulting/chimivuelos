@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getAdminConversations, getAdminConversationDetails, sendAdminMessage, markAdminMessagesAsRead, type Message, type Conversation } from '@/app/actions/chat'
-import { Search, Send, User, MessageCircle } from 'lucide-react'
+import { Search, Send, User, MessageCircle, ArrowLeft } from 'lucide-react'
 
 // Layout for Admin Chat
 // Left Sidebar: List of conversations
@@ -181,10 +181,13 @@ export default function AdminChatPage() {
     const selectedConversation = conversations.find(c => c.id === selectedConvId)
 
     return (
-        <div className="flex h-[calc(100vh-100px)] bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans">
+        <div className="flex h-[calc(100vh-100px)] bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans relative">
             
             {/* Sidebar List */}
-            <div className="w-1/3 border-r border-slate-100 flex flex-col bg-slate-50/50">
+            <div className={`
+                ${selectedConvId ? 'hidden md:flex' : 'flex'} 
+                w-full md:w-1/3 border-r border-slate-100 flex-col bg-slate-50/50
+            `}>
                 <div className="p-4 border-b border-slate-100 bg-white">
                     <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
                         <MessageCircle className="text-chimipink" /> 
@@ -247,38 +250,49 @@ export default function AdminChatPage() {
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col bg-slate-50/30">
+            <div className={`
+                ${selectedConvId ? 'flex' : 'hidden md:flex'} 
+                flex-1 flex-col bg-slate-50/30
+            `}>
                 {selectedConvId ? (
                     <>
                         {/* Chat Header */}
-                        <div className="p-4 bg-white border-b border-slate-100 flex justify-between items-center shadow-sm z-10">
+                        <div className="p-3 md:p-4 bg-white border-b border-slate-100 flex justify-between items-center shadow-sm z-10">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-linear-to-br from-chimipink to-chimicyan flex items-center justify-center text-white font-bold text-sm">
+                                {/* Back Button Mobile */}
+                                <button 
+                                    onClick={() => setSelectedConvId(null)}
+                                    className="md:hidden p-2 -ml-2 text-slate-500 hover:text-chimipink"
+                                >
+                                    <ArrowLeft size={20} />
+                                </button>
+
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-linear-to-br from-chimipink to-chimicyan flex items-center justify-center text-white font-bold text-xs md:text-sm">
                                     {selectedConversation?.profiles?.first_name?.[0]}
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-slate-800">
+                                    <h3 className="font-bold text-sm md:text-base text-slate-800 leading-tight">
                                         {selectedConversation?.profiles?.first_name} {selectedConversation?.profiles?.last_name}
                                     </h3>
-                                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                                    <p className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                                         Cliente registrado
                                     </p>
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <div className="px-3 py-1 bg-slate-100 text-slate-500 text-xs rounded-full font-medium">
+                                <div className="hidden sm:block px-3 py-1 bg-slate-100 text-slate-500 text-xs rounded-full font-medium">
                                     {selectedConversation?.profiles?.email}
                                 </div>
                             </div>
                         </div>
 
                         {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-6 flex flex-col-reverse gap-6">
+                        <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col-reverse gap-4 md:gap-6">
                             <div ref={messagesEndRef} />
                             {[...messages].reverse().map((msg) => (
                                 <div key={msg.id} className={`flex w-full ${msg.is_admin ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[70%] p-4 rounded-2xl text-sm shadow-sm ${
+                                    <div className={`max-w-[85%] md:max-w-[70%] p-3 md:p-4 rounded-2xl text-sm shadow-sm ${
                                         msg.is_admin
                                             ? 'bg-chimipink text-white rounded-br-none'
                                             : 'bg-white text-slate-700 border border-slate-200 rounded-bl-none'

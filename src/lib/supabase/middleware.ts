@@ -43,36 +43,67 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const protectedPaths = [
+  // Define route groups
+  const adminPaths = [
     '/dashboard',
     '/agents',
     '/clients',
-    '/flights',
-    '/chimi-transfers',
-    '/parcels'
+    '/admin',
+    '/chimi-vuelos',
+    '/chimi-giros',
+    '/chimi-encomiendas'
   ]
+  const clientPaths = ['/portal']
 
-  const isProtectedPath = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
+  const pathname = request.nextUrl.pathname
+  const isAdminPath = adminPaths.some(path => pathname.startsWith(path))
+  const isClientPath = clientPaths.some(path => pathname.startsWith(path))
+  const isAuthPath = pathname === '/login' || pathname === '/'
 
-  if (isProtectedPath && !user) {
-    // If user is not signed in and targeting a protected route, redirect to login
+  // User Role
+  const role = user?.user_metadata?.role || 'client'
+
+  // 1. SESSION CHECK: If no user and trying to access any protected path
+  if (!user && (isAdminPath || isClientPath)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    return NextResponse.redirect(url)
+    const response = NextResponse.redirect(url)
+    // Even if no user, we might want to clear old cookies/headers
+    return response
   }
 
-  // Also protect server actions/API routes if necessary, but middleware is mainly for pages
-  
+  // 2. ROLE CHECK: If user is logged in
   if (user) {
-    if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/') {
-        // If user is signed in and visits login or root, redirect to dashboard
-        const url = request.nextUrl.clone()
-        url.pathname = '/dashboard'
-        return NextResponse.redirect(url)
+    // Prevent clients from entering Admin areas
+    if (isAdminPath && role === 'client') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/portal'
+      const response = NextResponse.redirect(url)
+      supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie.name, cookie.value))
+      return response
+    }
+
+    // Prevent Admins/Agents from entering Client portal
+    if (isClientPath && role !== 'client') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      const response = NextResponse.redirect(url)
+      supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie.name, cookie.value))
+      return response
+    }
+
+    // 3. AUTH PAGE REDIRECT: Redirect already logged in users to their respective homes
+    if (isAuthPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = role === 'client' ? '/portal' : '/dashboard'
+      
+      const response = NextResponse.redirect(url)
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        response.cookies.set(cookie.name, cookie.value)
+      })
+      return response
     }
   }
 
-  // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
-  // creating a new Response object with NextResponse.redirect, ensure cookies are handled (usually automatic for redirects unless we need to persist session refreshes)
   return supabaseResponse
 }

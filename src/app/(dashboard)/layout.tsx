@@ -11,18 +11,26 @@ export default async function DashboardLayout({
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  // Second layer of security: Check role in the layout
+  const role = user?.user_metadata?.role || 'client';
+
+  if (role === 'client') {
+    const { redirect } = await import("next/navigation");
+    redirect('/portal');
+  }
+
   return (
     <div className="min-h-screen bg-page font-sans text-slate-900">
       
       {/* Sidebar - Fixed Left */}
-      <Sidebar role="admin" />
+      <Sidebar role={role as 'admin'} />
 
       {/* Main Content Area */}
       <div className="md:pl-48 flex flex-col min-h-screen transition-all duration-300">
         
         {/* Header - Sticky Top */}
         <div className="z-30 w-full">
-             <Header user={user} role="admin" />
+             <Header user={user} role={role as 'admin'} />
         </div>
 
         {/* Dynamic Page Content */}

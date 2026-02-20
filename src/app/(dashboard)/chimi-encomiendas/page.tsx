@@ -26,7 +26,8 @@ import {
     ChevronLeft, 
     ChevronRight,
     MapPin,
-    Link as LinkIcon
+    Link as LinkIcon,
+    X
 } from 'lucide-react'
 import { getParcels, createParcel, updateParcel, deleteParcel, updateParcelStatus, deleteParcelDocument, getParcelDocumentUrl } from '@/app/actions/manage-parcels'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
@@ -401,22 +402,36 @@ export default function ParcelsPage() {
                             {/* Client (Sender) Selection */}
                              <div className="grid gap-2 relative">
                                 <Label>Remitente (Cliente) <span className="text-red-500">*</span></Label>
-                                <Input 
-                                    placeholder="Buscar cliente..." 
-                                    value={searchClientTerm}
-                                    onChange={(e) => {
-                                        setSearchClientTerm(e.target.value)
-                                        setIsClientDropdownOpen(true)
-                                        if (e.target.value === '') {
-                                            setFormData(prev => ({ ...prev, sender_id: '' }))
-                                        }
-                                    }}
-                                    onClick={() => !selectedParcelId && setIsClientDropdownOpen(true)}
-                                    onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
-                                    required={!formData.sender_id}
-                                    disabled={!!selectedParcelId}
-                                    className={selectedParcelId ? "bg-slate-100 text-slate-500 cursor-not-allowed" : ""}
-                                />
+                                    <div className="relative">
+                                        <Input 
+                                            placeholder="Buscar cliente..." 
+                                            value={searchClientTerm}
+                                            onChange={(e) => {
+                                                setSearchClientTerm(e.target.value)
+                                                setIsClientDropdownOpen(true)
+                                                if (e.target.value === '') {
+                                                    setFormData(prev => ({ ...prev, sender_id: '' }))
+                                                }
+                                            }}
+                                            onClick={() => !selectedParcelId && setIsClientDropdownOpen(true)}
+                                            onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
+                                            required={!formData.sender_id}
+                                            disabled={!!selectedParcelId}
+                                            className={`${selectedParcelId ? "bg-slate-100 text-slate-500 cursor-not-allowed" : ""} pr-8`}
+                                        />
+                                        {searchClientTerm && !selectedParcelId && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    setSearchClientTerm('')
+                                                    setFormData(prev => ({ ...prev, sender_id: '' }))
+                                                }}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                 {isClientDropdownOpen && (
                                     <div className="absolute top-[70px] z-50 w-full max-h-40 overflow-y-auto bg-white border border-slate-200 rounded-md shadow-lg">
                                         {clients.filter(c => {
@@ -731,10 +746,18 @@ export default function ParcelsPage() {
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             <Input 
                                 placeholder="Buscar por código, nombre..." 
-                                className="pl-10 border-slate-200 bg-white focus:ring-chimiteal"
+                                className="pl-10 pr-10 border-slate-200 bg-white focus:ring-chimiteal"
                                 value={searchTerm}
                                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1) }}
                             />
+                            {searchTerm && (
+                                <button 
+                                    onClick={() => {setSearchTerm(''); setCurrentPage(1);}}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
                         </div>
                         
                         <select 
@@ -750,7 +773,7 @@ export default function ParcelsPage() {
                             <option value="cancelled">Cancelado</option>
                         </select>
 
-                         <div className="flex items-center gap-2 bg-white rounded-md border border-slate-200 px-2 h-10">
+                          <div className="flex items-center gap-2 bg-white rounded-md border border-slate-200 px-2 h-10 relative pr-8">
                             <input 
                                 type="date" 
                                 className="text-sm border-none focus:ring-0 p-0 text-slate-700 w-full outline-none"
@@ -758,8 +781,16 @@ export default function ParcelsPage() {
                                 onChange={(e) => setDateFrom(e.target.value)}
                                 title="Fecha Desde"
                             />
+                            {dateFrom && (
+                                <button 
+                                    onClick={() => setDateFrom('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
                         </div>
-                         <div className="flex items-center gap-2 bg-white rounded-md border border-slate-200 px-2 h-10">
+                          <div className="flex items-center gap-2 bg-white rounded-md border border-slate-200 px-2 h-10 relative pr-8">
                             <input 
                                 type="date" 
                                 className="text-sm border-none focus:ring-0 p-0 text-slate-700 w-full outline-none"
@@ -767,6 +798,14 @@ export default function ParcelsPage() {
                                 onChange={(e) => setDateTo(e.target.value)}
                                 title="Fecha Hasta"
                             />
+                            {dateTo && (
+                                <button 
+                                    onClick={() => setDateTo('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -803,19 +842,19 @@ export default function ParcelsPage() {
                                     <th className="px-6 py-4 font-medium">Saldo (€)</th>
                                     <th className="px-6 py-4 font-medium text-center">Fotos</th>
                                     <th className="px-6 py-4 font-medium">Estado</th>
-                                    <th className="px-6 py-4 font-medium text-right">Acciones</th>
+                                    <th className="px-6 py-4 font-medium text-right sticky right-0 bg-pink-100/90 backdrop-blur-sm z-20 border-l border-pink-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] text-pink-700">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {currentItems.length === 0 ? (
                                     <tr>
-                                        <td colSpan={11} className="py-8 text-center text-slate-500">
+                                        <td colSpan={14} className="py-8 text-center text-slate-500">
                                             No se encontraron encomiendas.
                                         </td>
                                     </tr>
                                 ) : (
                                     currentItems.map((parcel) => (
-                                        <tr key={parcel.id} className="bg-white hover:bg-slate-50/50">
+                                        <tr key={parcel.id} className="bg-white hover:bg-slate-50/50 group">
                                              <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
                                                 {new Date(parcel.created_at).toLocaleDateString('es-PE')}
                                             </td>
@@ -917,13 +956,13 @@ export default function ParcelsPage() {
                                                     <option value="cancelled">Cancelado</option>
                                                 </select>
                                             </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(parcel)} className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600">
-                                                        <Pencil className="h-4 w-4" />
+                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(parcel)}>
+                                                        <Pencil className="h-4 w-4 text-slate-400" />
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(parcel.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50">
-                                                        <Trash2 className="h-4 w-4" />
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(parcel.id)}>
+                                                        <Trash2 className="h-4 w-4 text-red-400" />
                                                     </Button>
                                                 </div>
                                             </td>
