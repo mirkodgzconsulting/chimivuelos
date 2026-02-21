@@ -44,13 +44,13 @@ export async function createFlight(formData: FormData) {
         if (!user) throw new Error('Unauthorized')
 
         const client_id = formData.get('client_id') as string
-        const travel_date = formData.get('travel_date') as string
+        const travel_date = formData.get('travel_date') as string || null
         const pnr = formData.get('pnr') as string
         const itinerary = formData.get('itinerary') as string
         const cost = parseFloat(formData.get('cost') as string) || 0
         const status = formData.get('status') as string || 'Programado'
         
-        const return_date = formData.get('return_date') as string
+        const return_date = formData.get('return_date') as string || null
         const sold_price = parseFloat(formData.get('sold_price') as string) || 0
         const payment_method_it = formData.get('payment_method_it') as string
         const payment_method_pe = formData.get('payment_method_pe') as string
@@ -67,18 +67,42 @@ export async function createFlight(formData: FormData) {
         const payment_quantity_str = formData.get('payment_quantity') as string
         const payment_quantity = parseFloat(payment_quantity_str) || 0
         const payment_exchange_rate = parseFloat(formData.get('payment_exchange_rate') as string) || 1.0
-        const payment_total = parseFloat(formData.get('payment_total') as string) || 0
         
-        // Handle Payment Proof
         let payment_proof_path = null
-        const proofFile = formData.get('payment_proof_file') as File
-        if (proofFile && proofFile.size > 0) {
-            const uploadResult = await uploadClientFile(proofFile, client_id)
-            payment_proof_path = uploadResult.path
+        const payment_details: PaymentDetail[] = []
+        
+        // Handle Multi Payments if sent as JSON
+        const multiPaymentsStr = formData.get('multi_payments') as string
+        if (multiPaymentsStr) {
+            try {
+                const multiPayments = JSON.parse(multiPaymentsStr) as PaymentDetail[]
+                
+                // For each temp payment, check if there's a corresponding proof file
+                for (let i = 0; i < multiPayments.length; i++) {
+                    const tempFile = formData.get(`payment_proof_${i}`) as File
+                    if (tempFile && tempFile.size > 0) {
+                        const uploadResult = await uploadClientFile(tempFile, client_id)
+                        multiPayments[i].proof_path = uploadResult.path
+                        // If multiple proofs, the "main" one for the flight record will be the last one assigned here
+                        // though each payment detail has its own path.
+                        payment_proof_path = uploadResult.path
+                    }
+                }
+                
+                payment_details.push(...multiPayments)
+            } catch (e) {
+                console.error('Error parsing multi_payments:', e)
+            }
         }
 
-        const payment_details: PaymentDetail[] = []
+        // Handle Single Payment (legacy/fallback)
         if (payment_quantity > 0) {
+            const proofFile = formData.get('payment_proof_file') as File
+            if (proofFile && proofFile.size > 0) {
+                const uploadResult = await uploadClientFile(proofFile, client_id)
+                payment_proof_path = uploadResult.path
+            }
+
             const currency = formData.get('payment_currency') as string || 'EUR'
             const original_amount = formData.get('payment_original_amount') as string || payment_quantity_str
             
@@ -97,7 +121,10 @@ export async function createFlight(formData: FormData) {
             })
         }
 
-        const on_account = payment_quantity
+        let totalOnAccount = 0
+        payment_details.forEach(p => totalOnAccount += parseFloat(p.cantidad) || 0)
+
+        const on_account = totalOnAccount
         const balance = sold_price - on_account
         const fee_agv = sold_price - cost
 
@@ -179,13 +206,13 @@ export async function updateFlight(formData: FormData) {
         if (!existingFlight) throw new Error('Flight not found')
 
         const client_id = existingFlight.client_id
-        const travel_date = formData.get('travel_date') as string
+        const travel_date = formData.get('travel_date') as string || null
         const pnr = formData.get('pnr') as string
         const itinerary = formData.get('itinerary') as string
         const cost = parseFloat(formData.get('cost') as string) || 0
         const status = formData.get('status') as string
 
-        const return_date = formData.get('return_date') as string
+        const return_date = formData.get('return_date') as string || null
         const sold_price = parseFloat(formData.get('sold_price') as string) || 0
         const payment_method_it = formData.get('payment_method_it') as string
         const payment_method_pe = formData.get('payment_method_pe') as string
@@ -202,24 +229,39 @@ export async function updateFlight(formData: FormData) {
         const payment_quantity_str = formData.get('payment_quantity') as string
         const payment_quantity = parseFloat(payment_quantity_str) || 0
         const payment_exchange_rate = parseFloat(formData.get('payment_exchange_rate') as string) || 1.0
-        const payment_total = parseFloat(formData.get('payment_total') as string) || 0
         
         const currentPayments = (existingFlight.payment_details as PaymentDetail[]) || []
-        let totalOnAccount = 0
 
-        // Calculate sum of existing payments
-        currentPayments.forEach((p: PaymentDetail) => {
-            totalOnAccount += parseFloat(p.cantidad) || 0
-        })
+        // Handle Multi Payments if sent as JSON
+        const multiPaymentsStr = formData.get('multi_payments') as string
+        if (multiPaymentsStr) {
+            try {
+                const multiPayments = JSON.parse(multiPaymentsStr) as PaymentDetail[]
+                
+                // For each temp payment, check if there's a corresponding proof file
+                for (let i = 0; i < multiPayments.length; i++) {
+                    const tempFile = formData.get(`payment_proof_${i}`) as File
+                    if (tempFile && tempFile.size > 0) {
+                        const uploadResult = await uploadClientFile(tempFile, client_id)
+                        multiPayments[i].proof_path = uploadResult.path
+                    }
+                }
 
-        // Handle Payment Proof (upload before creating payment entries)
-        let new_proof_path = null
+                currentPayments.push(...multiPayments)
+            } catch (e) {
+                console.error('Error parsing multi_payments:', e)
+            }
+        }
+
+        // Handle Payment Proof
+        let payment_proof_path = existingFlight.payment_proof_path
         const proofFile = formData.get('payment_proof_file') as File
         if (proofFile && proofFile.size > 0) {
             const uploadResult = await uploadClientFile(proofFile, client_id)
-            new_proof_path = uploadResult.path
+            payment_proof_path = uploadResult.path
         }
 
+        // Handle Single Payment (legacy/fallback)
         if (payment_quantity > 0) {
             const currency = formData.get('payment_currency') as string || 'EUR'
             const original_amount = formData.get('payment_original_amount') as string || payment_quantity_str
@@ -235,13 +277,17 @@ export async function updateFlight(formData: FormData) {
                 moneda: currency,
                 monto_original: original_amount,
                 created_at: new Date().toISOString(),
-                proof_path: new_proof_path || undefined
+                proof_path: payment_proof_path || undefined
             }
             currentPayments.push(newPayment)
-            totalOnAccount += payment_quantity
         }
 
-        const payment_proof_path = new_proof_path || existingFlight.payment_proof_path
+        let totalOnAccount = 0
+        currentPayments.forEach((p: PaymentDetail) => {
+            totalOnAccount += parseFloat(p.cantidad) || 0
+        })
+
+
 
         const currentDocuments: FlightDocument[] = (existingFlight.documents as unknown as FlightDocument[]) || []
         let docIndex = 0

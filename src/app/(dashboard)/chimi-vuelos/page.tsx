@@ -339,6 +339,8 @@ export default function FlightsPage() {
     const [showTicketTypeList, setShowTicketTypeList] = useState(false)
     const [showIATAOptions, setShowIATAOptions] = useState(false)
     const [baseOnAccount, setBaseOnAccount] = useState(0) // Track existing payments sum
+    const [tempPayments, setTempPayments] = useState<PaymentDetail[]>([])
+    const [tempPaymentProofs, setTempPaymentProofs] = useState<(File | null)[]>([])
 
     // Load Data
     const loadData = useCallback(async () => {
@@ -390,6 +392,10 @@ export default function FlightsPage() {
             if (currency === 'EUR') {
                 amount_eur = qty
                 newFormData.payment_exchange_rate = '1.0'
+            } else if (currency === 'PEN') {
+                // Division logic for Soles: Amount / Rate = EUR
+                // This means the rate represents "How many Soles for 1 EUR"
+                amount_eur = rate !== 0 ? qty / rate : 0
             } else {
                 // Multiplication logic (matches Google's direct rate): Foreign Amount * (Value of 1 unit in EUR)
                 // If Google says 1 USD = 0.85 EUR, then: 500 USD * 0.85 = 425 EUR
@@ -453,12 +459,12 @@ export default function FlightsPage() {
             pnr: '',
             itinerary: '',
             cost: '',
-            on_account: '',
-            balance: '',
-            status: 'pending',
+            on_account: '0.00',
+            balance: '0.00',
+            status: 'Programado',
             return_date: '',
             sold_price: '',
-            fee_agv: '',
+            fee_agv: '0.00',
             payment_method_it: '',
             payment_method_pe: '',
             sede_it: '',
@@ -486,6 +492,78 @@ export default function FlightsPage() {
         setShowPaymentFields(false)
         setPaymentProofFile(null)
         setBaseOnAccount(0)
+        setTempPayments([])
+        setTempPaymentProofs([])
+    }
+
+    const handleAddPaymentToTemp = () => {
+        if (!formData.payment_quantity || parseFloat(formData.payment_quantity) === 0) {
+            alert("Por favor ingrese una cantidad")
+            return
+        }
+
+        const pCurrency = formData.payment_currency || 'EUR'
+        const symbol = pCurrency === 'EUR' ? '€' : pCurrency === 'PEN' ? 'S/' : '$'
+        
+        // Use either the manually entered payment_total (EUR equiv) or the quantity
+        const eurAmount = formData.payment_total || formData.payment_quantity
+
+        const newPayment: PaymentDetail = {
+            sede_it: formData.sede_it,
+            sede_pe: formData.sede_pe,
+            metodo_it: formData.payment_method_it,
+            metodo_pe: formData.payment_method_pe,
+            cantidad: eurAmount,
+            tipo_cambio: parseFloat(formData.payment_exchange_rate) || 1.0,
+            total: `${symbol} ${parseFloat(formData.payment_quantity).toFixed(2)}`,
+            moneda: pCurrency,
+            monto_original: formData.payment_quantity,
+            created_at: new Date().toISOString()
+        }
+
+        setTempPayments(prev => [...prev, newPayment])
+        setTempPaymentProofs(prev => [...prev, paymentProofFile])
+        
+        // Update On Account
+        const addedEur = parseFloat(eurAmount) || 0
+        const newBase = baseOnAccount + addedEur
+        setBaseOnAccount(newBase)
+        
+        setFormData(prev => {
+            return {
+                ...prev,
+                on_account: newBase.toFixed(2),
+                balance: (parseFloat(prev.sold_price || '0') - newBase).toFixed(2),
+                // Reset payment fields
+                sede_it: '',
+                sede_pe: '',
+                payment_quantity: '',
+                payment_total: '',
+                payment_method_it: '',
+                payment_method_pe: '',
+                payment_exchange_rate: '1.0',
+                payment_currency: 'EUR'
+            }
+        })
+        setPaymentProofFile(null)
+        setShowPaymentFields(false)
+    }
+    const handleRemoveTempPayment = (index: number) => {
+        const removed = tempPayments[index]
+        const removedAmount = parseFloat(removed.cantidad) || 0
+        const newBase = Math.max(0, baseOnAccount - removedAmount)
+        setBaseOnAccount(newBase)
+        
+        setTempPayments(prev => prev.filter((_, i) => i !== index))
+        setTempPaymentProofs(prev => prev.filter((_, i) => i !== index))
+        
+        setFormData(prev => {
+            return {
+                ...prev,
+                on_account: newBase.toFixed(2),
+                balance: (parseFloat(prev.sold_price || '0') - newBase).toFixed(2)
+            }
+        })
     }
 
     const handleEdit = (flight: Flight) => {
@@ -546,12 +624,14 @@ export default function FlightsPage() {
         setIsDialogOpen(true)
     }
 
+    /*
     const handleDelete = async (id: string) => {
          if (confirm('¿Eliminar vuelo? Se borrarán todos los documentos asociados.')) {
              await deleteFlight(id)
              loadData()
          }
     }
+    */
 
     const deleteDoc = async (path: string) => {
         if (!selectedFlightId) return
@@ -661,9 +741,25 @@ export default function FlightsPage() {
             // Meta-data for the new multi-currency payment details
             const pCurrency = formData.payment_currency || 'EUR'
             const symbol = pCurrency === 'EUR' ? '€' : pCurrency === 'PEN' ? 'S/' : '$'
-            data.append('payment_original_amount', formData.payment_quantity)
-            data.append('payment_total_display', `${symbol} ${parseFloat(formData.payment_quantity || '0').toFixed(2)}`)
-            data.append('payment_currency', pCurrency)
+            
+            // Handle multiple payments added in the UI
+            if (tempPayments.length > 0) {
+                data.append('multi_payments', JSON.stringify(tempPayments))
+                // Append each proof file with a specific index key
+                tempPaymentProofs.forEach((file, i) => {
+                    if (file) data.append(`payment_proof_${i}`, file)
+                })
+            }
+
+            // Handle current payment fields if they have a value (user didn't click "Add" yet)
+            if (formData.payment_quantity && parseFloat(formData.payment_quantity) > 0) {
+                data.append('payment_original_amount', formData.payment_quantity)
+                data.append('payment_total_display', `${symbol} ${parseFloat(formData.payment_quantity || '0').toFixed(2)}`)
+                data.append('payment_currency', pCurrency)
+                data.append('payment_quantity', formData.payment_total || '0')
+            } else {
+                data.append('payment_quantity', '0')
+            }
 
             // Append Details
             data.append('details', JSON.stringify(flightDetails))
@@ -1076,14 +1172,49 @@ export default function FlightsPage() {
                             </div>
                             
                             {/* Flight Details */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                      <Label>Fecha de Viaje</Label>
-                                     <Input type="date" name="travel_date" value={formData.travel_date} onChange={handleInputChange} required />
+                                     <div className="relative">
+                                         <Input 
+                                            type="date" 
+                                            name="travel_date" 
+                                            value={formData.travel_date} 
+                                            onChange={handleInputChange} 
+                                            required 
+                                            className="pr-8"
+                                         />
+                                         {formData.travel_date && (
+                                             <button 
+                                                 type="button"
+                                                 onClick={() => setFormData(prev => ({ ...prev, travel_date: '' }))}
+                                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                             >
+                                                 <X size={14} />
+                                             </button>
+                                         )}
+                                     </div>
                                 </div>
                                 <div className="grid gap-2">
                                      <Label>Fecha de Retorno</Label>
-                                     <Input type="date" name="return_date" value={formData.return_date} onChange={handleInputChange} />
+                                     <div className="relative">
+                                         <Input 
+                                            type="date" 
+                                            name="return_date" 
+                                            value={formData.return_date} 
+                                            onChange={handleInputChange} 
+                                            className="pr-8"
+                                         />
+                                         {formData.return_date && (
+                                             <button 
+                                                 type="button"
+                                                 onClick={() => setFormData(prev => ({ ...prev, return_date: '' }))}
+                                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                             >
+                                                 <X size={14} />
+                                             </button>
+                                         )}
+                                     </div>
                                 </div>
                             </div>
                             
@@ -1364,20 +1495,42 @@ export default function FlightsPage() {
                                                 />
                                                 <span className="font-medium">Seguro desde</span>
                                             </label>
-                                            <div className="flex items-center gap-2">
-                                                <input 
-                                                    type="date" 
-                                                    value={flightDetails.insurance_tourism_date_from}
-                                                    onChange={(e) => handleDetailChange('insurance_tourism_date_from', e.target.value)}
-                                                    className="text-xs border rounded p-1 focus:ring-1 focus:ring-chimipink outline-none"
-                                                />
+                                             <div className="flex items-center gap-2">
+                                                <div className="relative">
+                                                    <input 
+                                                        type="date" 
+                                                        value={flightDetails.insurance_tourism_date_from}
+                                                        onChange={(e) => handleDetailChange('insurance_tourism_date_from', e.target.value)}
+                                                        className="text-xs border rounded p-1 focus:ring-1 focus:ring-chimipink outline-none pr-6"
+                                                    />
+                                                    {flightDetails.insurance_tourism_date_from && (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => handleDetailChange('insurance_tourism_date_from', '')}
+                                                            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                                 <span className="text-xs text-slate-500">hasta</span>
-                                                <input 
-                                                    type="date" 
-                                                    value={flightDetails.insurance_tourism_date_to}
-                                                    onChange={(e) => handleDetailChange('insurance_tourism_date_to', e.target.value)}
-                                                    className="text-xs border rounded p-1 focus:ring-1 focus:ring-chimipink outline-none"
-                                                />
+                                                <div className="relative">
+                                                    <input 
+                                                        type="date" 
+                                                        value={flightDetails.insurance_tourism_date_to}
+                                                        onChange={(e) => handleDetailChange('insurance_tourism_date_to', e.target.value)}
+                                                        className="text-xs border rounded p-1 focus:ring-1 focus:ring-chimipink outline-none pr-6"
+                                                    />
+                                                    {flightDetails.insurance_tourism_date_to && (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => handleDetailChange('insurance_tourism_date_to', '')}
+                                                            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                             <span className="text-xs text-slate-400 italic">(turista / Schengen)</span>
                                         </div>
@@ -1556,26 +1709,26 @@ export default function FlightsPage() {
                                                                     <span className="font-bold text-blue-700 flex items-center gap-2">
                                                                         <Edit className="h-3 w-3" /> Editando Abono #{idx + 1}
                                                                     </span>
-                                                                    <div className="flex gap-1">
-                                                                        <Button 
-                                                                            size="sm" 
-                                                                            variant="ghost" 
-                                                                            className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                                    <div className="flex gap-2">
+                                                                        <button 
+                                                                            type="button" 
                                                                             onClick={() => {
                                                                                 setEditingPaymentIndex(null)
                                                                                 setEditPaymentData(null)
                                                                             }}
+                                                                            className="text-red-400 hover:text-red-600 transition-colors p-1"
+                                                                            title="Cancelar"
                                                                         >
-                                                                            <X className="h-4 w-4" />
-                                                                        </Button>
-                                                                        <Button 
-                                                                            size="sm" 
-                                                                            variant="ghost" 
-                                                                            className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                                                            <X size={18} />
+                                                                        </button>
+                                                                        <button 
+                                                                            type="button" 
                                                                             onClick={() => handleSaveEditPayment(selectedFlightId!)}
+                                                                            className="text-emerald-400 hover:text-emerald-600 transition-colors p-1"
+                                                                            title="Guardar"
                                                                         >
-                                                                            <Check className="h-4 w-4" />
-                                                                        </Button>
+                                                                            <Check size={18} />
+                                                                        </button>
                                                                     </div>
                                                                 </div>
 
@@ -1715,6 +1868,8 @@ export default function FlightsPage() {
                                                                                             let amount_eur = 0
                                                                                             if (currency === 'EUR') {
                                                                                                 amount_eur = parseFloat(val) || 0
+                                                                                            } else if (currency === 'PEN') {
+                                                                                                amount_eur = rate !== 0 ? (parseFloat(val) || 0) / rate : 0
                                                                                             } else {
                                                                                                 amount_eur = (parseFloat(val) || 0) * rate
                                                                                             }
@@ -1756,8 +1911,18 @@ export default function FlightsPage() {
                                                                                             if (!prev) return null
                                                                                             const amt = parseFloat(prev.monto_original || prev.cantidad)
                                                                                             const rate = parseFloat(val) || 1
-                                                                                            const amount_eur = amt * rate
-                                                                                            const sym = prev.moneda === 'EUR' ? '€' : prev.moneda === 'PEN' ? 'S/' : '$'
+                                                                                            const currency = prev.moneda || 'EUR'
+                                                                                            
+                                                                                            let amount_eur = 0
+                                                                                            if (currency === 'EUR') {
+                                                                                                amount_eur = amt
+                                                                                            } else if (currency === 'PEN') {
+                                                                                                amount_eur = rate !== 0 ? amt / rate : 0
+                                                                                            } else {
+                                                                                                amount_eur = amt * rate
+                                                                                            }
+                                                                                            
+                                                                                            const sym = currency === 'EUR' ? '€' : currency === 'PEN' ? 'S/' : '$'
                                                                                             return {
                                                                                                 ...prev, 
                                                                                                 tipo_cambio: rate, 
@@ -1861,20 +2026,90 @@ export default function FlightsPage() {
                                     </div>
                                 ) : null}
 
+                                {tempPayments.length > 0 && (
+                                    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 px-1 pb-2">
+                                        <div className="flex items-center gap-2 opacity-60">
+                                            <div className="h-px flex-1 bg-slate-200"></div>
+                                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Abonos añadidos (sin guardar)</Label>
+                                            <div className="h-px flex-1 bg-slate-200"></div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {tempPayments.map((payment, idx) => (
+                                                <div key={idx} className="group relative bg-emerald-50/30 border border-emerald-100 rounded-xl p-3 shadow-sm hover:shadow-md transition-all border-l-4 border-l-emerald-400">
+                                                    <div className="flex justify-between items-center transition-all">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="grid gap-0.5">
+                                                                <span className="font-bold text-slate-700 flex items-center gap-2 text-xs">
+                                                                    {payment.metodo_it || payment.metodo_pe || 'Otros'}
+                                                                </span>
+                                                                <span className="text-[9px] text-slate-400 flex items-center gap-1 font-medium italic">
+                                                                    <Building2 className="h-2.5 w-2.5" /> {payment.sede_it || payment.sede_pe || 'S/D'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="text-right">
+                                                                <span className="font-bold text-emerald-600 text-sm leading-none block">€ {parseFloat(payment.cantidad || '0').toFixed(2)}</span>
+                                                                <span className="text-[9px] text-slate-400 uppercase tracking-tighter">
+                                                                    {payment.moneda && payment.moneda !== 'EUR' 
+                                                                        ? `${payment.total}`
+                                                                        : `€ ${parseFloat(payment.cantidad || '0').toFixed(2)}`
+                                                                    }
+                                                                </span>
+                                                            </div>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => handleRemoveTempPayment(idx)}
+                                                                className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                                                                title="Remover"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="border rounded-xl p-4 bg-slate-50/50 space-y-4 border-dashed border-slate-300 relative">
                                     <div className="flex justify-between items-center">
                                         <Label className="font-bold text-slate-700 flex items-center gap-2 text-xs uppercase tracking-wide">
-                                            💰 Registrar Nuevo Pago
+                                            {showPaymentFields ? '📝 Nuevo Abono' : '💰 Registrar Nuevo Pago'}
                                         </Label>
-                                        <Button 
-                                            type="button" 
-                                            variant="outline" 
-                                            size="sm"
-                                            onClick={() => setShowPaymentFields(!showPaymentFields)}
-                                            className={showPaymentFields ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" : "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"}
-                                        >
-                                            {showPaymentFields ? "Cerrar" : "+ Agregar Pago"}
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                            {showPaymentFields ? (
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setShowPaymentFields(false)}
+                                                        className="text-red-400 hover:text-red-600 transition-colors p-1"
+                                                        title="Cerrar"
+                                                    >
+                                                        <X size={20} />
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={handleAddPaymentToTemp}
+                                                        className="text-emerald-400 hover:text-emerald-600 transition-colors p-1"
+                                                        title="Añadir Pago"
+                                                    >
+                                                        <Check size={20} />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    size="sm"
+                                                    onClick={() => setShowPaymentFields(true)}
+                                                    className="bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
+                                                >
+                                                    + Agregar Pago
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {showPaymentFields && (
@@ -2050,7 +2285,9 @@ export default function FlightsPage() {
                                                     <Label className="text-xs font-bold text-slate-700 flex justify-between">
                                                         <span>Tipo de Cambio</span>
                                                         <span className="text-[10px] font-normal text-slate-400">
-                                                            {formData.payment_currency !== 'EUR' ? `1 ${formData.payment_currency === 'PEN' ? 'S/' : '$'} = ${formData.payment_exchange_rate} €` : 'Base EUR'}
+                                                            {formData.payment_currency === 'EUR' ? 'Base EUR' : 
+                                                             formData.payment_currency === 'PEN' ? `1 € = ${formData.payment_exchange_rate} S/` : 
+                                                             `1 $ = ${formData.payment_exchange_rate} €`}
                                                         </span>
                                                     </Label>
                                                     <Input 
@@ -2076,7 +2313,12 @@ export default function FlightsPage() {
                                                         />
                                                         {formData.payment_currency !== 'EUR' && (
                                                             <div className="text-[9px] text-emerald-600 mt-1 italic">
-                                                                Sugerido: {formData.payment_quantity} {formData.payment_currency} × {formData.payment_exchange_rate} = € {(parseFloat(formData.payment_quantity) * parseFloat(formData.payment_exchange_rate)).toFixed(2)}
+                                                                Sugerido: {formData.payment_quantity} {formData.payment_currency} {formData.payment_currency === 'PEN' ? '÷' : '×'} {formData.payment_exchange_rate} = € {
+                                                                    (formData.payment_currency === 'PEN' 
+                                                                        ? (parseFloat(formData.payment_exchange_rate) !== 0 ? parseFloat(formData.payment_quantity) / parseFloat(formData.payment_exchange_rate) : 0)
+                                                                        : (parseFloat(formData.payment_quantity) * parseFloat(formData.payment_exchange_rate))
+                                                                    ).toFixed(2)
+                                                                }
                                                             </div>
                                                         )}
                                                     </div>
