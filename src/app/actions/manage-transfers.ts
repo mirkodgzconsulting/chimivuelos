@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { uploadClientFile, deleteFileFromR2, deleteImageFromCloudflare, getFileUrl } from "@/lib/storage"
+import { checkEditPermission, consumeEditPermission } from "./manage-permissions"
+import { recordAuditLog } from "@/lib/audit"
 
 /**
  * Interface for Transfer Document
@@ -230,12 +232,31 @@ export async function createTransfer(formData: FormData) {
  * Updates an existing transfer
  */
 export async function updateTransfer(formData: FormData) {
-    const supabase = supabaseAdmin
+    const supabase = await createClient()
+    const adminSupabase = supabaseAdmin
     const id = formData.get('id') as string
 
     try {
-        const { data: existingTransfer } = await supabase.from('money_transfers').select('*').eq('id', id).single()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const hasPermission = await checkEditPermission('money_transfers', id)
+            if (!hasPermission) {
+                throw new Error('No tienes permiso para editar este giro. Debes solicitar autorización.')
+            }
+        } else if (userRole !== 'admin') {
+            throw new Error('Acceso denegado')
+        }
+
+        const { data: existingTransfer } = await adminSupabase.from('money_transfers').select('*').eq('id', id).single()
         if (!existingTransfer) throw new Error('Transfer not found')
+
+        // Deep clone for audit log comparison
+        const oldValues = JSON.parse(JSON.stringify(existingTransfer))
 
         const client_id = existingTransfer.client_id
         const transfer_mode = (formData.get('transfer_mode') as string) || 'eur_to_pen'
@@ -363,6 +384,37 @@ export async function updateTransfer(formData: FormData) {
 
         if (error) throw error
 
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'update',
+            resourceType: 'money_transfers',
+            resourceId: id,
+            oldValues: oldValues,
+            newValues: { 
+                status, 
+                amount_sent, 
+                amount_received,
+                exchange_rate,
+                total_amount,
+                on_account,
+                balance,
+                beneficiary_name,
+                transfer_code,
+                payment_details,
+                expense_details
+            },
+            metadata: { 
+                method: 'updateTransfer',
+                displayId: transfer_code || beneficiary_name || undefined
+            }
+        })
+
+        // Consume permission if agent
+        if (userRole === 'agent') {
+            await consumeEditPermission('money_transfers', id)
+        }
+
         revalidatePath('/chimi-transfers')
         return { success: true }
 
@@ -376,10 +428,31 @@ export async function updateTransfer(formData: FormData) {
  * Update only the status of a transfer
  */
 export async function updateTransferStatus(id: string, status: string) {
-    const supabase = supabaseAdmin
+    const supabase = await createClient()
+    const adminSupabase = supabaseAdmin
     try {
-        const { error } = await supabase.from('money_transfers').update({ status }).eq('id', id)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
+        // Fetch transfer info for audit log
+        const { data: transferRecord } = await adminSupabase.from('money_transfers').select('*').eq('id', id).single()
+
+        const { error } = await adminSupabase.from('money_transfers').update({ status }).eq('id', id)
         if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'update',
+            resourceType: 'money_transfers',
+            resourceId: id,
+            oldValues: transferRecord,
+            newValues: { status },
+            metadata: { 
+                method: 'updateTransferStatus',
+                displayId: transferRecord?.transfer_code || transferRecord?.beneficiary_name || undefined
+            }
+        })
         revalidatePath('/chimi-transfers')
         return { success: true }
     } catch (error: unknown) {
@@ -392,10 +465,19 @@ export async function updateTransferStatus(id: string, status: string) {
  * Delete a transfer and all its documents
  */
 export async function deleteTransfer(id: string) {
-    const supabase = supabaseAdmin
+    const supabase = await createClient()
+    const adminSupabase = supabaseAdmin
 
     try {
-        const { data: transfer } = await supabase.from('money_transfers').select('documents').eq('id', id).single()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        if (profile?.role !== 'admin') {
+            throw new Error('Solo los administradores pueden eliminar giros.')
+        }
+
+        const { data: transfer } = await adminSupabase.from('money_transfers').select('documents').eq('id', id).single()
         
         if (transfer && transfer.documents) {
             const docs = transfer.documents as unknown as TransferDocument[]
@@ -412,8 +494,17 @@ export async function deleteTransfer(id: string) {
             }
         }
 
-        const { error } = await supabase.from('money_transfers').delete().eq('id', id)
+        const { error } = await adminSupabase.from('money_transfers').delete().eq('id', id)
         if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'delete',
+            resourceType: 'money_transfers',
+            resourceId: id,
+            metadata: { method: 'deleteTransfer' }
+        })
 
         revalidatePath('/chimi-transfers')
         return { success: true }

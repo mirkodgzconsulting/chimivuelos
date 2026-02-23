@@ -1,15 +1,20 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2 } from 'lucide-react'
+import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2, Lock, Unlock } from 'lucide-react'
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
+import { createClient } from '@/lib/supabase/client'
+import { EditRequestModal } from '@/components/permissions/EditRequestModal'
+import { checkEditPermission, getActivePermissions } from '@/app/actions/manage-permissions'
+import { cn } from '@/lib/utils'
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { getFlights, getClientsForDropdown, createFlight, updateFlight, deleteFlightDocument, updateFlightStatus, getFlightDocumentUrl, deleteFlightPayment, updateFlightPayment } from '@/app/actions/manage-flights'
+import { getFlights, getClientsForDropdown, createFlight, updateFlight, deleteFlight, deleteFlightDocument, updateFlightStatus, getFlightDocumentUrl, deleteFlightPayment, updateFlightPayment } from '@/app/actions/manage-flights'
 
 interface FlightDocument {
     title: string
@@ -280,6 +285,33 @@ export default function FlightsPage() {
     const [currentPage, setCurrentPage] = useState(1)
     const [itemsPerPage, setItemsPerPage] = useState(10)
 
+    // Role & Permissions State
+    const [userRole, setUserRole] = useState<string | null>(null)
+    const [unlockedResources, setUnlockedResources] = useState<Set<string>>(new Set())
+    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
+    const [pendingResourceId, setPendingResourceId] = useState<string | null>(null)
+    const [pendingResourceName, setPendingResourceName] = useState<string>('')
+
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                const rawRole = user.user_metadata?.role || 'client'
+                const role = rawRole === 'usuario' ? 'agent' : rawRole
+                setUserRole(role)
+
+                if (role === 'agent') {
+                    const permissions = await getActivePermissions()
+                    setUnlockedResources(new Set(permissions))
+                }
+            }
+        }
+        fetchInitialData()
+    }, [])
+
+
+
     // Form Data
     const [formData, setFormData] = useState({
         client_id: '',
@@ -525,46 +557,25 @@ export default function FlightsPage() {
         setTempPayments(prev => [...prev, newPayment])
         setTempPaymentProofs(prev => [...prev, paymentProofFile])
         
-        // Update On Account
-        const addedEur = parseFloat(eurAmount) || 0
-        const newBase = baseOnAccount + addedEur
-        setBaseOnAccount(newBase)
-        
-        setFormData(prev => {
-            return {
-                ...prev,
-                on_account: newBase.toFixed(2),
-                balance: (parseFloat(prev.sold_price || '0') - newBase).toFixed(2),
-                // Reset payment fields
-                sede_it: '',
-                sede_pe: '',
-                payment_quantity: '',
-                payment_total: '',
-                payment_method_it: '',
-                payment_method_pe: '',
-                payment_exchange_rate: '1.0',
-                payment_currency: 'EUR'
-            }
-        })
         setPaymentProofFile(null)
         setShowPaymentFields(false)
+        
+        // Form resetting of payment fields will be handled by existing code or just reset manually
+        setFormData(prev => ({
+            ...prev,
+            sede_it: '',
+            sede_pe: '',
+            payment_quantity: '',
+            payment_total: '',
+            payment_method_it: '',
+            payment_method_pe: '',
+            payment_exchange_rate: '1.0',
+            payment_currency: 'EUR'
+        }))
     }
     const handleRemoveTempPayment = (index: number) => {
-        const removed = tempPayments[index]
-        const removedAmount = parseFloat(removed.cantidad) || 0
-        const newBase = Math.max(0, baseOnAccount - removedAmount)
-        setBaseOnAccount(newBase)
-        
         setTempPayments(prev => prev.filter((_, i) => i !== index))
         setTempPaymentProofs(prev => prev.filter((_, i) => i !== index))
-        
-        setFormData(prev => {
-            return {
-                ...prev,
-                on_account: newBase.toFixed(2),
-                balance: (parseFloat(prev.sold_price || '0') - newBase).toFixed(2)
-            }
-        })
     }
 
     const handleEdit = (flight: Flight) => {
@@ -625,14 +636,36 @@ export default function FlightsPage() {
         setIsDialogOpen(true)
     }
 
-    /*
-    const handleDelete = async (id: string) => {
-         if (confirm('¿Eliminar vuelo? Se borrarán todos los documentos asociados.')) {
-             await deleteFlight(id)
-             loadData()
-         }
+    const handleDeleteFlight = async (id: string) => {
+        if (!confirm('¿Estás seguro de que deseas eliminar este vuelo? Esta acción no se puede deshacer.')) return
+        
+        const result = await deleteFlight(id)
+        if (result.success) {
+            toast.success('Vuelo eliminado correctamente')
+            loadData()
+        } else {
+            toast.error(result.error || 'Error al eliminar vuelo')
+        }
     }
-    */
+
+    const handleEditClick = async (flight: Flight) => {
+        if (userRole === 'admin') {
+            handleEdit(flight)
+            return
+        }
+
+        if (userRole === 'agent') {
+            const isUnlocked = unlockedResources.has(flight.id) || await checkEditPermission('flights', flight.id)
+            if (isUnlocked) {
+                setUnlockedResources(prev => new Set(prev).add(flight.id))
+                handleEdit(flight)
+            } else {
+                setPendingResourceId(flight.id)
+                setPendingResourceName(flight.pnr || flight.id)
+                setIsPermissionModalOpen(true)
+            }
+        }
+    }
 
     const deleteDoc = async (path: string) => {
         if (!selectedFlightId) return
@@ -665,6 +698,24 @@ export default function FlightsPage() {
             const res = await deleteFlightPayment(flightId, originalIndex)
             if (res.success) {
                 await loadData()
+                
+                // Update local formData if the edited flight is the current one
+                if (selectedFlightId === flightId) {
+                    const flight = flights.find(f => f.id === flightId)
+                    if (flight && flight.payment_details) {
+                        const remainingPayments = [...flight.payment_details]
+                        remainingPayments.splice(originalIndex, 1)
+                        let totalOnAccount = 0
+                        remainingPayments.forEach(p => totalOnAccount += parseFloat(p.cantidad) || 0)
+                        
+                        setFormData(prev => ({
+                            ...prev,
+                            on_account: totalOnAccount.toFixed(2),
+                            balance: (parseFloat(prev.sold_price || '0') - totalOnAccount).toFixed(2)
+                        }))
+                        setBaseOnAccount(totalOnAccount)
+                    }
+                }
             } else {
                 alert('Error al eliminar el pago: ' + (res.error || ''))
             }
@@ -681,39 +732,90 @@ export default function FlightsPage() {
     const handleSaveEditPayment = async (flightId: string) => {
         if (!editPaymentData || editingPaymentIndex === null) return
         
-        const formData = new FormData()
-        formData.append('flightId', flightId)
-        formData.append('paymentIndex', editingPaymentIndex.toString())
-        formData.append('sede_it', editPaymentData.sede_it)
-        formData.append('sede_pe', editPaymentData.sede_pe)
-        formData.append('metodo_it', editPaymentData.metodo_it)
-        formData.append('metodo_pe', editPaymentData.metodo_pe)
-        formData.append('cantidad', editPaymentData.cantidad)
-        formData.append('tipo_cambio', editPaymentData.tipo_cambio.toString())
-        formData.append('total', editPaymentData.total)
-        if (editPaymentData.moneda) formData.append('moneda', editPaymentData.moneda)
-        if (editPaymentData.monto_original) formData.append('monto_original', editPaymentData.monto_original)
+        const formDataPayload = new FormData()
+        formDataPayload.append('flightId', flightId)
+        formDataPayload.append('paymentIndex', editingPaymentIndex.toString())
+        formDataPayload.append('sede_it', editPaymentData.sede_it)
+        formDataPayload.append('sede_pe', editPaymentData.sede_pe)
+        formDataPayload.append('metodo_it', editPaymentData.metodo_it)
+        formDataPayload.append('metodo_pe', editPaymentData.metodo_pe)
+        formDataPayload.append('cantidad', editPaymentData.cantidad)
+        formDataPayload.append('tipo_cambio', editPaymentData.tipo_cambio.toString())
+        formDataPayload.append('total', editPaymentData.total)
+        if (editPaymentData.moneda) formDataPayload.append('moneda', editPaymentData.moneda)
+        if (editPaymentData.monto_original) formDataPayload.append('monto_original', editPaymentData.monto_original)
         if (editPaymentData.moneda && editPaymentData.monto_original) {
             const sym = editPaymentData.moneda === 'EUR' ? '€' : editPaymentData.moneda === 'PEN' ? 'S/' : '$'
-            formData.append('total_display', `${sym} ${parseFloat(editPaymentData.monto_original).toFixed(2)}`)
+            formDataPayload.append('total_display', `${sym} ${parseFloat(editPaymentData.monto_original).toFixed(2)}`)
         }
         
         if (editPaymentFile) {
-            formData.append('proofFile', editPaymentFile)
+            formDataPayload.append('proofFile', editPaymentFile)
         }
 
-        const res = await updateFlightPayment(formData)
+        const res = await updateFlightPayment(formDataPayload)
         if (res.success) {
             await loadData()
+            
+            // Update local formData if the edited flight is the current one
+            if (selectedFlightId === flightId) {
+                const flight = flights.find(f => f.id === flightId)
+                if (flight && flight.payment_details) {
+                    const updatedPayments = [...flight.payment_details]
+                    updatedPayments[editingPaymentIndex] = {
+                        ...updatedPayments[editingPaymentIndex],
+                        cantidad: editPaymentData.cantidad
+                    }
+                    let totalOnAccount = 0
+                    updatedPayments.forEach(p => totalOnAccount += parseFloat(p.cantidad) || 0)
+                    
+                    setFormData(prev => ({
+                        ...prev,
+                        on_account: totalOnAccount.toFixed(2),
+                        balance: (parseFloat(prev.sold_price || '0') - totalOnAccount).toFixed(2)
+                    }))
+                    setBaseOnAccount(totalOnAccount)
+                }
+            }
             setEditingPaymentIndex(null)
             setEditPaymentData(null)
             setEditPaymentFile(null)
         } else {
-            alert('Error al actualizar el pago: ' + (res.error || ''))
         }
     }
 
     const [isSubmitting, setIsSubmitting] = useState(false)
+
+    // Derived Financial Summary
+    const financials = useMemo(() => {
+        const flight = flights.find(f => f.id === selectedFlightId)
+        let totalOnAccount = 0
+        const dbPayments = (flight?.payment_details as PaymentDetail[]) || []
+        
+        dbPayments.forEach((p, idx) => {
+            if (idx === editingPaymentIndex && editPaymentData) {
+                totalOnAccount += parseFloat(editPaymentData.cantidad) || 0
+            } else {
+                totalOnAccount += parseFloat(p.cantidad) || 0
+            }
+        })
+        
+        tempPayments.forEach(p => totalOnAccount += parseFloat(p.cantidad) || 0)
+        
+        // Also add the "current" pending payment fields if they have a value and aren't in temp yet
+        if (!showPaymentFields && formData.payment_quantity && parseFloat(formData.payment_quantity) > 0) {
+            totalOnAccount += parseFloat(formData.payment_total) || 0
+        }
+
+        const soldPrice = parseFloat(formData.sold_price) || 0
+        const cost = parseFloat(formData.cost) || 0
+        
+        return {
+            on_account: totalOnAccount.toFixed(2),
+            balance: (soldPrice - totalOnAccount).toFixed(2),
+            fee_agv: (soldPrice - cost).toFixed(2)
+        }
+    }, [flights, selectedFlightId, editingPaymentIndex, editPaymentData, tempPayments, formData.sold_price, formData.cost, formData.payment_total, formData.payment_quantity, showPaymentFields])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -734,6 +836,12 @@ export default function FlightsPage() {
                 if (key === 'payment_quantity') {
                     // Send the EUR equivalent for accounting
                     data.append(key, formData.payment_total || '0')
+                } else if (key === 'on_account') {
+                    data.append(key, financials.on_account)
+                } else if (key === 'balance') {
+                    data.append(key, financials.balance)
+                } else if (key === 'fee_agv') {
+                    data.append(key, financials.fee_agv)
                 } else {
                     data.append(key, val)
                 }
@@ -782,8 +890,19 @@ export default function FlightsPage() {
 
             if (selectedFlightId) {
                  await updateFlight(data)
+                 // Ensure the resource is locked again for the agent
+                 setUnlockedResources(prev => {
+                     const next = new Set(prev)
+                     next.delete(selectedFlightId)
+                     return next
+                 })
             } else {
-                 await createFlight(data)
+                 const result = await createFlight(data)
+                 if (!result.success) {
+                    alert("Error: " + result.error)
+                    setIsSubmitting(false)
+                    return
+                 }
             }
 
             setIsDialogOpen(false)
@@ -1670,7 +1789,7 @@ export default function FlightsPage() {
                                         type="number" 
                                         step="0.01" 
                                         name="on_account" 
-                                        value={formData.on_account} 
+                                        value={financials.on_account} 
                                         onChange={handleInputChange} 
                                         placeholder="0.00" 
                                         readOnly
@@ -1682,11 +1801,11 @@ export default function FlightsPage() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-2 rounded">
                                 <div className="grid gap-2">
                                     <Label>Saldo (Automático)</Label>
-                                    <Input type="number" step="0.01" name="balance" value={formData.balance} readOnly className="bg-slate-100 font-bold" />
+                                    <Input type="number" step="0.01" name="balance" value={financials.balance} readOnly className="bg-slate-100 font-bold" />
                                 </div>
                                 <div className="grid gap-2">
                                     <Label>FEE-AGV (Automático)</Label>
-                                    <Input type="number" step="0.01" name="fee_agv" value={formData.fee_agv} readOnly className="bg-slate-100 font-bold text-emerald-600" />
+                                    <Input type="number" step="0.01" name="fee_agv" value={financials.fee_agv} readOnly className="bg-slate-100 font-bold text-emerald-600" />
                                 </div>
                             </div>
 
@@ -2650,12 +2769,28 @@ export default function FlightsPage() {
                                             </td>
                                             <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(flight)}>
-                                                        <Edit className="h-4 w-4 text-slate-400" />
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        onClick={() => handleEditClick(flight)}
+                                                        className={cn(
+                                                            userRole === 'agent' && !unlockedResources.has(flight.id) && "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                                        )}
+                                                        title={userRole === 'agent' && !unlockedResources.has(flight.id) ? "Solicitar permiso para editar" : "Editar"}
+                                                    >
+                                                        {userRole === 'agent' && !unlockedResources.has(flight.id) ? (
+                                                            <Lock className="h-4 w-4" />
+                                                        ) : unlockedResources.has(flight.id) ? (
+                                                            <Unlock className="h-4 w-4 text-emerald-600" />
+                                                        ) : (
+                                                            <Edit className="h-4 w-4 text-slate-400" />
+                                                        )}
                                                     </Button>
-                                                    {/* <Button variant="ghost" size="sm" onClick={() => handleDelete(flight.id)}>
-                                                        <Trash2 className="h-4 w-4 text-red-400" />
-                                                    </Button> */}
+                                                    {userRole === 'admin' && (
+                                                        <Button variant="ghost" size="sm" onClick={() => handleDeleteFlight(flight.id)}>
+                                                            <Trash2 className="h-4 w-4 text-red-400" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -2695,6 +2830,13 @@ export default function FlightsPage() {
                     )}
                 </CardContent>
             </Card>
-        </div>
+            <EditRequestModal 
+            isOpen={isPermissionModalOpen}
+            onClose={() => setIsPermissionModalOpen(false)}
+            resourceType="flights"
+            resourceId={pendingResourceId || ''}
+            resourceName={pendingResourceName}
+        />
+    </div>
     )
 }

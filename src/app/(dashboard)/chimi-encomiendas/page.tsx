@@ -37,6 +37,11 @@ import {
 import { getParcels, createParcel, updateParcel, deleteParcel, updateParcelStatus, deleteParcelDocument, getParcelDocumentUrl } from '@/app/actions/manage-parcels'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
 import * as XLSX from 'xlsx'
+import { createClient } from '@/lib/supabase/client'
+import { EditRequestModal } from '@/components/permissions/EditRequestModal'
+import { checkEditPermission, getActivePermissions } from '@/app/actions/manage-permissions'
+import { cn } from '@/lib/utils'
+import { Lock, Unlock } from 'lucide-react'
 
 // Interfaces
 interface ParcelDocument {
@@ -161,6 +166,33 @@ export default function ParcelsPage() {
     const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null)
     const [docsViewerParcel, setDocsViewerParcel] = useState<Parcel | null>(null)
 
+    // Role & Permissions State
+    const [userRole, setUserRole] = useState<string | null>(null)
+    const [unlockedResources, setUnlockedResources] = useState<Set<string>>(new Set())
+    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
+    const [pendingResourceId, setPendingResourceId] = useState<string | null>(null)
+    const [pendingResourceName, setPendingResourceName] = useState<string>('')
+
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                const rawRole = user.user_metadata?.role || 'client'
+                const role = rawRole === 'usuario' ? 'agent' : rawRole
+                setUserRole(role)
+
+                if (role === 'agent') {
+                    const permissions = await getActivePermissions()
+                    setUnlockedResources(new Set(permissions))
+                }
+            }
+        }
+        fetchInitialData()
+    }, [])
+
+
+
     // Form Data
     const [formData, setFormData] = useState({
         // Sender
@@ -235,6 +267,23 @@ export default function ParcelsPage() {
         }
         init()
     }, [loadData])
+    
+    // Derived Financial Summary
+    const financials = useMemo(() => {
+        let totalOnAccount = 0
+        tempPayments.forEach(p => totalOnAccount += parseFloat(p.cantidad) || 0)
+        
+        // Add pending payment if visible and has value
+        if (showPaymentFields && formData.payment_quantity && parseFloat(formData.payment_quantity) > 0) {
+            totalOnAccount += parseFloat(formData.payment_total) || 0
+        }
+
+        const cost = parseFloat(formData.shipping_cost) || 0
+        return {
+            on_account: totalOnAccount.toFixed(2),
+            balance: (cost - totalOnAccount).toFixed(2)
+        }
+    }, [tempPayments, showPaymentFields, formData.payment_quantity, formData.payment_total, formData.shipping_cost])
 
     // Handlers
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -248,13 +297,6 @@ export default function ParcelsPage() {
         setFormData(prev => {
             const newData = { ...prev, [name]: value }
             
-            // Auto-calculate balance if cost or on_account changes
-            if (name === 'shipping_cost' || name === 'on_account') {
-                const cost = parseFloat(newData.shipping_cost) || 0
-                const cur_on_account = parseFloat(newData.on_account) || 0
-                newData.balance = (cost - cur_on_account).toFixed(2)
-            }
-
             // Recalculate temp payment conversion (Like Vuelos/Giros)
             if (['payment_quantity', 'payment_exchange_rate', 'payment_currency'].includes(name)) {
                 const qty = parseFloat(newData.payment_quantity) || 0
@@ -271,12 +313,6 @@ export default function ParcelsPage() {
                     result = qty * rate
                 }
                 newData.payment_total = result.toFixed(2)
-
-                // SYNC WITH ON_ACCOUNT: Sum existing payments + current draft
-                const existingTotal = tempPayments.reduce((acc, p) => acc + (parseFloat(p.cantidad) || 0), 0)
-                const totalWithDraft = existingTotal + result
-                newData.on_account = totalWithDraft.toFixed(2)
-                newData.balance = (parseFloat(newData.shipping_cost || "0") - totalWithDraft).toFixed(2)
             }
             
             return newData
@@ -406,6 +442,25 @@ export default function ParcelsPage() {
         setIsDialogOpen(true)
     }
 
+    const handleEditClick = async (parcel: Parcel) => {
+        if (userRole === 'admin') {
+            handleEdit(parcel)
+            return
+        }
+
+        if (userRole === 'agent') {
+            const isUnlocked = unlockedResources.has(parcel.id) || await checkEditPermission('parcels', parcel.id)
+            if (isUnlocked) {
+                setUnlockedResources(prev => new Set(prev).add(parcel.id))
+                handleEdit(parcel)
+            } else {
+                setPendingResourceId(parcel.id)
+                setPendingResourceName(parcel.tracking_code || parcel.id)
+                setIsPermissionModalOpen(true)
+            }
+        }
+    }
+
     const handlePaymentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setPaymentProofFile(e.target.files[0])
@@ -436,8 +491,6 @@ export default function ParcelsPage() {
         setTempPayments([...tempPayments, newPayment])
         setTempPaymentProofs([...tempPaymentProofs, paymentProofFile])
         
-        const newOnAccount = [...tempPayments, newPayment].reduce((acc, curr) => acc + parseFloat(curr.cantidad), 0)
-        
         setFormData(prev => ({
             ...prev,
             payment_quantity: "",
@@ -447,9 +500,7 @@ export default function ParcelsPage() {
             sede_it: "",
             sede_pe: "",
             payment_method_it: "",
-            payment_method_pe: "",
-            on_account: newOnAccount.toFixed(2),
-            balance: (parseFloat(prev.shipping_cost || "0") - newOnAccount).toFixed(2)
+            payment_method_pe: ""
         }))
         
         setPaymentProofFile(null)
@@ -461,13 +512,6 @@ export default function ParcelsPage() {
         const updatedProofs = tempPaymentProofs.filter((_, i) => i !== index)
         setTempPayments(updated)
         setTempPaymentProofs(updatedProofs)
-
-        const newOnAccount = updated.reduce((acc, curr) => acc + parseFloat(curr.cantidad), 0)
-        setFormData(prev => ({
-            ...prev,
-            on_account: newOnAccount.toFixed(2),
-            balance: (parseFloat(prev.shipping_cost || "0") - newOnAccount).toFixed(2)
-        }))
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -500,7 +544,8 @@ export default function ParcelsPage() {
         }
 
         // IMPORTANT: The total 'on_account' MUST be the sum of ALL final payments
-        const currentOnAccount = finalPayments.reduce((acc, p) => acc + (parseFloat(p.cantidad) || 0), 0)
+        const currentOnAccount = parseFloat(financials.on_account)
+        const currentBalance = parseFloat(financials.balance)
 
         const payload = new FormData()
         Object.entries(formData).forEach(([key, value]) => {
@@ -508,7 +553,7 @@ export default function ParcelsPage() {
             if (key === 'on_account') {
                 payload.append(key, currentOnAccount.toFixed(2))
             } else if (key === 'balance') {
-                payload.append(key, (parseFloat(formData.shipping_cost || "0") - currentOnAccount).toFixed(2))
+                payload.append(key, currentBalance.toFixed(2))
             } else {
                 payload.append(key, value)
             }
@@ -540,6 +585,14 @@ export default function ParcelsPage() {
         if (result.error) {
             alert(result.error)
         } else {
+            // Ensure the resource is locked again for the agent
+            if (selectedParcelId) {
+                setUnlockedResources(prev => {
+                    const next = new Set(prev)
+                    next.delete(selectedParcelId)
+                    return next
+                })
+            }
             setIsDialogOpen(false)
             resetForm()
             loadData()
@@ -1183,10 +1236,7 @@ export default function ParcelsPage() {
                                     {/* Footer Info like Vuelos */}
                                     <div className="flex flex-col items-center pt-2 border-t border-slate-100 italic">
                                         <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Vista Previa de Saldo</span>
-                                        {(() => {
-                                            const displayBalance = parseFloat(formData.balance) || 0
-                                            return <span className={`text-sm font-bold ${displayBalance > 0 ? 'text-chimipink' : 'text-chimiteal'}`}>€ {displayBalance.toFixed(2)}</span>
-                                        })()}
+                                        <span className={`text-sm font-bold ${parseFloat(financials.balance) > 0 ? 'text-chimipink' : 'text-chimiteal'}`}>€ {financials.balance}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1595,12 +1645,28 @@ export default function ParcelsPage() {
                                             </td>
                                             <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(parcel)}>
-                                                        <Pencil className="h-4 w-4 text-slate-400" />
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        onClick={() => handleEditClick(parcel)}
+                                                        className={cn(
+                                                            userRole === 'agent' && !unlockedResources.has(parcel.id) && "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                                        )}
+                                                        title={userRole === 'agent' && !unlockedResources.has(parcel.id) ? "Solicitar permiso para editar" : "Editar"}
+                                                    >
+                                                        {userRole === 'agent' && !unlockedResources.has(parcel.id) ? (
+                                                            <Lock className="h-4 w-4" />
+                                                        ) : unlockedResources.has(parcel.id) ? (
+                                                            <Unlock className="h-4 w-4 text-emerald-600" />
+                                                        ) : (
+                                                            <Pencil className="h-4 w-4 text-slate-400" />
+                                                        )}
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(parcel.id)}>
-                                                        <Trash2 className="h-4 w-4 text-red-400" />
-                                                    </Button>
+                                                    {userRole === 'admin' && (
+                                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(parcel.id)}>
+                                                            <Trash2 className="h-4 w-4 text-red-400" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -1640,6 +1706,13 @@ export default function ParcelsPage() {
                     )}
                 </CardContent>
             </Card>
+            <EditRequestModal 
+                isOpen={isPermissionModalOpen}
+                onClose={() => setIsPermissionModalOpen(false)}
+                resourceType="parcels"
+                resourceId={pendingResourceId || ''}
+                resourceName={pendingResourceName}
+            />
         </div>
     )
 }

@@ -12,7 +12,8 @@ import {
   UserCog,
   Menu,
   X,
-  MessageCircle
+  MessageCircle,
+  ShieldCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -46,7 +47,7 @@ const SidebarItem = ({ icon: Icon, label, href, isActive, onClick }: SidebarItem
 );
 
 interface MobileSidebarProps {
-  role?: 'admin' | 'client';
+  role?: 'admin' | 'client' | 'agent' | 'usuario';
 }
 
 export function MobileSidebar({ role }: MobileSidebarProps) {
@@ -120,8 +121,13 @@ export function MobileSidebar({ role }: MobileSidebarProps) {
                     <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Principal</div>
                     
                     <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} onClick={() => setIsOpen(false)} />
-                    <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} onClick={() => setIsOpen(false)} />
-                    <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} onClick={() => setIsOpen(false)} />
+                    {role === 'admin' && (
+                        <>
+                            <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} onClick={() => setIsOpen(false)} />
+                            <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} onClick={() => setIsOpen(false)} />
+                            <SidebarItem icon={ShieldCheck} label="Permisos" href="/admin/permissions" isActive={pathname.startsWith('/admin/permissions')} onClick={() => setIsOpen(false)} />
+                        </>
+                    )}
                     <SidebarItem icon={MessageCircle} label="Mensajes" href="/admin/chat" isActive={pathname.startsWith('/admin/chat')} onClick={() => setIsOpen(false)} />
                     
                     <div className="my-4 border-t border-sidebar-border mx-2" />

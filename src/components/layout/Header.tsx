@@ -11,7 +11,7 @@ import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface HeaderProps {
   user?: SupabaseUser | null;
-  role?: 'admin' | 'client';
+  role?: 'admin' | 'agent' | 'client' | 'usuario';
 }
 
 export function Header({ user, role }: HeaderProps) {
@@ -27,7 +27,18 @@ export function Header({ user, role }: HeaderProps) {
 
   // Safe name extraction
   const displayName = user?.user_metadata?.full_name || user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario';
-  const displayRole = role === 'admin' ? 'Administrador' : 'Cliente';
+  
+  const getDisplayRole = (role?: string) => {
+    switch(role) {
+      case 'admin': return 'Administrador';
+      case 'agent': return 'Agente';
+      case 'usuario': return 'Agente';
+      case 'client': return 'Cliente';
+      default: return 'Cliente';
+    }
+  };
+
+  const displayRole = getDisplayRole(role);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between bg-header px-6 shadow-sm">

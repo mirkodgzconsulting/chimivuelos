@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { uploadClientFile, deleteFileFromR2, deleteImageFromCloudflare, getFileUrl } from "@/lib/storage"
+import { checkEditPermission, consumeEditPermission } from "./manage-permissions"
+import { recordAuditLog } from "@/lib/audit"
 
 /**
  * Interface for Flight Document
@@ -202,8 +204,23 @@ export async function updateFlight(formData: FormData) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Unauthorized')
 
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const hasPermission = await checkEditPermission('flights', id)
+            if (!hasPermission) {
+                throw new Error('No tienes permiso para editar este vuelo. Debes solicitar autorización.')
+            }
+        } else if (userRole !== 'admin') {
+            throw new Error('Acceso denegado')
+        }
+
         const { data: existingFlight } = await adminSupabase.from('flights').select('*').eq('id', id).single()
         if (!existingFlight) throw new Error('Flight not found')
+
+        // Deep clone for audit log comparison
+        const oldValues = JSON.parse(JSON.stringify(existingFlight))
 
         const client_id = existingFlight.client_id
         const travel_date = formData.get('travel_date') as string || null
@@ -343,6 +360,36 @@ export async function updateFlight(formData: FormData) {
 
         if (error) throw error
 
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'update',
+            resourceType: 'flights',
+            resourceId: id,
+            oldValues: oldValues,
+            newValues: { 
+                travel_date, 
+                return_date,
+                pnr, 
+                itinerary, 
+                cost, 
+                sold_price, 
+                status,
+                on_account,
+                balance,
+                payment_details: currentPayments
+            },
+            metadata: { 
+                method: 'updateFlight',
+                displayId: pnr || undefined
+            }
+        })
+
+        // Consume permission if agent
+        if (userRole === 'agent') {
+            await consumeEditPermission('flights', id)
+        }
+
         revalidatePath('/chimi-vuelos')
         return { success: true }
 
@@ -357,10 +404,32 @@ export async function updateFlight(formData: FormData) {
  * Update only the status of a flight (Inline Edit)
  */
 export async function updateFlightStatus(id: string, status: string) {
-    const supabase = supabaseAdmin
+    const supabase = await createClient()
+    const adminSupabase = supabaseAdmin
     try {
-        const { error } = await supabase.from('flights').update({ status }).eq('id', id)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
+        // Fetch flight info for audit log
+        const { data: flightRecord } = await adminSupabase.from('flights').select('*').eq('id', id).single()
+
+        const { error } = await adminSupabase.from('flights').update({ status }).eq('id', id)
         if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'update',
+            resourceType: 'flights',
+            resourceId: id,
+            oldValues: flightRecord,
+            newValues: { status },
+            metadata: { 
+                method: 'updateFlightStatus',
+                displayId: flightRecord?.pnr || undefined
+            }
+        })
+
         revalidatePath('/chimi-vuelos')
         return { success: true }
     } catch (error: unknown) {
@@ -373,9 +442,17 @@ export async function updateFlightStatus(id: string, status: string) {
  * Delete a flight and all its documents
  */
 export async function deleteFlight(id: string) {
-    const supabase = supabaseAdmin
+    const supabase = await createClient()
 
     try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
+        const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+        if (profile?.role !== 'admin') {
+            throw new Error('Solo los administradores pueden eliminar vuelos.')
+        }
+
         // Get documents to delete them from storage
         const { data: flight } = await supabase.from('flights').select('documents').eq('id', id).single()
         
@@ -396,6 +473,15 @@ export async function deleteFlight(id: string) {
 
         const { error } = await supabase.from('flights').delete().eq('id', id)
         if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'delete',
+            resourceType: 'flights',
+            resourceId: id,
+            metadata: { method: 'deleteFlight' }
+        })
 
         revalidatePath('/chimi-vuelos')
         return { success: true }
@@ -502,9 +588,14 @@ export async function deleteFlightPayment(flightId: string, paymentIndex: number
     const adminSupabase = supabaseAdmin
 
     try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
         const { data: flight } = await adminSupabase.from('flights').select('*').eq('id', flightId).single()
         if (!flight) throw new Error('Flight not found')
 
+        const oldValues = JSON.parse(JSON.stringify(flight))
         const payments = (flight.payment_details as PaymentDetail[]) || []
         
         // Safety check: index out of bounds
@@ -529,6 +620,20 @@ export async function deleteFlightPayment(flightId: string, paymentIndex: number
         }).eq('id', flightId)
 
         if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'update',
+            resourceType: 'flights',
+            resourceId: flightId,
+            oldValues,
+            newValues: { payment_details: payments, on_account, balance },
+            metadata: { 
+                method: 'deleteFlightPayment',
+                displayId: flight.pnr || undefined
+            }
+        })
         
         revalidatePath('/chimi-vuelos')
         return { success: true }
@@ -548,9 +653,14 @@ export async function updateFlightPayment(formData: FormData) {
     const proofFile = formData.get('proofFile') as File | null
 
     try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
         const { data: flight } = await adminSupabase.from('flights').select('*').eq('id', flightId).single()
         if (!flight) throw new Error('Flight not found')
 
+        const oldValues = JSON.parse(JSON.stringify(flight))
         const payments = (flight.payment_details as PaymentDetail[]) || []
         
         if (paymentIndex < 0 || paymentIndex >= payments.length) {
@@ -596,6 +706,20 @@ export async function updateFlightPayment(formData: FormData) {
         }).eq('id', flightId)
 
         if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'update',
+            resourceType: 'flights',
+            resourceId: flightId,
+            oldValues,
+            newValues: { payment_details: payments, on_account, balance },
+            metadata: { 
+                method: 'updateFlightPayment',
+                displayId: flight.pnr || undefined
+            }
+        })
         
         revalidatePath('/chimi-vuelos')
         return { success: true }

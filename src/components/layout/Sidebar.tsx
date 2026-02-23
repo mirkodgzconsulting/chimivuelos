@@ -9,7 +9,8 @@ import {
   Users, 
   LogOut,
   UserCog,
-  MessageCircle
+  MessageCircle,
+  ShieldCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -40,7 +41,7 @@ const SidebarItem = ({ icon: Icon, label, href, isActive }: SidebarItemProps) =>
 );
 
 interface SidebarProps {
-  role?: 'admin' | 'client';
+  role?: 'admin' | 'client' | 'agent' | 'usuario';
 }
 
 export function Sidebar({ role }: SidebarProps) {
@@ -84,8 +85,13 @@ export function Sidebar({ role }: SidebarProps) {
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Principal</div>
                 
                 <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} />
-                <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} />
-                <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} />
+                {role === 'admin' && (
+                    <>
+                        <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} />
+                        <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} />
+                        <SidebarItem icon={ShieldCheck} label="Permisos" href="/admin/permissions" isActive={pathname.startsWith('/admin/permissions')} />
+                    </>
+                )}
                 <SidebarItem icon={MessageCircle} label="Mensajes" href="/admin/chat" isActive={pathname.startsWith('/admin/chat')} />
                 
                 <div className="my-4 border-t border-sidebar-border mx-2" />

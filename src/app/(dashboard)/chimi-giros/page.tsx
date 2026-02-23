@@ -5,9 +5,13 @@ import Image from "next/image"
 import { 
     Search, Plus, FileSpreadsheet, Pencil, Trash2, 
     ChevronLeft, ChevronRight, FileText, FolderOpen, Download, X,
-    Building2, Calendar, Check, NotebookPen, Copy
+    Building2, Calendar, Check, NotebookPen, Copy, Lock, Unlock
 } from "lucide-react"
 import * as XLSX from "xlsx"
+import { createClient } from '@/lib/supabase/client'
+import { EditRequestModal } from '@/components/permissions/EditRequestModal'
+import { checkEditPermission, getActivePermissions } from '@/app/actions/manage-permissions'
+import { cn } from '@/lib/utils'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -155,6 +159,33 @@ export default function MoneyTransfersPage() {
     const [docsViewerTransfer, setDocsViewerTransfer] = useState<MoneyTransfer | null>(null)
     const [viewingBeneficiary, setViewingBeneficiary] = useState<MoneyTransfer | null>(null)
 
+    // Role & Permissions State
+    const [userRole, setUserRole] = useState<string | null>(null)
+    const [unlockedResources, setUnlockedResources] = useState<Set<string>>(new Set())
+    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
+    const [pendingResourceId, setPendingResourceId] = useState<string | null>(null)
+    const [pendingResourceName, setPendingResourceName] = useState<string>('')
+
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                const rawRole = user.user_metadata?.role || 'client'
+                const role = rawRole === 'usuario' ? 'agent' : rawRole
+                setUserRole(role)
+
+                if (role === 'agent') {
+                    const permissions = await getActivePermissions()
+                    setUnlockedResources(new Set(permissions))
+                }
+            }
+        }
+        fetchInitialData()
+    }, [])
+
+
+
     // Form Data
     const [formData, setFormData] = useState({
         client_id: "",
@@ -244,6 +275,29 @@ export default function MoneyTransfersPage() {
             clearTimeout(timer)
         }
     }, [loadData])
+    
+    // Derived Financial Summary
+    const financials = useMemo(() => {
+        let totalOnAccount = 0
+        tempPayments.forEach(p => totalOnAccount += parseFloat(p.cantidad) || 0)
+        
+        // Add pending payment if visible and has value
+        if (showPaymentFields && formData.payment_quantity && parseFloat(formData.payment_quantity) > 0) {
+            totalOnAccount += parseFloat(formData.payment_total) || 0
+        }
+
+        const totalAmount = parseFloat(formData.total_amount) || 0
+        let totalInEur = totalAmount
+        if (formData.transfer_mode === 'pen_to_eur') {
+            const rate = parseFloat(formData.exchange_rate) || 1.0
+            totalInEur = rate !== 0 ? totalAmount / rate : 0
+        }
+
+        return {
+            on_account: totalOnAccount.toFixed(2),
+            balance: (totalInEur - totalOnAccount).toFixed(2)
+        }
+    }, [tempPayments, showPaymentFields, formData.payment_quantity, formData.payment_total, formData.total_amount, formData.exchange_rate, formData.transfer_mode])
 
 
 
@@ -322,20 +376,6 @@ export default function MoneyTransfersPage() {
                 newData.expense_total = result.toFixed(2)
             }
 
-            const currentTotal = parseFloat(newData.total_amount) || 0
-            const currentAcuenta = parseFloat(newData.on_account) || 0
-            
-            // CONVERT TO EUR FOR ACCOUNTING BALANCE
-            let totalInEur = currentTotal
-            if (newData.transfer_mode === 'pen_to_eur') {
-                const rate = parseFloat(newData.exchange_rate) || 0
-                // If rate is 0, we use currentTotal directly just for UI feedback
-                // until the rate is entered, preventing the balance from showing 0.
-                totalInEur = rate !== 0 ? currentTotal / rate : currentTotal
-            }
-            
-            newData.balance = (totalInEur - currentAcuenta).toFixed(2)
-
             return newData
         })
     }
@@ -366,19 +406,8 @@ export default function MoneyTransfersPage() {
         setTempPayments(newPayments)
         setTempPaymentProofs(prev => [...prev, paymentProofFile])
         
-        const newOnAccount = newPayments.reduce((sum, p) => sum + (parseFloat(p.cantidad) || 0), 0)
-        
-        const totalAmount = parseFloat(formData.total_amount) || 0
-        let totalInEur = totalAmount
-        if (formData.transfer_mode === 'pen_to_eur') {
-            const rate = parseFloat(formData.exchange_rate) || 1.0
-            totalInEur = rate !== 0 ? totalAmount / rate : 0
-        }
-
         setFormData(prev => ({
             ...prev,
-            on_account: newOnAccount.toFixed(2),
-            balance: (totalInEur - newOnAccount).toFixed(2),
             sede_it: "", sede_pe: "", payment_method_it: "", payment_method_pe: "",
             payment_quantity: "", payment_total: "", payment_exchange_rate: "1.0",
             payment_currency: "EUR"
@@ -392,20 +421,6 @@ export default function MoneyTransfersPage() {
         const newProofs = tempPaymentProofs.filter((_, i) => i !== index)
         setTempPayments(newPayments)
         setTempPaymentProofs(newProofs)
-        
-        const newOnAccount = newPayments.reduce((sum, p) => sum + (parseFloat(p.cantidad) || 0), 0)
-        const totalAmount = parseFloat(formData.total_amount) || 0
-        let totalInEur = totalAmount
-        if (formData.transfer_mode === 'pen_to_eur') {
-            const rate = parseFloat(formData.exchange_rate) || 1.0
-            totalInEur = rate !== 0 ? totalAmount / rate : 0
-        }
-
-        setFormData(prev => ({
-            ...prev,
-            on_account: newOnAccount.toFixed(2),
-            balance: (totalInEur - newOnAccount).toFixed(2)
-        }))
     }
 
     const handleAddExpense = () => {
@@ -566,13 +581,41 @@ export default function MoneyTransfersPage() {
         setIsDialogOpen(true)
     }
 
+    const handleEditClick = async (transfer: MoneyTransfer) => {
+        if (userRole === 'admin') {
+            handleEdit(transfer)
+            return
+        }
+
+        if (userRole === 'agent') {
+            const isUnlocked = unlockedResources.has(transfer.id) || await checkEditPermission('money_transfers', transfer.id)
+            if (isUnlocked) {
+                setUnlockedResources(prev => new Set(prev).add(transfer.id))
+                handleEdit(transfer)
+            } else {
+                setPendingResourceId(transfer.id)
+                setPendingResourceName(transfer.transfer_code || transfer.id)
+                setIsPermissionModalOpen(true)
+            }
+        }
+    }
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsLoading(true)
 
+        const currentOnAccount = parseFloat(financials.on_account)
+        const currentBalance = parseFloat(financials.balance)
+
         const submission = new FormData()
         Object.entries(formData).forEach(([key, value]) => {
-            submission.append(key, value)
+            if (key === 'on_account') {
+                submission.append(key, currentOnAccount.toFixed(2))
+            } else if (key === 'balance') {
+                submission.append(key, currentBalance.toFixed(2))
+            } else {
+                submission.append(key, value)
+            }
         })
 
         // Add Multi-Payments and Expenses
@@ -610,6 +653,14 @@ export default function MoneyTransfersPage() {
         }
 
         if (result.success) {
+            // Ensure the resource is locked again for the agent
+            if (selectedTransferId) {
+                setUnlockedResources(prev => {
+                    const next = new Set(prev)
+                    next.delete(selectedTransferId)
+                    return next
+                })
+            }
             setIsDialogOpen(false)
             resetForm()
             loadData()
@@ -1272,12 +1323,7 @@ export default function MoneyTransfersPage() {
                                     {/* Payment Footer */}
                                     <div className="flex flex-col items-center pt-3 border-t border-slate-100 italic">
                                         <span className="text-[10px] uppercase font-bold text-slate-400">Saldo Pendiente</span>
-                                        {(() => {
-                                            const currentBalance = parseFloat(formData.balance) || 0
-                                            const draft = showPaymentFields ? (parseFloat(formData.payment_total) || 0) : 0
-                                            const displayBalance = currentBalance - draft
-                                            return <span className={`text-sm font-bold ${displayBalance > 0 ? 'text-chimipink' : 'text-chimiteal'}`}>€ {displayBalance.toFixed(2)}</span>
-                                        })()}
+                                        <span className={`text-sm font-bold ${parseFloat(financials.balance) > 0 ? 'text-chimipink' : 'text-chimiteal'}`}>€ {financials.balance}</span>
                                     </div>
                                 </div>
 
@@ -1962,14 +2008,30 @@ export default function MoneyTransfersPage() {
                                                     <option value="cancelled">Cancelado</option>
                                                 </select>
                                             </td>
-                                            <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
+                                             <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(transfer)}>
-                                                        <Pencil className="h-4 w-4 text-slate-400" />
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        onClick={() => handleEditClick(transfer)}
+                                                        className={cn(
+                                                            userRole === 'agent' && !unlockedResources.has(transfer.id) && "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                                        )}
+                                                        title={userRole === 'agent' && !unlockedResources.has(transfer.id) ? "Solicitar permiso para editar" : "Editar"}
+                                                    >
+                                                        {userRole === 'agent' && !unlockedResources.has(transfer.id) ? (
+                                                            <Lock className="h-4 w-4" />
+                                                        ) : unlockedResources.has(transfer.id) ? (
+                                                            <Unlock className="h-4 w-4 text-emerald-600" />
+                                                        ) : (
+                                                            <Pencil className="h-4 w-4 text-slate-400" />
+                                                        )}
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(transfer.id)}>
-                                                        <Trash2 className="h-4 w-4 text-red-400" />
-                                                    </Button>
+                                                    {userRole === 'admin' && (
+                                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(transfer.id)}>
+                                                            <Trash2 className="h-4 w-4 text-red-400" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -2009,6 +2071,14 @@ export default function MoneyTransfersPage() {
                     )}
                 </CardContent>
             </Card>
+
+            <EditRequestModal 
+                isOpen={isPermissionModalOpen}
+                onClose={() => setIsPermissionModalOpen(false)}
+                resourceType="money_transfers"
+                resourceId={pendingResourceId || ''}
+                resourceName={pendingResourceName}
+            />
         </div>
     )
 }

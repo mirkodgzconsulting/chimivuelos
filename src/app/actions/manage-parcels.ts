@@ -3,6 +3,9 @@
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { uploadFileToR2, getFileUrl, type StorageType } from '@/lib/storage'
 import { revalidatePath } from 'next/cache'
+import { createClient } from "@/lib/supabase/server"
+import { checkEditPermission, consumeEditPermission } from "./manage-permissions"
+import { recordAuditLog } from "@/lib/audit"
 
 export async function getParcels() {
     const supabase = supabaseAdmin
@@ -125,17 +128,37 @@ export async function createParcel(formData: FormData) {
 }
 
 export async function updateParcel(formData: FormData) {
-    const supabase = supabaseAdmin
+    const supabase = await createClient()
+    const adminSupabase = supabaseAdmin
     const id = formData.get('id') as string
-    
-    // Retrieve existing data to preserve old docs
-    const { data: existing } = await supabase
-        .from('parcels')
-        .select('documents, payment_details')
-        .eq('id', id)
-        .single()
-        
-    const currentDocs = existing?.documents || []
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const hasPermission = await checkEditPermission('parcels', id)
+            if (!hasPermission) {
+                throw new Error('No tienes permiso para editar esta encomienda. Debes solicitar autorización.')
+            }
+        } else if (userRole !== 'admin') {
+            throw new Error('Acceso denegado')
+        }
+
+        const { data: existing } = await adminSupabase
+            .from('parcels')
+            .select('*')
+            .eq('id', id)
+            .single()
+            
+        if (!existing) throw new Error('Parcel not found')
+
+        // Deep clone for audit log comparison
+        const oldValues = JSON.parse(JSON.stringify(existing))
+        const currentDocs = existing.documents || []
 
     // 1. Core Data
     // Sender ID is locked in UI but we might receive it anyway, usually we don't update it
@@ -212,29 +235,83 @@ export async function updateParcel(formData: FormData) {
         .eq('id', id)
 
     if (error) {
-        return { error: error.message }
+        throw error
+    }
+
+    await recordAuditLog({
+        actorId: user.id,
+        action: 'update',
+        resourceType: 'parcels',
+        resourceId: id,
+        oldValues: oldValues,
+        newValues: { 
+            recipient_name,
+            recipient_phone,
+            recipient_address,
+            origin_address,
+            destination_address,
+            package_type,
+            package_weight,
+            package_description,
+            shipping_cost,
+            on_account,
+            status,
+            payment_details
+        },
+        metadata: { 
+            method: 'updateParcel',
+            displayId: existing?.tracking_number || undefined
+        }
+    })
+
+    // Consume permission if agent
+    if (userRole === 'agent') {
+        await consumeEditPermission('parcels', id)
     }
 
     revalidatePath('/chimi-encomiendas')
     return { success: true }
+    } catch (error: unknown) {
+        console.error('Error updating parcel:', error)
+        return { error: error instanceof Error ? error.message : 'Error al actualizar encomienda' }
+    }
 }
 
 export async function deleteParcel(id: string) {
-    const supabase = supabaseAdmin
-    
-    // Optionally delete files from bucket here if desired
-    
-    const { error } = await supabase
-        .from('parcels')
-        .delete()
-        .eq('id', id)
+    const supabase = await createClient()
+    const adminSupabase = supabaseAdmin
 
-    if (error) {
-        return { error: error.message }
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        if (profile?.role !== 'admin') {
+            throw new Error('Solo los administradores pueden eliminar encomiendas.')
+        }
+
+        const { error } = await adminSupabase
+            .from('parcels')
+            .delete()
+            .eq('id', id)
+
+        if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'delete',
+            resourceType: 'parcels',
+            resourceId: id,
+            metadata: { method: 'deleteParcel' }
+        })
+
+        revalidatePath('/chimi-encomiendas')
+        return { success: true }
+    } catch (error: unknown) {
+        console.error('Error deleting parcel:', error)
+        return { error: error instanceof Error ? error.message : 'Error al eliminar encomienda' }
     }
-
-    revalidatePath('/chimi-encomiendas')
-    return { success: true }
 }
 
 export async function deleteParcelDocument(id: string, docPath: string) {
@@ -264,15 +341,42 @@ export async function deleteParcelDocument(id: string, docPath: string) {
 }
 
 export async function updateParcelStatus(id: string, status: string) {
-    const supabase = supabaseAdmin
-    const { error } = await supabase
-        .from('parcels')
-        .update({ status })
-        .eq('id', id)
+    const supabase = await createClient()
+    const adminSupabase = supabaseAdmin
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Unauthorized')
 
-    if (error) return { error: error.message }
-    revalidatePath('/chimi-encomiendas')
-    return { success: true }
+        // Fetch parcel info for audit log
+        const { data: parcelRecord } = await adminSupabase.from('parcels').select('*').eq('id', id).single()
+
+        const { error } = await adminSupabase
+            .from('parcels')
+            .update({ status })
+            .eq('id', id)
+
+        if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'update',
+            resourceType: 'parcels',
+            resourceId: id,
+            oldValues: parcelRecord,
+            newValues: { status },
+            metadata: { 
+                method: 'updateParcelStatus',
+                displayId: parcelRecord?.tracking_number || undefined
+            }
+        })
+
+        revalidatePath('/chimi-encomiendas')
+        return { success: true }
+    } catch (error: unknown) {
+        console.error('Error updating status:', error)
+        return { error: error instanceof Error ? error.message : 'Error al actualizar estado' }
+    }
 }
 
 export async function getParcelDocumentUrl(path: string, storage: StorageType = 'r2') {
