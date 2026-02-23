@@ -955,7 +955,7 @@ export default function MoneyTransfersPage() {
                                             )}
                                         </div>
                                         {showBankList && (
-                                            <div className="absolute top-full z-[100] w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                            <div className="absolute top-full z-100 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
                                                 {PERU_BANK_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.beneficiary_bank.toLowerCase())).map((opt, idx) => (
                                                     <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
                                                         setFormData(p => ({ ...p, beneficiary_bank: opt }))

@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2 } from 'lucide-react'
+import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { getFlights, getClientsForDropdown, createFlight, updateFlight, deleteFlight, deleteFlightDocument, updateFlightStatus, getFlightDocumentUrl, deleteFlightPayment, updateFlightPayment } from '@/app/actions/manage-flights'
+import { getFlights, getClientsForDropdown, createFlight, updateFlight, deleteFlightDocument, updateFlightStatus, getFlightDocumentUrl, deleteFlightPayment, updateFlightPayment } from '@/app/actions/manage-flights'
 
 interface FlightDocument {
     title: string
@@ -1775,7 +1776,7 @@ export default function FlightsPage() {
                                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 mt-3">
                                                                             <div className="grid gap-1 relative">
                                                                                     <Label className="text-[10px] uppercase font-bold text-blue-600 flex items-center gap-1">
-                                                                                    <img src="https://flagcdn.com/w20/it.png" width="14" alt="italia" className="rounded-sm inline-block" />
+                                                                                    <Image src="https://flagcdn.com/w20/it.png" width={14} height={10} alt="italia" className="rounded-sm inline-block" />
                                                                                     Método Pago IT
                                                                                 </Label>
                                                                                 <div className="relative">
@@ -1814,7 +1815,7 @@ export default function FlightsPage() {
                                                                             </div>
                                                                             <div className="grid gap-1 relative">
                                                                                     <Label className="text-[10px] uppercase font-bold text-rose-600 flex items-center gap-1">
-                                                                                    <img src="https://flagcdn.com/w20/pe.png" width="14" alt="peru" className="rounded-sm inline-block" />
+                                                                                    <Image src="https://flagcdn.com/w20/pe.png" width={14} height={10} alt="peru" className="rounded-sm inline-block" />
                                                                                     Método Pago PE
                                                                                 </Label>
                                                                                 <div className="relative">
@@ -2157,7 +2158,7 @@ export default function FlightsPage() {
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
                                                 <div className="grid gap-2 relative">
                                                     <Label className="text-xs flex items-center gap-1.5 font-bold text-blue-700">
-                                                        <img src="https://flagcdn.com/w20/it.png" width="16" alt="italia" className="rounded-sm inline-block shadow-sm" />
+                                                        <Image src="https://flagcdn.com/w20/it.png" width={16} height={12} alt="italia" className="rounded-sm inline-block shadow-sm" />
                                                         Método Pago IT
                                                     </Label>
                                                     <div className="relative">
@@ -2197,7 +2198,7 @@ export default function FlightsPage() {
                                                 </div>
                                                 <div className="grid gap-2 relative">
                                                     <Label className="text-xs flex items-center gap-1.5 font-bold text-rose-700">
-                                                        <img src="https://flagcdn.com/w20/pe.png" width="16" alt="peru" className="rounded-sm inline-block shadow-sm" />
+                                                        <Image src="https://flagcdn.com/w20/pe.png" width={16} height={12} alt="peru" className="rounded-sm inline-block shadow-sm" />
                                                         Método Pago PE
                                                     </Label>
                                                     <div className="relative">
