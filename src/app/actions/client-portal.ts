@@ -217,3 +217,33 @@ export async function getParcelById(id: string) {
     if (error) return null
     return data
 }
+
+export async function getServiceHistory(resourceId: string, resourceType: 'parcels' | 'money_transfers' | 'flights') {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    // Fetch update logs that changed the status
+    const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('resource_id', resourceId)
+        .eq('resource_type', resourceType)
+        .eq('action', 'update')
+        .order('created_at', { ascending: true })
+
+    if (error) {
+        console.error('Error fetching service history:', error)
+        return []
+    }
+
+    // Filter logs that actually changed the status
+    const history = data
+        .filter(log => log.new_values && log.new_values.status)
+        .map(log => ({
+            status: log.new_values.status,
+            created_at: log.created_at
+        }))
+
+    return history
+}

@@ -1,15 +1,32 @@
-import { getTransferById } from '@/app/actions/client-portal'
+import { getTransferById, getServiceHistory } from '@/app/actions/client-portal'
 import { redirect } from 'next/navigation'
-import { Banknote, User, ArrowLeft, Download, FileText, History, CheckCircle2, DollarSign } from 'lucide-react'
+import { Banknote, User, Download, FileText, CheckCircle2, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { cn } from "@/lib/utils"
+
+const STATUS_LABELS: Record<string, string> = {
+    scheduled: 'PROGRAMADO',
+    delivered: 'ENTREGADO',
+    cancelled: 'CANCELADO'
+}
+
+const STATUS_COLORS: Record<string, string> = {
+    scheduled: 'bg-sky-400',
+    delivered: 'bg-emerald-500',
+    cancelled: 'bg-red-500'
+}
 
 const formatCurrency = (amount: number | null | undefined, currency = 'EUR') => {
     return new Intl.NumberFormat('es-ES', { 
         style: 'currency', 
         currency: currency 
     }).format(amount || 0)
+}
+
+interface HistoryLog {
+    status: string
+    created_at: string
 }
 
 interface TransferDocument {
@@ -26,6 +43,18 @@ export default async function TransferDetailPage({ params }: { params: { id: str
     if (!transfer) {
         redirect('/portal/giros')
     }
+
+    const historyLogs = await getServiceHistory(id, 'money_transfers')
+    
+    // Combine creation with audit logs
+    const timeline = [
+        { status: 'CREACIÓN', created_at: transfer.created_at, color: 'bg-blue-400' },
+        ...historyLogs.map((log: HistoryLog) => ({
+            status: STATUS_LABELS[log.status] || log.status.toUpperCase(),
+            created_at: log.created_at,
+            color: STATUS_COLORS[log.status] || 'bg-slate-400'
+        }))
+    ]
 
     return (
         <div className="space-y-6 w-full">
@@ -81,8 +110,8 @@ export default async function TransferDetailPage({ params }: { params: { id: str
 
                             {/* Data Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Beneficiary & Details */}
-                                <div className="space-y-6">
+                                {/* Left Column: Beneficiary & History */}
+                                <div className="space-y-8">
                                     <div>
                                         <h3 className="text-xs font-bold text-chimipink uppercase tracking-wider mb-2 flex items-center gap-2">
                                             <User size={14} /> Datos del Beneficiario
@@ -120,22 +149,43 @@ export default async function TransferDetailPage({ params }: { params: { id: str
                                                     <span>Modo de Envío:</span>
                                                     <span className="font-bold text-slate-800 capitalize">{transfer.transfer_mode?.replace(/_/g, ' ') || 'Giro Normal'}</span>
                                                 </li>
-                                                <li className="flex justify-between items-center py-1 border-b border-white/20">
-                                                    <span>Fecha de Creación:</span>
-                                                    <span className="font-bold text-slate-800">{new Date(transfer.created_at).toLocaleDateString()}</span>
-                                                </li>
                                                 {transfer.terms_accepted_at && (
                                                     <li className="flex justify-between items-center py-1">
-                                                        <span>Términos Aceptados:</span>
-                                                        <span className="font-bold text-chimiteal flex items-center gap-1"><CheckCircle2 size={12} /> {new Date(transfer.terms_accepted_at).toLocaleDateString()}</span>
+                                                        <span>Condiciones:</span>
+                                                        <span className="font-bold text-chimiteal flex items-center gap-1"><CheckCircle2 size={12} /> Aceptadas</span>
                                                     </li>
                                                 )}
                                             </ul>
                                         </div>
                                     </div>
+
+                                    {/* Status Timeline - Moved here to match Encomiendas structure */}
+                                    <div>
+                                        <h3 className="text-xs font-bold text-chimipink uppercase tracking-wider mb-4 flex items-center gap-2">
+                                            <Clock size={14} /> Historial de Cambio
+                                        </h3>
+                                        <div className="relative pl-6 space-y-4 mb-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+                                            {timeline.map((step, idx) => (
+                                                <div key={idx} className="relative flex items-center gap-4 group">
+                                                    <div className={cn(
+                                                        "absolute -left-[23px] h-3 w-3 rounded-full border-2 border-white shadow-sm z-10",
+                                                        step.color
+                                                    )} />
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-bold text-slate-400 leading-none mb-1">
+                                                            {new Date(step.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                                        </span>
+                                                        <span className="text-xs font-black text-slate-700 uppercase tracking-tighter">
+                                                            {step.status}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
 
-                                {/* Documents & Financials */}
+                                {/* Right Column: Documents & Financials */}
                                 <div className="space-y-8">
                                     {/* Documents */}
                                     <div>

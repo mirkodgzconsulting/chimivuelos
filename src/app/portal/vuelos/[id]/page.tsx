@@ -1,11 +1,54 @@
-import { getFlightById } from '@/app/actions/client-portal'
+import { getFlightById, getServiceHistory } from '@/app/actions/client-portal'
 import { redirect } from 'next/navigation'
-import { Plane, Calendar, FileText, Banknote } from 'lucide-react'
+import { Plane, Calendar, FileText, Banknote, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { FlightDocumentRow } from '../ClientDownloadButton'
 import { FlightRecommendations } from '../components/FlightRecommendations'
 import { FlightFAQ } from '../components/FlightFAQ'
+import { cn } from "@/lib/utils"
+
+const STATUS_LABELS: Record<string, string> = {
+    // Keys
+    'Programado': 'PROGRAMADO',
+    'En tránsito': 'EN TRÁNSITO',
+    'Reprogramado': 'REPROGRAMADO',
+    'Cambio de horario': 'CAMBIO DE HORARIO',
+    'Cancelado': 'CANCELADO',
+    'No-show (no se presentó)': 'NO-SHOW',
+    'En migración': 'EN MIGRACIÓN',
+    'Deportado': 'DEPORTADO',
+    'Finalizado': 'FINALIZADO',
+    // Fallback technical keys
+    pending: 'PENDIENTE',
+    confirmed: 'CONFIRMADO',
+    scheduled: 'PROGRAMADO',
+    delayed: 'RETRASADO',
+    landed: 'ATERRIZADO'
+}
+
+const STATUS_COLORS: Record<string, string> = {
+    'Programado': 'bg-sky-400',
+    'En tránsito': 'bg-orange-400',
+    'Reprogramado': 'bg-amber-400',
+    'Cambio de horario': 'bg-amber-500',
+    'Cancelado': 'bg-red-500',
+    'No-show (no se presentó)': 'bg-slate-400',
+    'En migración': 'bg-purple-400',
+    'Deportado': 'bg-red-700',
+    'Finalizado': 'bg-emerald-500',
+    // Fallbacks
+    pending: 'bg-amber-400',
+    confirmed: 'bg-emerald-500',
+    scheduled: 'bg-sky-400',
+    delayed: 'bg-orange-500',
+    landed: 'bg-chimiteal'
+}
+
+interface HistoryLog {
+    status: string
+    created_at: string
+}
 
 const formatCurrency = (amount: number | null | undefined) => {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount || 0)
@@ -40,7 +83,23 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
     const { id } = await params
     const flight = await getFlightById(id)
 
-    let flightDetails: Record<string, any> = {}
+    if (!flight) {
+        redirect('/portal/vuelos')
+    }
+
+    const historyLogs = await getServiceHistory(id, 'flights')
+    
+    // Combine creation with audit logs
+    const timeline = [
+        { status: 'CREACIÓN', created_at: flight.created_at, color: 'bg-blue-400' },
+        ...historyLogs.map((log: HistoryLog) => ({
+            status: STATUS_LABELS[log.status] || log.status.toUpperCase(),
+            created_at: log.created_at,
+            color: STATUS_COLORS[log.status] || 'bg-slate-400'
+        }))
+    ]
+
+    let flightDetails: Record<string, string | boolean | number> = {}
     try {
         if (typeof flight?.details === 'string') {
             flightDetails = JSON.parse(flight.details)
@@ -59,10 +118,6 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
     // Also check for special note
     if (flightDetails.special_note) {
         activeDetails.push(['special_note', `Nota: ${flightDetails.special_note}`])
-    }
-
-    if (!flight) {
-        redirect('/portal/vuelos')
     }
 
     return (
@@ -158,8 +213,30 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
                                             </div>
                                         </div>
                                     )}
-
-
+                                    {/* Status Timeline */}
+                                    <div>
+                                        <h3 className="text-xs font-bold text-chimipink uppercase tracking-wider mb-4 flex items-center gap-2">
+                                            <Clock size={14} /> Historial de Cambio
+                                        </h3>
+                                        <div className="relative pl-6 space-y-4 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                                            {timeline.map((step, idx) => (
+                                                <div key={idx} className="relative flex items-center gap-4 group">
+                                                    <div className={cn(
+                                                        "absolute -left-[23px] h-3 w-3 rounded-full border-2 border-white shadow-sm z-10",
+                                                        step.color
+                                                    )} />
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-bold text-slate-400 leading-none mb-1">
+                                                            {new Date(step.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                                        </span>
+                                                        <span className="text-xs font-black text-slate-700 uppercase tracking-tighter">
+                                                            {step.status}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Documents Group */}
