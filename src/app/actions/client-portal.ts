@@ -164,7 +164,7 @@ export async function getMyTransfers() {
     const { data } = await supabase
         .from('money_transfers')
         .select('*')
-        .eq('sender_id', user.id) // Corrected from client_id
+        .eq('client_id', user.id) 
         .order('created_at', { ascending: false })
     
     return data || []
@@ -180,6 +180,38 @@ export async function getFlightById(id: string) {
         .select('*')
         .eq('id', id)
         .eq('client_id', user.id)
+        .single()
+    
+    if (error) return null
+    return data
+}
+
+export async function getTransferById(id: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data, error } = await supabase
+        .from('money_transfers')
+        .select('*')
+        .eq('id', id)
+        .eq('client_id', user.id)
+        .single()
+    
+    if (error) return null
+    return data
+}
+
+export async function getParcelById(id: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data, error } = await supabase
+        .from('parcels')
+        .select('*')
+        .eq('id', id)
+        .eq('sender_id', user.id)
         .single()
     
     if (error) return null

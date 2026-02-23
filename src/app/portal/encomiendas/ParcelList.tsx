@@ -2,10 +2,9 @@
 
 import { useState } from 'react'
 import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Package, Calendar, FileText, Download, AlertCircle, ChevronDown, ArrowRight, User } from "lucide-react"
+import { Package, Calendar, AlertCircle, ArrowRight, User } from "lucide-react"
 import { TermsGuard } from '@/components/client/TermsGuard'
-import { cn } from "@/lib/utils"
+import { useRouter } from 'next/navigation'
 
 export interface ParcelDocument {
     title: string
@@ -36,20 +35,21 @@ export interface Parcel {
 export default function ParcelList({ parcels, termsContent, termsVersion }: { parcels: Parcel[], termsContent: string, termsVersion: string }) {
     const [selectedParcel, setSelectedParcel] = useState<Parcel | null>(null)
     const [showTerms, setShowTerms] = useState(false)
-    const [expandedParcelId, setExpandedParcelId] = useState<string | null>(null)
+    const router = useRouter()
 
-    const handleViewDocs = (parcel: Parcel) => {
+    const handleParcelClick = (parcel: Parcel) => {
         if (!parcel.terms_accepted_at) {
             setSelectedParcel(parcel)
             setShowTerms(true)
         } else {
-            setExpandedParcelId(parcel.id === expandedParcelId ? null : parcel.id)
+            router.push(`/portal/encomiendas/${parcel.id}`)
         }
     }
 
     const handleTermsSuccess = () => {
+        router.refresh()
         if (selectedParcel) {
-            setExpandedParcelId(selectedParcel.id)
+            router.push(`/portal/encomiendas/${selectedParcel.id}`)
         }
     }
 
@@ -70,127 +70,75 @@ export default function ParcelList({ parcels, termsContent, termsVersion }: { pa
     return (
         <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             {parcels.map((parcel) => {
-                const isExpanded = expandedParcelId === parcel.id
                 const isTermsAccepted = !!parcel.terms_accepted_at
 
                 return (
-                    <Card key={parcel.id} className="overflow-hidden shadow-sm hover:shadow-md transition-all border-slate-200">
-                        <CardContent className="p-4 sm:p-6">
+                    <Card 
+                        key={parcel.id} 
+                        onClick={() => handleParcelClick(parcel)}
+                        className="cursor-pointer group overflow-hidden shadow-sm hover:shadow-md transition-all border-slate-200 relative"
+                    >
+                        {/* Status Bar */}
+                        <div className={cn(
+                            "absolute left-0 top-0 bottom-0 w-1",
+                            parcel.status === 'delivered' ? "bg-emerald-500" :
+                            parcel.status === 'cancelled' ? "bg-red-500" : "bg-amber-500"
+                        )} />
+
+                        <CardContent className="p-6">
                             
                             {/* Header */}
-                            <div className="flex justify-between items-start mb-4 sm:mb-6 relative">
-                                <div className="flex items-start gap-3 sm:gap-4">
-                                    <div className="bg-slate-50 p-2.5 sm:p-3 rounded-xl text-slate-700 shrink-0">
+                            <div className="flex justify-between items-start mb-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="bg-slate-50 p-3 rounded-xl text-slate-700 group-hover:text-chimiteal transition-colors">
                                         <Package size={24} />
                                     </div>
-                                    <div className="min-w-0">
-                                        <h3 className="font-bold text-slate-900 text-base sm:text-lg">Encomienda</h3>
+                                    <div>
+                                        <h3 className="font-bold text-slate-900 text-lg">Encomienda</h3>
                                         {parcel.tracking_number && (
-                                            <span className="text-xs sm:text-sm font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md mt-1 inline-block truncate max-w-full">
-                                                {parcel.tracking_number}
+                                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1 inline-block uppercase tracking-widest">
+                                                ID: {parcel.tracking_number}
                                             </span>
                                         )}
                                     </div>
                                 </div>
                                 
                                 {!isTermsAccepted && (
-                                    <div className="text-chimipink animate-pulse shrink-0" title="Acción Requerida">
+                                    <div className="text-chimipink animate-pulse" title="Acción Requerida">
                                         <AlertCircle size={22} />
                                     </div>
                                 )}
                             </div>
 
                             {/* Content */}
-                            <div className="space-y-3 mb-4 sm:mb-6">
+                            <div className="space-y-4 mb-6">
                                 <div className="flex items-center gap-3 text-slate-700">
-                                    <User size={18} className="text-slate-400 shrink-0" />
-                                    <span className="font-semibold text-sm sm:text-base truncate">{parcel.recipient_name}</span>
+                                    <User size={18} className="text-slate-400" />
+                                    <span className="font-bold text-sm truncate">{parcel.recipient_name}</span>
                                 </div>
-                                <div className="flex items-center gap-3 text-slate-500">
-                                    <Calendar size={18} className="shrink-0" />
-                                    <span className="font-medium text-sm sm:text-base">{new Date(parcel.created_at).toLocaleDateString()}</span>
+                                <div className="flex items-center justify-between text-xs font-medium">
+                                    <div className="flex items-center gap-2 text-slate-400">
+                                        <Calendar size={14} />
+                                        <span>{new Date(parcel.created_at).toLocaleDateString()}</span>
+                                    </div>
+                                    <span className={cn(
+                                        "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter",
+                                        parcel.status === 'delivered' ? "bg-emerald-100 text-emerald-700" :
+                                        parcel.status === 'cancelled' ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                                    )}>
+                                        {parcel.status === 'delivered' ? 'Entregado' : 
+                                         parcel.status === 'cancelled' ? 'Cancelado' :
+                                         parcel.status === 'in_transit' ? 'En Tránsito' : 
+                                         'Pendiente'}
+                                    </span>
                                 </div>
                             </div>
 
-                            {/* Footer */}
-                            <Button 
-                                onClick={() => handleViewDocs(parcel)}
-                                variant="ghost"
-                                className="w-full justify-between px-0 hover:bg-transparent hover:text-chimipink text-slate-800 font-bold group h-auto py-0"
-                            >
-                                {isTermsAccepted ? (
-                                    <>
-                                        <span className="text-base">{isExpanded ? 'Ocultar Detalles' : 'Ver Detalles'}</span>
-                                        <ChevronDown className={cn("h-5 w-5 transition-transform text-slate-400 group-hover:text-chimipink", isExpanded && "rotate-180")} />
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="text-base">Ver Detalles</span>
-                                        <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1 text-slate-400 group-hover:text-chimipink" />
-                                    </>
-                                )}
-                            </Button>
-
-                            {/* Expanded Content */}
-                            {isExpanded && isTermsAccepted && (
-                                <div className="mt-6 pt-6 border-t border-slate-100 animate-in slide-in-from-top-2 space-y-4">
-                                    
-                                    {/* Parcel Details Grid */}
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <div className="space-y-1">
-                                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Tipo</span>
-                                            <p className="font-semibold text-slate-700 capitalize">{parcel.package_type || '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Peso</span>
-                                            <p className="font-semibold text-slate-700">{parcel.package_weight || '-'}</p>
-                                        </div>
-                                        
-                                        <div className="col-span-2 space-y-1">
-                                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Dirección de Entrega</span>
-                                            <p className="text-slate-700 bg-slate-50 p-2 rounded-md border border-slate-100">
-                                                {parcel.recipient_address || '-'}
-                                            </p>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Teléfono</span>
-                                            <p className="font-mono text-slate-600">{parcel.recipient_phone || '-'}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">DNI/Doc</span>
-                                            <p className="font-mono text-slate-600">{parcel.recipient_document || '-'}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Description */}
-                                    <div className="mb-4">
-                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-bold">Descripción</p>
-                                        <p className="text-sm text-slate-700 italic bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                            &quot;{parcel.package_description || 'Sin descripción'}&quot;
-                                        </p>
-                                    </div>
-
-                                    <h4 className="font-bold text-xs text-slate-400 uppercase tracking-wider mb-3">Documentos</h4>
-                                    <div className="space-y-3">
-                                        {parcel.documents && parcel.documents.length > 0 ? (
-                                            parcel.documents.map((doc, idx) => (
-                                                <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center justify-between hover:border-chimiteal/30 transition-colors">
-                                                    <div className="flex items-center gap-3 overflow-hidden">
-                                                        <FileText size={18} className="text-slate-400 shrink-0" />
-                                                        <span className="text-sm font-semibold text-slate-700 truncate">{doc.title || doc.name}</span>
-                                                    </div>
-                                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-chimiteal hover:bg-white">
-                                                        <Download size={18} />
-                                                    </Button>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-sm text-center text-slate-400 py-2 italic bg-slate-50 rounded-lg">No hay documentos.</p>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+                            {/* Action */}
+                            <div className="pt-4 border-t border-slate-50 flex items-center justify-between text-xs font-bold text-slate-400 group-hover:text-chimiteal transition-colors">
+                                <span>VER DETALLES</span>
+                                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                            </div>
                         </CardContent>
                     </Card>
                 )
@@ -209,4 +157,8 @@ export default function ParcelList({ parcels, termsContent, termsVersion }: { pa
             )}
         </div>
     )
+}
+
+function cn(...inputs: (string | boolean | undefined | null)[]) {
+    return inputs.filter(Boolean).join(' ')
 }
