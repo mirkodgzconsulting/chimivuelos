@@ -1137,9 +1137,9 @@ export default function FlightsPage() {
                                                 setClientSearch('')
                                                 setFormData(prev => ({ ...prev, client_id: '', client_email: '', client_phone: '' }))
                                             }}
-                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                         >
-                                            <X size={14} />
+                                            <X size={14} strokeWidth={3} />
                                         </button>
                                     )}
                                 </div>
@@ -1188,9 +1188,9 @@ export default function FlightsPage() {
                                              <button 
                                                  type="button"
                                                  onClick={() => setFormData(prev => ({ ...prev, travel_date: '' }))}
-                                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                              >
-                                                 <X size={14} />
+                                                 <X size={14} strokeWidth={3} />
                                              </button>
                                          )}
                                      </div>
@@ -1209,9 +1209,9 @@ export default function FlightsPage() {
                                              <button 
                                                  type="button"
                                                  onClick={() => setFormData(prev => ({ ...prev, return_date: '' }))}
-                                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                              >
-                                                 <X size={14} />
+                                                 <X size={14} strokeWidth={3} />
                                              </button>
                                          )}
                                      </div>
@@ -1239,9 +1239,9 @@ export default function FlightsPage() {
                                             <button 
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, ticket_type: '' }))}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                             >
-                                                <X size={14} />
+                                                <X size={14} strokeWidth={3} />
                                             </button>
                                         )}
                                     </div>
@@ -1286,9 +1286,9 @@ export default function FlightsPage() {
                                             <button 
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, iata_gds: '' }))}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                             >
-                                                <X size={14} />
+                                                <X size={14} strokeWidth={3} />
                                             </button>
                                         )}
                                     </div>
@@ -1393,9 +1393,9 @@ export default function FlightsPage() {
                                             <button 
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, itinerary: '' }))}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                             >
-                                                <X size={14} />
+                                                <X size={14} strokeWidth={3} />
                                             </button>
                                         )}
                                     </div>
@@ -1507,9 +1507,9 @@ export default function FlightsPage() {
                                                         <button 
                                                             type="button"
                                                             onClick={() => handleDetailChange('insurance_tourism_date_from', '')}
-                                                            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                            className="absolute right-1 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                                         >
-                                                            <X size={12} />
+                                                            <X size={12} strokeWidth={3} />
                                                         </button>
                                                     )}
                                                 </div>
@@ -1525,9 +1525,9 @@ export default function FlightsPage() {
                                                         <button 
                                                             type="button"
                                                             onClick={() => handleDetailChange('insurance_tourism_date_to', '')}
-                                                            className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                            className="absolute right-1 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                                         >
-                                                            <X size={12} />
+                                                            <X size={12} strokeWidth={3} />
                                                         </button>
                                                     )}
                                                 </div>
@@ -1753,9 +1753,9 @@ export default function FlightsPage() {
                                                                                         <button 
                                                                                             type="button" 
                                                                                             onClick={() => setEditPaymentData(prev => prev ? {...prev, sede_it: ''} : null)}
-                                                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                                                                         >
-                                                                                            <X size={12} />
+                                                                                            <X size={12} strokeWidth={3} />
                                                                                         </button>
                                                                                     )}
                                                                                 </div>
@@ -1795,9 +1795,9 @@ export default function FlightsPage() {
                                                                                         <button 
                                                                                             type="button" 
                                                                                             onClick={() => setEditPaymentData(prev => prev ? {...prev, metodo_it: ''} : null)}
-                                                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                                                                         >
-                                                                                            <X size={12} />
+                                                                                            <X size={12} strokeWidth={3} />
                                                                                         </button>
                                                                                     )}
                                                                                 </div>
@@ -1834,9 +1834,9 @@ export default function FlightsPage() {
                                                                                         <button 
                                                                                             type="button" 
                                                                                             onClick={() => setEditPaymentData(prev => prev ? {...prev, metodo_pe: ''} : null)}
-                                                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                                                                         >
-                                                                                            <X size={12} />
+                                                                                            <X size={12} strokeWidth={3} />
                                                                                         </button>
                                                                                     )}
                                                                                 </div>
@@ -2135,9 +2135,9 @@ export default function FlightsPage() {
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => setFormData(p => ({ ...p, sede_it: '' }))}
-                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                                             >
-                                                                <X size={14} />
+                                                                <X size={14} strokeWidth={3} />
                                                             </button>
                                                         )}
                                                     </div>
@@ -2178,9 +2178,9 @@ export default function FlightsPage() {
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => setFormData(p => ({ ...p, payment_method_it: '' }))}
-                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                                             >
-                                                                <X size={14} />
+                                                                <X size={14} strokeWidth={3} />
                                                             </button>
                                                         )}
                                                     </div>
@@ -2218,9 +2218,9 @@ export default function FlightsPage() {
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => setFormData(p => ({ ...p, payment_method_pe: '' }))}
-                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                                             >
-                                                                <X size={14} />
+                                                                <X size={14} strokeWidth={3} />
                                                             </button>
                                                         )}
                                                     </div>
@@ -2442,9 +2442,9 @@ export default function FlightsPage() {
                             {searchTerm && (
                                 <button 
                                     onClick={() => {setSearchTerm(''); setCurrentPage(1);}}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                 >
-                                    <X size={14} />
+                                    <X size={14} strokeWidth={3} />
                                 </button>
                             )}
                         </div>
@@ -2471,9 +2471,9 @@ export default function FlightsPage() {
                             {dateFrom && (
                                 <button 
                                     onClick={() => setDateFrom('')}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                 >
-                                    <X size={14} />
+                                    <X size={14} strokeWidth={3} />
                                 </button>
                             )}
                         </div>
@@ -2489,9 +2489,9 @@ export default function FlightsPage() {
                             {dateTo && (
                                 <button 
                                     onClick={() => setDateTo('')}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                 >
-                                    <X size={14} />
+                                    <X size={14} strokeWidth={3} />
                                 </button>
                             )}
                         </div>

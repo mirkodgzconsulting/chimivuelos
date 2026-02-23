@@ -128,7 +128,12 @@ export async function updateClient(formData: FormData) {
   }
 
   try {
-    const updateData: any = {
+    const updateData: {
+      email: string;
+      user_metadata: { first_name: string; last_name: string };
+      email_confirm: boolean;
+      password?: string;
+    } = {
       email,
       user_metadata: {
         first_name: firstName,
@@ -182,9 +187,10 @@ export async function updateClient(formData: FormData) {
                    storage: result.storage,
                    uploaded_at: new Date().toISOString()
                })
-           } catch (err: any) {
+           } catch (err: unknown) {
                console.error("Error uploading file:", err)
-               uploadErrors.push(`Error subiendo ${file.name}: ${err.message || 'Error desconocido'}`);
+               const msg = err instanceof Error ? err.message : 'Error desconocido'
+               uploadErrors.push(`Error subiendo ${file.name}: ${msg}`);
            }
         }
       }

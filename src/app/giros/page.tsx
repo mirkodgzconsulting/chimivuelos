@@ -18,7 +18,7 @@ interface TransferResult {
     beneficiary_account?: string | null
     sender_name: string
     code: string
-    status: 'pending' | 'processing' | 'available' | 'completed' | 'cancelled'
+    status: 'scheduled' | 'delivered' | 'cancelled' | 'pending' | 'processing' | 'available' | 'completed'
 }
 
 function TrackingContent() {
@@ -68,12 +68,14 @@ function TrackingContent() {
     const getStatusInfo = (status: string) => {
         switch (status) {
             case 'pending':
-                return { label: 'Pendiente', color: 'text-amber-600', bg: 'bg-amber-100', icon: Clock, desc: 'En espera de procesamiento.' }
+            case 'scheduled':
+                return { label: 'Programado', color: 'text-amber-600', bg: 'bg-amber-100', icon: Clock, desc: 'En espera de procesamiento.' }
             case 'processing':
                 return { label: 'En Proceso', color: 'text-blue-600', bg: 'bg-blue-100', icon: Loader2, desc: 'Envío en curso.' }
             case 'available':
                 return { label: 'Para Cobro', color: 'text-emerald-600', bg: 'bg-emerald-100', icon: CheckCircle, desc: 'Listo para retiro.' }
             case 'completed':
+            case 'delivered':
                 return { label: 'Entregado', color: 'text-slate-600', bg: 'bg-slate-200', icon: CheckCircle, desc: 'Dinero entregado exitosamente.' }
             case 'cancelled':
                 return { label: 'Cancelado', color: 'text-red-600', bg: 'bg-red-100', icon: XCircle, desc: 'Giro cancelado.' }

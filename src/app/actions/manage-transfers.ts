@@ -1,6 +1,7 @@
 'use server'
 
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { uploadClientFile, deleteFileFromR2, deleteImageFromCloudflare, getFileUrl } from "@/lib/storage"
 
@@ -19,13 +20,45 @@ interface TransferDocument {
 /**
  * Interface for Money Transfer Record
  */
+interface PaymentDetail {
+    sede_it: string
+    sede_pe: string
+    metodo_it: string
+    metodo_pe: string
+    cantidad: string       // EUR amount (affects accounting)
+    tipo_cambio: number    // Exchange rate used
+    total: string          // Formatted original amount (e.g. "S/ 400.00")
+    moneda?: string        // 'EUR', 'PEN', 'USD'
+    monto_original?: string
+    created_at?: string
+    updated_at?: string
+    proof_path?: string
+}
+
+interface ExpenseDetail {
+    description: string
+    amount: number
+    currency: string
+    category: string
+    sede_it?: string
+    sede_pe?: string
+    metodo_it?: string
+    metodo_pe?: string
+    tipo_cambio?: number
+    total_formatted?: string
+    created_at?: string
+    proof_path?: string
+}
+
 export interface MoneyTransfer {
     id: string
     created_at: string
     client_id: string
+    transfer_mode: 'eur_to_pen' | 'pen_to_eur' | 'eur_to_eur'
     amount_sent: number
     exchange_rate: number
     amount_received: number
+    commission_percentage: number
     commission: number
     total_amount: number
     on_account: number
@@ -36,8 +69,13 @@ export interface MoneyTransfer {
     beneficiary_bank: string
     beneficiary_account: string
     transfer_code: string
-    status: 'pending' | 'processing' | 'available' | 'completed' | 'cancelled'
+    status: 'scheduled' | 'delivered' | 'cancelled'
+    payment_details?: PaymentDetail[]
+    expense_details?: ExpenseDetail[]
+    agent_id?: string
     documents?: TransferDocument[]
+    total_expenses?: number
+    net_profit?: number
     profiles?: {
         first_name: string
         last_name: string
@@ -55,18 +93,17 @@ export async function createTransfer(formData: FormData) {
 
     try {
         const client_id = formData.get('client_id') as string
+        const transfer_mode = (formData.get('transfer_mode') as string) || 'eur_to_pen'
         
         // Financial Details
         const amount_sent = parseFloat(formData.get('amount_sent') as string) || 0
         const exchange_rate = parseFloat(formData.get('exchange_rate') as string) || 0
-        const amount_received = parseFloat(formData.get('amount_received') as string) || (amount_sent * exchange_rate)
+        const amount_received = parseFloat(formData.get('amount_received') as string) || 0
+        const commission_percentage = parseFloat(formData.get('commission_percentage') as string) || 0
         const commission = parseFloat(formData.get('commission') as string) || 0
         
         // Payment Control
         const total_amount = parseFloat(formData.get('total_amount') as string) || (amount_sent + commission)
-        const on_account = parseFloat(formData.get('on_account') as string) || 0
-        const balance = parseFloat(formData.get('balance') as string) || (total_amount - on_account)
-        
         // Beneficiary Details
         const beneficiary_name = formData.get('beneficiary_name') as string
         const beneficiary_document = formData.get('beneficiary_document') as string
@@ -75,7 +112,60 @@ export async function createTransfer(formData: FormData) {
         const beneficiary_account = formData.get('beneficiary_account') as string
         
         const transfer_code = formData.get('transfer_code') as string || `GIR-${Date.now().toString().slice(-4)}`
-        const status = formData.get('status') as string || 'pending'
+        const status = formData.get('status') as string || 'scheduled'
+
+        // Handle Payment Details (Multi-payment logic)
+        const payment_details: PaymentDetail[] = []
+        const multiPaymentsStr = formData.get('payment_details') as string
+        if (multiPaymentsStr) {
+            try {
+                const multiPayments = JSON.parse(multiPaymentsStr) as PaymentDetail[]
+                for (let i = 0; i < multiPayments.length; i++) {
+                    const tempFile = formData.get(`payment_proof_${i}`) as File
+                    if (tempFile && tempFile.size > 0) {
+                        const uploadResult = await uploadClientFile(tempFile, client_id)
+                        multiPayments[i].proof_path = uploadResult.path
+                    }
+                }
+                payment_details.push(...multiPayments)
+            } catch (e) {
+                console.error('Error parsing payment_details:', e)
+            }
+        }
+
+        // Handle Expense Details
+        const expense_details: ExpenseDetail[] = []
+        const expensesStr = formData.get('expense_details') as string
+        if (expensesStr) {
+            try {
+                const expenses = JSON.parse(expensesStr) as ExpenseDetail[]
+                for (let i = 0; i < expenses.length; i++) {
+                    const tempFile = formData.get(`expense_proof_${i}`) as File
+                    if (tempFile && tempFile.size > 0) {
+                        const uploadResult = await uploadClientFile(tempFile, client_id)
+                        expenses[i].proof_path = uploadResult.path
+                    }
+                }
+                expense_details.push(...expenses)
+            } catch (e) {
+                console.error('Error parsing expense_details:', e)
+            }
+        }
+
+        const on_account = payment_details.reduce((sum, p) => sum + (parseFloat(p.cantidad) || 0), 0)
+        
+        // Accounting conversion: Balance and Profit are ALWAYS in EUR
+        let totalAmountEur = total_amount
+        let commissionEur = commission
+        if (transfer_mode === 'pen_to_eur') {
+            const rate = exchange_rate || 1.0
+            totalAmountEur = total_amount / rate
+            commissionEur = commission / rate
+        }
+
+        const balance = totalAmountEur - on_account
+        const total_expenses = expense_details.reduce((sum, e) => sum + (e.amount || 0), 0)
+        const net_profit = commissionEur - total_expenses
 
         // Handle Documents
         const documents: TransferDocument[] = []
@@ -100,9 +190,11 @@ export async function createTransfer(formData: FormData) {
 
         const { error } = await supabase.from('money_transfers').insert({
             client_id,
+            transfer_mode,
             amount_sent,
             exchange_rate,
             amount_received,
+            commission_percentage,
             commission,
             total_amount,
             on_account,
@@ -114,7 +206,12 @@ export async function createTransfer(formData: FormData) {
             beneficiary_account,
             transfer_code,
             status,
-            documents: documents as unknown
+            payment_details: payment_details as unknown,
+            expense_details: expense_details as unknown,
+            documents: documents as unknown,
+            total_expenses,
+            net_profit,
+            agent_id: (await (await createClient()).auth.getUser()).data.user?.id
         })
 
         if (error) throw error
@@ -137,20 +234,19 @@ export async function updateTransfer(formData: FormData) {
     const id = formData.get('id') as string
 
     try {
-        const { data: existingTransfer } = await supabase.from('money_transfers').select('documents, client_id').eq('id', id).single()
+        const { data: existingTransfer } = await supabase.from('money_transfers').select('*').eq('id', id).single()
         if (!existingTransfer) throw new Error('Transfer not found')
 
         const client_id = existingTransfer.client_id
+        const transfer_mode = (formData.get('transfer_mode') as string) || 'eur_to_pen'
         
         // Financial Details
         const amount_sent = parseFloat(formData.get('amount_sent') as string) || 0
         const exchange_rate = parseFloat(formData.get('exchange_rate') as string) || 0
-        const amount_received = parseFloat(formData.get('amount_received') as string) || (amount_sent * exchange_rate)
+        const amount_received = parseFloat(formData.get('amount_received') as string) || 0
+        const commission_percentage = parseFloat(formData.get('commission_percentage') as string) || 0
         const commission = parseFloat(formData.get('commission') as string) || 0
         const total_amount = parseFloat(formData.get('total_amount') as string) || (amount_sent + commission)
-        const on_account = parseFloat(formData.get('on_account') as string) || 0
-        const balance = parseFloat(formData.get('balance') as string) || (total_amount - on_account)
-        
         const beneficiary_name = formData.get('beneficiary_name') as string
         const beneficiary_document = formData.get('beneficiary_document') as string
         const beneficiary_phone = formData.get('beneficiary_phone') as string
@@ -159,6 +255,63 @@ export async function updateTransfer(formData: FormData) {
         
         const transfer_code = formData.get('transfer_code') as string
         const status = formData.get('status') as string
+        const agent_id = formData.get('agent_id') as string || null
+
+        // Handle Payment Details
+        const payment_details: PaymentDetail[] = (existingTransfer.payment_details as unknown as PaymentDetail[]) || []
+        const multiPaymentsStr = formData.get('payment_details') as string
+        if (multiPaymentsStr) {
+            try {
+                const newMultiPayments = JSON.parse(multiPaymentsStr) as PaymentDetail[]
+                for (let i = 0; i < newMultiPayments.length; i++) {
+                    const tempFile = formData.get(`payment_proof_${i}`) as File
+                    if (tempFile && tempFile.size > 0) {
+                        const uploadResult = await uploadClientFile(tempFile, client_id)
+                        newMultiPayments[i].proof_path = uploadResult.path
+                    }
+                }
+                // Replace or merge payment details. For simplicity, replacing for now.
+                // A more robust solution might merge based on an ID or update existing.
+                payment_details.splice(0, payment_details.length, ...newMultiPayments);
+            } catch (e) {
+                console.error('Error parsing payment_details:', e)
+            }
+        }
+
+        // Handle Expense Details
+        const expense_details: ExpenseDetail[] = (existingTransfer.expense_details as unknown as ExpenseDetail[]) || []
+        const expensesStr = formData.get('expense_details') as string
+        if (expensesStr) {
+            try {
+                const newExpenses = JSON.parse(expensesStr) as ExpenseDetail[]
+                for (let i = 0; i < newExpenses.length; i++) {
+                    const tempFile = formData.get(`expense_proof_${i}`) as File
+                    if (tempFile && tempFile.size > 0) {
+                        const uploadResult = await uploadClientFile(tempFile, client_id)
+                        newExpenses[i].proof_path = uploadResult.path
+                    }
+                }
+                // Replace or merge expense details.
+                expense_details.splice(0, expense_details.length, ...newExpenses);
+            } catch (e) {
+                console.error('Error parsing expense_details:', e)
+            }
+        }
+
+        const on_account = payment_details.reduce((sum, p) => sum + (parseFloat(p.cantidad) || 0), 0)
+        
+        // Accounting conversion: Balance and Profit are ALWAYS in EUR
+        let totalAmountEur = total_amount
+        let commissionEur = commission
+        if (transfer_mode === 'pen_to_eur') {
+            const rate = exchange_rate || 1.0
+            totalAmountEur = total_amount / rate
+            commissionEur = commission / rate
+        }
+
+        const balance = totalAmountEur - on_account
+        const total_expenses = expense_details.reduce((sum, e) => sum + (e.amount || 0), 0)
+        const net_profit = commissionEur - total_expenses
 
         // Build new documents array (Start with existing ones)
         const currentDocuments: TransferDocument[] = (existingTransfer.documents as unknown as TransferDocument[]) || []
@@ -184,9 +337,11 @@ export async function updateTransfer(formData: FormData) {
         }
 
         const { error } = await supabase.from('money_transfers').update({
+            transfer_mode,
             amount_sent,
             exchange_rate,
             amount_received,
+            commission_percentage,
             commission,
             total_amount,
             on_account,
@@ -198,7 +353,12 @@ export async function updateTransfer(formData: FormData) {
             beneficiary_account,
             transfer_code,
             status,
-            documents: currentDocuments as unknown
+            payment_details: payment_details as unknown,
+            expense_details: expense_details as unknown,
+            documents: currentDocuments as unknown,
+            total_expenses,
+            net_profit,
+            agent_id: agent_id || (await (await createClient()).auth.getUser()).data.user?.id
         }).eq('id', id)
 
         if (error) throw error
@@ -354,6 +514,7 @@ export async function getTransferByCode(code: string) {
         .from('money_transfers')
         .select(`
             created_at,
+            transfer_mode,
             amount_sent,
             amount_received,
             beneficiary_name,
@@ -378,6 +539,7 @@ export async function getTransferByCode(code: string) {
         success: true,
         data: {
             created_at: data.created_at,
+            transfer_mode: data.transfer_mode,
             amount_sent: data.amount_sent,
             amount_received: data.amount_received,
             beneficiary_name: maskName(data.beneficiary_name),

@@ -10,6 +10,9 @@ export async function getParcels() {
         .from('parcels')
         .select(`
             *,
+            origin_address,
+            destination_address,
+            payment_details,
             profiles:sender_id (
                 first_name,
                 last_name,
@@ -32,9 +35,10 @@ export async function createParcel(formData: FormData) {
     // 1. Core Data
     const sender_id = formData.get('sender_id') as string
     const recipient_name = formData.get('recipient_name') as string
-    const recipient_document = formData.get('recipient_document') as string
     const recipient_phone = formData.get('recipient_phone') as string
     const recipient_address = formData.get('recipient_address') as string
+    const origin_address = formData.get('origin_address') as string
+    const destination_address = formData.get('destination_address') as string
     
     // 2. Package Details (Simplified)
     const package_type = formData.get('package_type') as string
@@ -46,6 +50,19 @@ export async function createParcel(formData: FormData) {
     const on_account = parseFloat(formData.get('on_account') as string) || 0
     // Balance is auto-generated but we calculate client-side too
     
+    // 3. Multi-Payments & Proofs
+    const paymentDetailsRaw = formData.get('payment_details') as string
+    const payment_details = paymentDetailsRaw ? JSON.parse(paymentDetailsRaw) : []
+
+    for (let i = 0; i < payment_details.length; i++) {
+        const file = formData.get(`payment_proof_${i}`) as File
+        if (file && file.size > 0) {
+            const path = `parcels/payments/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+            await uploadFileToR2(file, path)
+            payment_details[i].proof_path = path
+        }
+    }
+
     const status = formData.get('status') as string || 'pending'
     
     // Generate Tracking Code (Simple)
@@ -84,9 +101,10 @@ export async function createParcel(formData: FormData) {
         .insert({
             sender_id,
             recipient_name,
-            recipient_document,
             recipient_phone,
             recipient_address,
+            origin_address,
+            destination_address,
             package_type,
             package_weight,
             package_description,
@@ -94,14 +112,15 @@ export async function createParcel(formData: FormData) {
             on_account,
             status,
             tracking_code,
-            documents
+            documents,
+            payment_details
         })
 
     if (error) {
         return { error: error.message }
     }
 
-    revalidatePath('/parcels')
+    revalidatePath('/chimi-encomiendas')
     return { success: true }
 }
 
@@ -112,7 +131,7 @@ export async function updateParcel(formData: FormData) {
     // Retrieve existing data to preserve old docs
     const { data: existing } = await supabase
         .from('parcels')
-        .select('documents')
+        .select('documents, payment_details')
         .eq('id', id)
         .single()
         
@@ -121,9 +140,10 @@ export async function updateParcel(formData: FormData) {
     // 1. Core Data
     // Sender ID is locked in UI but we might receive it anyway, usually we don't update it
     const recipient_name = formData.get('recipient_name') as string
-    const recipient_document = formData.get('recipient_document') as string
     const recipient_phone = formData.get('recipient_phone') as string
     const recipient_address = formData.get('recipient_address') as string
+    const origin_address = formData.get('origin_address') as string
+    const destination_address = formData.get('destination_address') as string
     
     const package_type = formData.get('package_type') as string
     const package_weight = formData.get('package_weight') as string
@@ -133,7 +153,20 @@ export async function updateParcel(formData: FormData) {
     const on_account = parseFloat(formData.get('on_account') as string) || 0
     const status = formData.get('status') as string
 
-    // 2. New Files Upload
+    // 2. Multi-Payments & Proofs
+    const paymentDetailsRaw = formData.get('payment_details') as string
+    const payment_details = paymentDetailsRaw ? JSON.parse(paymentDetailsRaw) : []
+
+    for (let i = 0; i < payment_details.length; i++) {
+        const file = formData.get(`payment_proof_${i}`) as File
+        if (file && file.size > 0) {
+            const path = `parcels/payments/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+            await uploadFileToR2(file, path)
+            payment_details[i].proof_path = path
+        }
+    }
+
+    // 3. New Files Upload
     let index = 0
     while (formData.has(`document_title_${index}`)) {
         const title = formData.get(`document_title_${index}`) as string
@@ -162,9 +195,10 @@ export async function updateParcel(formData: FormData) {
         .from('parcels')
         .update({
             recipient_name,
-            recipient_document,
             recipient_phone,
             recipient_address,
+            origin_address,
+            destination_address,
             package_type,
             package_weight,
             package_description,
@@ -172,6 +206,7 @@ export async function updateParcel(formData: FormData) {
             on_account,
             status,
             documents: currentDocs,
+            payment_details,
             updated_at: new Date().toISOString()
         })
         .eq('id', id)
@@ -180,7 +215,7 @@ export async function updateParcel(formData: FormData) {
         return { error: error.message }
     }
 
-    revalidatePath('/parcels')
+    revalidatePath('/chimi-encomiendas')
     return { success: true }
 }
 
@@ -198,7 +233,7 @@ export async function deleteParcel(id: string) {
         return { error: error.message }
     }
 
-    revalidatePath('/parcels')
+    revalidatePath('/chimi-encomiendas')
     return { success: true }
 }
 
@@ -224,7 +259,7 @@ export async function deleteParcelDocument(id: string, docPath: string) {
 
     if (error) return { error: error.message }
 
-    revalidatePath('/parcels')
+    revalidatePath('/chimi-encomiendas')
     return { success: true }
 }
 
@@ -236,7 +271,7 @@ export async function updateParcelStatus(id: string, status: string) {
         .eq('id', id)
 
     if (error) return { error: error.message }
-    revalidatePath('/parcels')
+    revalidatePath('/chimi-encomiendas')
     return { success: true }
 }
 

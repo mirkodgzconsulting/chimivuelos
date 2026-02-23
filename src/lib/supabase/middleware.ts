@@ -39,9 +39,18 @@ export async function updateSession(request: NextRequest) {
   // issues with users being randomly logged out.
 
 
+  // Get the user from Supabase.
+  // We handle errors gracefully to avoid server-side AuthApiErrors in logs
+  // when a session is simply invalid or expired.
   const {
     data: { user },
+    error
   } = await supabase.auth.getUser()
+
+  // If there's a refresh token error, we treat the user as logged out
+  // This prevents redundant AuthApiError logs in the console
+  const hasAuthError = error?.name === 'AuthApiError' && error.message.includes('Refresh Token')
+  const effectiveUser = hasAuthError ? null : user
 
   // Define route groups
   const adminPaths = [
@@ -61,10 +70,10 @@ export async function updateSession(request: NextRequest) {
   const isAuthPath = pathname === '/login' || pathname === '/'
 
   // User Role
-  const role = user?.user_metadata?.role || 'client'
+  const role = effectiveUser?.user_metadata?.role || 'client'
 
   // 1. SESSION CHECK: If no user and trying to access any protected path
-  if (!user && (isAdminPath || isClientPath)) {
+  if (!effectiveUser && (isAdminPath || isClientPath)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     const response = NextResponse.redirect(url)
@@ -73,7 +82,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // 2. ROLE CHECK: If user is logged in
-  if (user) {
+  if (effectiveUser) {
     // Prevent clients from entering Admin areas
     if (isAdminPath && role === 'client') {
       const url = request.nextUrl.clone()

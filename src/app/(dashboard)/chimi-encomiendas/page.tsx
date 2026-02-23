@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,7 +28,11 @@ import {
     ChevronRight,
     MapPin,
     Link as LinkIcon,
-    X
+    X,
+    Building2,
+    NotebookPen,
+    Wallet,
+    Check
 } from 'lucide-react'
 import { getParcels, createParcel, updateParcel, deleteParcel, updateParcelStatus, deleteParcelDocument, getParcelDocumentUrl } from '@/app/actions/manage-parcels'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
@@ -41,6 +46,21 @@ interface ParcelDocument {
     size: number
     type: string
     storage: 'r2' | 'images'
+}
+
+interface PaymentDetail {
+    sede_it: string
+    sede_pe: string
+    metodo_it: string
+    metodo_pe: string
+    cantidad: string       // EUR amount (affects accounting)
+    tipo_cambio: number    // Exchange rate used
+    total: string          // Formatted original amount (e.g. "S/ 400.00")
+    moneda?: string        // 'EUR', 'PEN', 'USD'
+    monto_original?: string
+    created_at?: string
+    updated_at?: string
+    proof_path?: string
 }
 
 interface Parcel {
@@ -60,6 +80,9 @@ interface Parcel {
     balance: number
     status: 'pending' | 'warehouse' | 'transit' | 'delivered' | 'cancelled'
     documents?: ParcelDocument[]
+    payment_details?: PaymentDetail[]
+    origin_address?: string
+    destination_address?: string
     profiles?: {
         first_name: string | null
         last_name: string | null
@@ -75,6 +98,33 @@ interface ClientProfile {
     email: string | null
     phone: string | null
 }
+
+const SEDE_IT_OPTIONS = ["turro milano", "corsico milano", "roma", "lima"]
+const PAYMENT_METHOD_IT_OPTIONS = [
+    "EFEC TURRO — MILANO",
+    "EFEC CORSICO — MILANO",
+    "EFEC ROMA",
+    "UNICREDIT CHIMI",
+    "BANK WISE",
+    "BONIFICO SUEMA",
+    "POS — UNICREDIT CHIMI",
+    "WESTERN UNION",
+    "RIA",
+    "OTRO GIRO"
+]
+const PAYMENT_METHOD_PE_OPTIONS = [
+    "EFEC LIMA SOL",
+    "EFEC LIMA EURO",
+    "EFEC LIMA DOLAR",
+    "BCP SOLES CHIMI",
+    "BCP DOLAR",
+    "BANCA EURO PERÚ",
+    "POS / LINK — BCP CHIMI",
+    "WESTERN UNION",
+    "RIA",
+    "OTRO GIRO"
+]
+const CURRENCY_OPTIONS = ["EUR", "PEN", "USD"]
 
 export default function ParcelsPage() {
     // Main Data State
@@ -118,7 +168,6 @@ export default function ParcelsPage() {
         
         // Recipient
         recipient_name: "",
-        recipient_document: "",
         recipient_phone: "",
         recipient_address: "",
         
@@ -134,8 +183,34 @@ export default function ParcelsPage() {
         
         // Meta
         tracking_code: "",
-        status: "pending"
+        status: "pending",
+
+        // Origins and Destinations
+        origin_address: "",
+        destination_address: "",
+
+        // Registration Fields for Sub-Payments
+        sede_it: "",
+        sede_pe: "",
+        payment_method_it: "",
+        payment_method_pe: "",
+        payment_quantity: "",
+        payment_exchange_rate: "1.0",
+        payment_currency: "EUR",
+        payment_total: ""
     })
+
+    const [tempPayments, setTempPayments] = useState<PaymentDetail[]>([])
+    const [tempPaymentProofs, setTempPaymentProofs] = useState<(File | null)[]>([])
+    const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null)
+    const [showPaymentFields, setShowPaymentFields] = useState(false)
+
+    // Dropdown helpers
+    const [showSedeITList, setShowSedeITList] = useState(false)
+    const [showMetodoITList, setShowMetodoITList] = useState(false)
+    const [showMetodoPEList, setShowMetodoPEList] = useState(false)
+    const [showOriginList, setShowOriginList] = useState(false)
+    const [showDestinationList, setShowDestinationList] = useState(false)
 
     // File Upload State
     const [numDocs, setNumDocs] = useState(0)
@@ -166,7 +241,7 @@ export default function ParcelsPage() {
         const { name, value } = e.target
         
         // Numeric restrictions (Decimals allowed for cost)
-        if (['shipping_cost', 'on_account'].includes(name)) {
+        if (['shipping_cost', 'on_account', 'payment_quantity', 'payment_exchange_rate'].includes(name)) {
              if (!/^\d*\.?\d*$/.test(value)) return
         }
 
@@ -176,9 +251,32 @@ export default function ParcelsPage() {
             // Auto-calculate balance if cost or on_account changes
             if (name === 'shipping_cost' || name === 'on_account') {
                 const cost = parseFloat(newData.shipping_cost) || 0
-                const onAccount = parseFloat(newData.on_account) || 0
-                const balance = (cost - onAccount).toFixed(2)
-                newData.balance = balance
+                const cur_on_account = parseFloat(newData.on_account) || 0
+                newData.balance = (cost - cur_on_account).toFixed(2)
+            }
+
+            // Recalculate temp payment conversion (Like Vuelos/Giros)
+            if (['payment_quantity', 'payment_exchange_rate', 'payment_currency'].includes(name)) {
+                const qty = parseFloat(newData.payment_quantity) || 0
+                const rate = parseFloat(newData.payment_exchange_rate) || 1.0
+                const curr = newData.payment_currency
+
+                let result = 0
+                if (curr === 'EUR') {
+                    result = qty
+                    newData.payment_exchange_rate = '1.0'
+                } else if (curr === 'PEN') {
+                    result = rate !== 0 ? qty / rate : 0
+                } else {
+                    result = qty * rate
+                }
+                newData.payment_total = result.toFixed(2)
+
+                // SYNC WITH ON_ACCOUNT: Sum existing payments + current draft
+                const existingTotal = tempPayments.reduce((acc, p) => acc + (parseFloat(p.cantidad) || 0), 0)
+                const totalWithDraft = existingTotal + result
+                newData.on_account = totalWithDraft.toFixed(2)
+                newData.balance = (parseFloat(newData.shipping_cost || "0") - totalWithDraft).toFixed(2)
             }
             
             return newData
@@ -215,23 +313,38 @@ export default function ParcelsPage() {
         setFormData({
             sender_id: "",
             recipient_name: "",
-            recipient_document: "",
             recipient_phone: "",
             recipient_address: "",
             package_type: "Caja",
             package_weight: "",
             package_description: "",
             shipping_cost: "",
-            on_account: "",
-            balance: "",
+            on_account: "0.00",
+            balance: "0.00",
             tracking_code: "",
-            status: "pending"
+            status: "pending",
+            sede_it: "",
+            sede_pe: "",
+            payment_method_it: "",
+            payment_method_pe: "",
+            payment_quantity: "",
+            payment_exchange_rate: "1.0",
+            payment_currency: "EUR",
+            payment_total: "",
+            origin_address: "",
+            destination_address: ""
         })
         setSelectedParcelId(null)
         setNumDocs(0)
         setDocumentInputs([])
         setExistingDocuments([])
         setSearchClientTerm('')
+        
+        // Reset Payments
+        setTempPayments([])
+        setTempPaymentProofs([])
+        setPaymentProofFile(null)
+        setShowPaymentFields(false)
     }
 
     const handleEdit = (parcel: Parcel) => {
@@ -239,7 +352,6 @@ export default function ParcelsPage() {
         setFormData({
             sender_id: parcel.sender_id,
             recipient_name: parcel.recipient_name,
-            recipient_document: parcel.recipient_document || "",
             recipient_phone: parcel.recipient_phone || "",
             recipient_address: parcel.recipient_address || "",
             package_type: parcel.package_type || "Caja",
@@ -249,7 +361,17 @@ export default function ParcelsPage() {
             on_account: parcel.on_account.toString(),
             balance: parcel.balance.toString(),
             tracking_code: parcel.tracking_code || "",
-            status: parcel.status
+            status: parcel.status,
+            sede_it: "",
+            sede_pe: "",
+            payment_method_it: "",
+            payment_method_pe: "",
+            payment_quantity: "",
+            payment_exchange_rate: "1.0",
+            payment_currency: "EUR",
+            payment_total: "",
+            origin_address: parcel.origin_address || "",
+            destination_address: parcel.destination_address || ""
         })
         
         const cl = clients.find(c => c.id === parcel.sender_id)
@@ -262,16 +384,134 @@ export default function ParcelsPage() {
         }
         setNumDocs(0)
         setDocumentInputs([])
+        
+        // Load Payments
+        let paymentsToShow: PaymentDetail[] = []
+        if (parcel.payment_details) {
+            if (Array.isArray(parcel.payment_details)) {
+                paymentsToShow = parcel.payment_details
+            } else if (typeof parcel.payment_details === 'string') {
+                try {
+                    paymentsToShow = JSON.parse(parcel.payment_details)
+                } catch (e) {
+                    console.error("Error parsing payment_details:", e)
+                    paymentsToShow = []
+                }
+            }
+        }
+        
+        setTempPayments(paymentsToShow)
+        setTempPaymentProofs(new Array(paymentsToShow.length).fill(null))
+        
         setIsDialogOpen(true)
+    }
+
+    const handlePaymentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setPaymentProofFile(e.target.files[0])
+        }
+    }
+
+    const handleAddPayment = () => {
+        if (!formData.payment_quantity || parseFloat(formData.payment_quantity) === 0) return
+
+        const pCurrency = formData.payment_currency || 'EUR'
+        const symbol = pCurrency === 'EUR' ? '€' : pCurrency === 'PEN' ? 'S/' : '$'
+        
+        const eurAmount = formData.payment_total || formData.payment_quantity
+        
+        const newPayment: PaymentDetail = {
+            sede_it: formData.sede_it,
+            sede_pe: formData.sede_pe,
+            metodo_it: formData.payment_method_it,
+            metodo_pe: formData.payment_method_pe,
+            cantidad: eurAmount,
+            tipo_cambio: parseFloat(formData.payment_exchange_rate) || 1.0,
+            total: `${symbol} ${parseFloat(formData.payment_quantity).toFixed(2)}`,
+            moneda: pCurrency,
+            monto_original: formData.payment_quantity,
+            created_at: new Date().toISOString()
+        }
+
+        setTempPayments([...tempPayments, newPayment])
+        setTempPaymentProofs([...tempPaymentProofs, paymentProofFile])
+        
+        const newOnAccount = [...tempPayments, newPayment].reduce((acc, curr) => acc + parseFloat(curr.cantidad), 0)
+        
+        setFormData(prev => ({
+            ...prev,
+            payment_quantity: "",
+            payment_total: "",
+            payment_exchange_rate: "1.0",
+            payment_currency: "EUR",
+            sede_it: "",
+            sede_pe: "",
+            payment_method_it: "",
+            payment_method_pe: "",
+            on_account: newOnAccount.toFixed(2),
+            balance: (parseFloat(prev.shipping_cost || "0") - newOnAccount).toFixed(2)
+        }))
+        
+        setPaymentProofFile(null)
+        setShowPaymentFields(false)
+    }
+
+    const handleRemovePayment = (index: number) => {
+        const updated = tempPayments.filter((_, i) => i !== index)
+        const updatedProofs = tempPaymentProofs.filter((_, i) => i !== index)
+        setTempPayments(updated)
+        setTempPaymentProofs(updatedProofs)
+
+        const newOnAccount = updated.reduce((acc, curr) => acc + parseFloat(curr.cantidad), 0)
+        setFormData(prev => ({
+            ...prev,
+            on_account: newOnAccount.toFixed(2),
+            balance: (parseFloat(prev.shipping_cost || "0") - newOnAccount).toFixed(2)
+        }))
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsLoading(true)
 
+        // Capture any "unsaved" payment in the fields
+        const finalPayments = [...tempPayments]
+        const finalProofs = [...tempPaymentProofs]
+        
+        if (formData.payment_quantity && parseFloat(formData.payment_quantity) > 0) {
+            const pCurrency = formData.payment_currency || 'EUR'
+            const symbol = pCurrency === 'EUR' ? '€' : pCurrency === 'PEN' ? 'S/' : '$'
+            const eurAmount = formData.payment_total || formData.payment_quantity
+            
+            const lastPayment: PaymentDetail = {
+                sede_it: formData.sede_it,
+                sede_pe: formData.sede_pe,
+                metodo_it: formData.payment_method_it,
+                metodo_pe: formData.payment_method_pe,
+                cantidad: eurAmount,
+                tipo_cambio: parseFloat(formData.payment_exchange_rate) || 1.0,
+                total: `${symbol} ${parseFloat(formData.payment_quantity).toFixed(2)}`,
+                moneda: pCurrency,
+                monto_original: formData.payment_quantity,
+                created_at: new Date().toISOString()
+            }
+            finalPayments.push(lastPayment)
+            finalProofs.push(paymentProofFile)
+        }
+
+        // IMPORTANT: The total 'on_account' MUST be the sum of ALL final payments
+        const currentOnAccount = finalPayments.reduce((acc, p) => acc + (parseFloat(p.cantidad) || 0), 0)
+
         const payload = new FormData()
         Object.entries(formData).forEach(([key, value]) => {
-            payload.append(key, value)
+            // Update on_account and balance in payload based on our verified calculation
+            if (key === 'on_account') {
+                payload.append(key, currentOnAccount.toFixed(2))
+            } else if (key === 'balance') {
+                payload.append(key, (parseFloat(formData.shipping_cost || "0") - currentOnAccount).toFixed(2))
+            } else {
+                payload.append(key, value)
+            }
         })
 
         if (selectedParcelId) {
@@ -282,6 +522,14 @@ export default function ParcelsPage() {
             if (doc.file) {
                 payload.append(`document_title_${index}`, doc.title)
                 payload.append(`document_file_${index}`, doc.file)
+            }
+        })
+
+        // Add Payments list to payload
+        payload.append('payment_details', JSON.stringify(finalPayments))
+        finalProofs.forEach((file, index) => {
+            if (file) {
+                payload.append(`payment_proof_${index}`, file)
             }
         })
 
@@ -426,9 +674,9 @@ export default function ParcelsPage() {
                                                     setSearchClientTerm('')
                                                     setFormData(prev => ({ ...prev, sender_id: '' }))
                                                 }}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
                                             >
-                                                <X size={14} />
+                                                <X size={14} strokeWidth={3} />
                                             </button>
                                         )}
                                     </div>
@@ -514,7 +762,12 @@ export default function ParcelsPage() {
                                             </div>
                                              <div className="grid gap-2">
                                                 <Label>A Cuenta (€)</Label>
-                                                <Input name="on_account" type="number" step="0.01" value={formData.on_account} onChange={handleInputChange} />
+                                                <Input 
+                                                    name="on_account" 
+                                                    value={formData.on_account} 
+                                                    readOnly 
+                                                    className="bg-slate-100 font-bold text-slate-700"
+                                                />
                                             </div>
                                         </div>
                                         <div className="grid gap-2 mt-2">
@@ -537,44 +790,421 @@ export default function ParcelsPage() {
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2">
-                                         <div className="grid gap-2">
-                                            <Label>DNI / Pasaporte</Label>
-                                            <Input name="recipient_document" value={formData.recipient_document} onChange={handleInputChange} />
+                                        <div className="grid gap-2 relative">
+                                            <Label className="text-xs font-bold text-slate-700">Dirección de Partida</Label>
+                                            <div className="relative">
+                                                <Input 
+                                                    name="origin_address"
+                                                    value={formData.origin_address}
+                                                    onChange={(e) => {
+                                                        const { value } = e.target
+                                                        setFormData(prev => ({ ...prev, origin_address: value }))
+                                                        setShowOriginList(true)
+                                                    }}
+                                                    onFocus={() => setShowOriginList(true)}
+                                                    onBlur={() => setTimeout(() => setShowOriginList(false), 200)}
+                                                    placeholder="Buscar origen..."
+                                                    autoComplete="off"
+                                                    className="h-10 text-sm bg-white"
+                                                />
+                                                {formData.origin_address && (
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setFormData(p => ({ ...p, origin_address: '' }))}
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                    >
+                                                        <X size={14} strokeWidth={3} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {showOriginList && (
+                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                    {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.origin_address.toLowerCase())).map((opt, idx) => (
+                                                        <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                            setFormData(p => ({ ...p, origin_address: opt }))
+                                                            setShowOriginList(false)
+                                                        }}>{opt}</div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="grid gap-2">
-                                            <Label>Teléfono</Label>
-                                            <Input name="recipient_phone" value={formData.recipient_phone} onChange={handleInputChange} />
+                                        <div className="grid gap-2 relative">
+                                            <Label className="text-xs font-bold text-slate-700">Dirección de Llegada</Label>
+                                            <div className="relative">
+                                                <Input 
+                                                    name="destination_address"
+                                                    value={formData.destination_address}
+                                                    onChange={(e) => {
+                                                        const { value } = e.target
+                                                        setFormData(prev => ({ ...prev, destination_address: value }))
+                                                        setShowDestinationList(true)
+                                                    }}
+                                                    onFocus={() => setShowDestinationList(true)}
+                                                    onBlur={() => setTimeout(() => setShowDestinationList(false), 200)}
+                                                    placeholder="Buscar destino..."
+                                                    autoComplete="off"
+                                                    className="h-10 text-sm bg-white"
+                                                />
+                                                {formData.destination_address && (
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setFormData(p => ({ ...p, destination_address: '' }))}
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                    >
+                                                        <X size={14} strokeWidth={3} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {showDestinationList && (
+                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                    {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.destination_address.toLowerCase())).map((opt, idx) => (
+                                                        <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                            setFormData(p => ({ ...p, destination_address: opt }))
+                                                            setShowDestinationList(false)
+                                                        }}>{opt}</div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label>Dirección de Recojo</Label>
+                                        <Label>Teléfono</Label>
+                                        <Input name="recipient_phone" value={formData.recipient_phone} onChange={handleInputChange} />
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label>Notas de Envio</Label>
                                         <textarea 
                                             name="recipient_address"
                                             value={formData.recipient_address}
                                             onChange={handleInputChange}
                                             className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                                            placeholder="Dirección exacta, referencia..."
-                                            required
+                                            placeholder="Dirección exacta, referencia, notas..."
                                         />
                                     </div>
                                     
-                                    <div className="grid gap-2 mt-4">
-                                        <Label>Estado del Envío</Label>
-                                        <select 
-                                            name="status"
-                                            value={formData.status}
-                                            onChange={handleInputChange}
-                                            className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                                        >
-                                            <option value="pending">Pendiente (Recibido)</option>
-                                            <option value="warehouse">En Almacén</option>
-                                            <option value="transit">En Tránsito</option>
-                                            <option value="delivered">Entregado</option>
-                                            <option value="cancelled">Cancelado</option>
-                                        </select>
+                                </div>
+                            </div>
+
+                            {/* REGISTRO DE PAGO (Exactly like Vuelos) */}
+                            <div className="space-y-4 pt-4 border-t border-slate-200">
+                                {tempPayments.length > 0 && (
+                                    <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 px-1 pb-2">
+                                        <div className="flex items-center gap-2 opacity-60">
+                                            <div className="h-px flex-1 bg-slate-200"></div>
+                                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Abonos añadidos (sin guardar)</Label>
+                                            <div className="h-px flex-1 bg-slate-200"></div>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            {tempPayments.map((payment, idx) => (
+                                                <div key={idx} className="group relative bg-emerald-50/30 border border-emerald-100 rounded-xl p-3 shadow-sm hover:shadow-md transition-all border-l-4 border-l-emerald-400">
+                                                    <div className="flex justify-between items-center transition-all">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="grid gap-0.5">
+                                                                <span className="font-bold text-slate-700 flex items-center gap-2 text-xs">
+                                                                    {payment.metodo_it || payment.metodo_pe || 'Otros'}
+                                                                </span>
+                                                                <span className="text-[9px] text-slate-400 flex items-center gap-1 font-medium italic">
+                                                                    <Building2 size={10} className="h-2.5 w-2.5" /> {payment.sede_it || payment.sede_pe || 'S/D'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="text-right">
+                                                                <span className="font-bold text-emerald-600 text-sm leading-none block">€ {parseFloat(payment.cantidad || '0').toFixed(2)}</span>
+                                                                <span className="text-[9px] text-slate-400 uppercase tracking-tighter">
+                                                                    {payment.moneda && payment.moneda !== 'EUR' 
+                                                                        ? `${payment.total}`
+                                                                        : `€ ${parseFloat(payment.cantidad || '0').toFixed(2)}`
+                                                                    }
+                                                                </span>
+                                                            </div>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => handleRemovePayment(idx)}
+                                                                className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                                                                title="Remover"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="border rounded-xl p-4 bg-slate-50/50 space-y-4 border-dashed border-slate-300 relative">
+                                    <div className="flex justify-between items-center">
+                                        <Label className="font-bold text-slate-700 flex items-center gap-2 text-xs uppercase tracking-wide">
+                                            {showPaymentFields ? (
+                                                <><NotebookPen size={14} className="text-chimipink" /> Nuevo Abono</>
+                                            ) : (
+                                                <><Wallet size={14} className="text-chimipink" /> Registrar Nuevo Pago</>
+                                            )}
+                                        </Label>
+                                        <div className="flex items-center gap-2">
+                                            {showPaymentFields ? (
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setShowPaymentFields(false)}
+                                                        className="text-red-400 hover:text-red-600 transition-colors p-1"
+                                                        title="Cerrar"
+                                                    >
+                                                        <X size={20} />
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={handleAddPayment}
+                                                        className="text-emerald-400 hover:text-emerald-600 transition-colors p-1"
+                                                        title="Añadir Pago"
+                                                    >
+                                                        <Check size={20} className="h-5 w-5" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                 <Button 
+                                                    type="button" 
+                                                    variant="outline" 
+                                                    size="sm"
+                                                     onClick={() => {
+                                                         setFormData(prev => ({
+                                                             ...prev,
+                                                             payment_currency: "EUR",
+                                                             payment_exchange_rate: "1.00",
+                                                             payment_quantity: "",
+                                                             payment_total: "",
+                                                             sede_it: prev.sede_it || "turro milano"
+                                                         }))
+                                                         setShowPaymentFields(true)
+                                                     }}
+                                                     className="bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 h-7 text-[10px] uppercase font-bold"
+                                                 >
+                                                     + Agregar Pago
+                                                 </Button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {showPaymentFields && (
+                                        <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-2 border-t pt-4 border-slate-200">
+                                            <div className="grid gap-2 relative">
+                                                <Label className="text-xs flex items-center gap-1.5 font-bold text-slate-700">
+                                                    <Building2 size={12} className="text-slate-400" /> Sedes
+                                                </Label>
+                                                <div className="relative">
+                                                    <Input 
+                                                        name="sede_it" 
+                                                        value={formData.sede_it} 
+                                                        onChange={(e) => {
+                                                            const { value } = e.target
+                                                            setFormData(prev => ({ ...prev, sede_it: value }))
+                                                            setShowSedeITList(true)
+                                                        }}
+                                                        onFocus={() => setShowSedeITList(true)}
+                                                        onBlur={() => setTimeout(() => setShowSedeITList(false), 200)}
+                                                        placeholder="Buscar sede..."
+                                                        autoComplete="off"
+                                                        className="bg-slate-50 border-slate-200 focus:ring-slate-500 pr-8 h-10 text-sm"
+                                                    />
+                                                    {formData.sede_it && (
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setFormData(p => ({ ...p, sede_it: '' }))}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                        >
+                                                            <X size={14} strokeWidth={3} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                {showSedeITList && (
+                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                        {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.sede_it.toLowerCase())).map((opt, idx) => (
+                                                            <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                setFormData(p => ({ ...p, sede_it: opt }))
+                                                                setShowSedeITList(false)
+                                                            }}>{opt}</div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div className="grid gap-2 relative">
+                                                    <Label className="text-xs flex items-center gap-1.5 font-bold text-blue-700">
+                                                        <Image src="https://flagcdn.com/w20/it.png" width={16} height={12} alt="italia" className="rounded-sm inline-block shadow-sm" />
+                                                        Método Pago IT
+                                                    </Label>
+                                                    <div className="relative">
+                                                        <Input 
+                                                            name="payment_method_it" 
+                                                            value={formData.payment_method_it} 
+                                                            onChange={(e) => {
+                                                                const { value } = e.target
+                                                                setFormData(prev => ({ ...prev, payment_method_it: value }))
+                                                                setShowMetodoITList(true)
+                                                            }}
+                                                            onFocus={() => setShowMetodoITList(true)}
+                                                            onBlur={() => setTimeout(() => setShowMetodoITList(false), 200)}
+                                                            placeholder="Buscar método..."
+                                                            autoComplete="off"
+                                                            className="bg-blue-50/50 border-blue-200 focus:ring-blue-500 pr-8 h-10 text-sm"
+                                                        />
+                                                        {formData.payment_method_it && (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setFormData(p => ({ ...p, payment_method_it: '' }))}
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                            >
+                                                                <X size={14} strokeWidth={3} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {showMetodoITList && (
+                                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                            {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase())).map((opt, idx) => (
+                                                                <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                    setFormData(p => ({ ...p, payment_method_it: opt }))
+                                                                    setShowMetodoITList(false)
+                                                                }}>{opt}</div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="grid gap-2 relative">
+                                                    <Label className="text-xs flex items-center gap-1.5 font-bold text-rose-700">
+                                                        <Image src="https://flagcdn.com/w20/pe.png" width={16} height={12} alt="peru" className="rounded-sm inline-block shadow-sm" />
+                                                        Método Pago PE
+                                                    </Label>
+                                                    <div className="relative">
+                                                        <Input 
+                                                            name="payment_method_pe" 
+                                                            value={formData.payment_method_pe} 
+                                                            onChange={(e) => {
+                                                                const { value } = e.target
+                                                                setFormData(prev => ({ ...prev, payment_method_pe: value }))
+                                                                setShowMetodoPEList(true)
+                                                            }}
+                                                            onFocus={() => setShowMetodoPEList(true)}
+                                                            onBlur={() => setTimeout(() => setShowMetodoPEList(false), 200)}
+                                                            placeholder="Buscar método..."
+                                                            autoComplete="off"
+                                                            className="bg-rose-50/50 border-rose-200 focus:ring-rose-500 pr-8 h-10 text-sm"
+                                                        />
+                                                        {formData.payment_method_pe && (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setFormData(p => ({ ...p, payment_method_pe: '' }))}
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                            >
+                                                                <X size={14} strokeWidth={3} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {showMetodoPEList && (
+                                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                            {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase())).map((opt, idx) => (
+                                                                <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                                    setFormData(p => ({ ...p, payment_method_pe: opt }))
+                                                                    setShowMetodoPEList(false)
+                                                                }}>{opt}</div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div className="grid gap-1.5">
+                                                    <Label className="text-xs font-bold text-slate-700">Moneda de Pago</Label>
+                                                    <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-lg">
+                                                        {CURRENCY_OPTIONS.map(curr => (
+                                                            <button
+                                                                key={curr}
+                                                                type="button"
+                                                                className={`h-7 rounded-md text-[10px] font-black transition-all ${formData.payment_currency === curr ? 'bg-chimipink text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                                                onClick={() => setFormData(p => ({ ...p, payment_currency: curr }))}
+                                                            >
+                                                                {curr === 'EUR' ? '€ EUR' : curr === 'PEN' ? 'S/ PEN' : '$ USD'}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div className="grid gap-1.5">
+                                                    <Label className="text-xs font-bold text-slate-700">Cantidad</Label>
+                                                    <Input 
+                                                        type="number" 
+                                                        name="payment_quantity" 
+                                                        value={formData.payment_quantity} 
+                                                        onChange={handleInputChange} 
+                                                        className="h-10 text-lg font-bold bg-yellow-50/50 border-yellow-200 text-slate-700" 
+                                                        placeholder="0.00" 
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div className="grid gap-1.5">
+                                                    <Label className="text-xs font-bold text-slate-700">Tipo de Cambio (Base EUR)</Label>
+                                                    <Input 
+                                                        name="payment_exchange_rate" 
+                                                        type="number" 
+                                                        step="0.0001" 
+                                                        value={formData.payment_exchange_rate} 
+                                                        onChange={handleInputChange} 
+                                                        disabled={formData.payment_currency === 'EUR'} 
+                                                        className="h-10 text-sm bg-white font-medium border-slate-200" 
+                                                        placeholder="1.0000"
+                                                    />
+                                                </div>
+                                                <div className="grid gap-1.5">
+                                                    <Label className="text-xs font-bold text-emerald-700">Equivalente a Abonar (EUR €)</Label>
+                                                    <div className="h-10 px-3 flex items-center bg-emerald-50 rounded-md border border-emerald-100 font-black text-emerald-600 text-lg">
+                                                        {formData.payment_total || '0.00'}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid gap-2 mt-2">
+                                                <Label className="text-xs font-bold text-slate-700">Foto de Comprobante (Opcional)</Label>
+                                                <Input 
+                                                    type="file" 
+                                                    accept="image/*" 
+                                                    className="cursor-pointer file:bg-chimiteal/10 file:text-chimiteal file:border-0 file:rounded file:px-2 file:py-1 file:mr-2 file:text-xs file:font-semibold h-10 border-slate-200" 
+                                                    onChange={handlePaymentFileChange}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Footer Info like Vuelos */}
+                                    <div className="flex flex-col items-center pt-2 border-t border-slate-100 italic">
+                                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">Vista Previa de Saldo</span>
+                                        {(() => {
+                                            const displayBalance = parseFloat(formData.balance) || 0
+                                            return <span className={`text-sm font-bold ${displayBalance > 0 ? 'text-chimipink' : 'text-chimiteal'}`}>€ {displayBalance.toFixed(2)}</span>
+                                        })()}
                                     </div>
                                 </div>
+                            </div>
+
+                            <div className="grid gap-2 mt-4 pt-4 border-t border-slate-200 px-1">
+                                <Label className="font-bold text-slate-700">Estado del Envío</Label>
+                                <select 
+                                    name="status"
+                                    value={formData.status}
+                                    onChange={handleInputChange}
+                                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-chimiteal outline-none"
+                                >
+                                    <option value="pending">Pendiente (Recibido)</option>
+                                    <option value="warehouse">En Almacén</option>
+                                    <option value="transit">En Tránsito</option>
+                                    <option value="delivered">Entregado</option>
+                                    <option value="cancelled">Cancelado</option>
+                                </select>
                             </div>
 
                             {/* Documents Section */}
@@ -666,21 +1296,28 @@ export default function ParcelsPage() {
                             <Label className="text-slate-500 text-xs uppercase">Nombre Completo</Label>
                             <div className="font-medium text-slate-900">{viewingRecipient?.recipient_name}</div>
                         </div>
-                        <div className="grid gap-1">
-                            <Label className="text-slate-500 text-xs uppercase">Dirección de Recojo</Label>
-                            <div className="font-medium text-slate-900 bg-slate-50 p-2 rounded border border-slate-100">
-                                {viewingRecipient?.recipient_address}
-                            </div>
-                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-1">
-                                <Label className="text-slate-500 text-xs uppercase">Documento</Label>
-                                <div className="font-medium text-slate-900">{viewingRecipient?.recipient_document || '-'}</div>
+                                <Label className="text-slate-500 text-xs uppercase">Partida</Label>
+                                <div className="font-medium text-slate-900 capitalize italic">{viewingRecipient?.origin_address || '-'}</div>
                             </div>
-                             <div className="grid gap-1">
-                                <Label className="text-slate-500 text-xs uppercase">Teléfono</Label>
-                                <div className="font-medium text-slate-900">{viewingRecipient?.recipient_phone || '-'}</div>
+                            <div className="grid gap-1">
+                                <Label className="text-slate-500 text-xs uppercase">Llegada</Label>
+                                <div className="font-medium text-slate-900 capitalize italic">{viewingRecipient?.destination_address || '-'}</div>
                             </div>
+                        </div>
+
+                        <div className="grid gap-1">
+                            <Label className="text-slate-500 text-xs uppercase">Notas de Envio</Label>
+                            <div className="font-medium text-slate-900 bg-slate-50 p-2 rounded border border-slate-100">
+                                {viewingRecipient?.recipient_address || '-'}
+                            </div>
+                        </div>
+
+                        <div className="grid gap-1">
+                            <Label className="text-slate-500 text-xs uppercase">Teléfono</Label>
+                            <div className="font-medium text-slate-900">{viewingRecipient?.recipient_phone || '-'}</div>
                         </div>
                     </div>
                 </DialogContent>
