@@ -89,6 +89,7 @@ interface Parcel {
     payment_details?: PaymentDetail[]
     origin_address?: string
     destination_address?: string
+    destination_address_client?: string
     profiles?: {
         first_name: string | null
         last_name: string | null
@@ -225,6 +226,7 @@ export default function ParcelsPage() {
         // Origins and Destinations
         origin_address: "",
         destination_address: "",
+        destination_address_client: "",
 
         // Registration Fields for Sub-Payments
         sede_it: "",
@@ -382,7 +384,8 @@ export default function ParcelsPage() {
             payment_currency: "EUR",
             payment_total: "",
             origin_address: "",
-            destination_address: ""
+            destination_address: "",
+            destination_address_client: ""
         })
         setSelectedParcelId(null)
         setNumDocs(0)
@@ -421,7 +424,8 @@ export default function ParcelsPage() {
             payment_currency: "EUR",
             payment_total: "",
             origin_address: parcel.origin_address || "",
-            destination_address: parcel.destination_address || ""
+            destination_address: parcel.destination_address || "",
+            destination_address_client: parcel.destination_address_client || ""
         })
         
         const cl = clients.find(c => c.id === parcel.sender_id)
@@ -718,7 +722,7 @@ export default function ParcelsPage() {
                         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
                             {/* Client (Sender) Selection */}
                              <div className="grid gap-2 relative">
-                                <Label>Remitente (Cliente) <span className="text-red-500">*</span></Label>
+                                <Label className="flex items-center gap-2 font-bold text-slate-700 text-sm mb-1"><User className="h-4 w-4 text-chimipink" /> Remitente (Cliente) <span className="text-red-500">*</span></Label>
                                     <div className="relative">
                                         <Input 
                                             placeholder="Buscar cliente..." 
@@ -780,8 +784,8 @@ export default function ParcelsPage() {
                                 
                                 {/* Package Details (Left) */}
                                 <div className="space-y-4 border p-4 rounded-md bg-slate-50">
-                                    <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                                        <Package className="h-4 w-4" />
+                                    <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                                        <Package className="h-4 w-4 text-chimicyan" />
                                         Detalles del Paquete
                                     </h3>
                                     
@@ -825,7 +829,7 @@ export default function ParcelsPage() {
                                     </div>
 
                                     <div className="border-t border-slate-200 pt-3 mt-2">
-                                        <h4 className="font-semibold text-slate-700 text-xs mb-2 uppercase">Costos</h4>
+                                        <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-3"><Wallet className="h-4 w-4 text-emerald-500" /> Costos</h4>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             <div className="grid gap-2">
                                                 <Label>Total a Pagar (€)</Label>
@@ -848,20 +852,44 @@ export default function ParcelsPage() {
                                     </div>
                                 </div>
 
-                                {/* Recipient (Right) */}
-                                <div className="space-y-4 border p-4 rounded-md bg-white">
-                                    <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                                        <MapPin className="h-4 w-4" />
-                                        Datos del Destinatario
-                                    </h3>
-                                    
-                                    <div className="grid gap-2">
-                                        <Label>Nombre Completo</Label>
-                                        <Input name="recipient_name" value={formData.recipient_name} onChange={handleInputChange} required />
+                                {/* Right Column */}
+                                <div className="flex flex-col gap-4">
+                                    <div className="space-y-4 border p-4 rounded-md bg-white">
+                                        <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                                            <User className="h-4 w-4 text-violet-500" />
+                                            Datos del Destinatario
+                                        </h3>
+                                        
+                                        <div className="grid gap-2">
+                                            <Label>Nombre Completo</Label>
+                                            <Input name="recipient_name" value={formData.recipient_name} onChange={handleInputChange} required />
+                                        </div>
+
+                                        <div className="grid gap-2">
+                                            <Label>Teléfono</Label>
+                                            <Input name="recipient_phone" value={formData.recipient_phone} onChange={handleInputChange} />
+                                        </div>
+
+                                        <div className="grid gap-2">
+                                            <Label>Notas de Envio</Label>
+                                            <textarea 
+                                                name="recipient_address"
+                                                value={formData.recipient_address}
+                                                onChange={handleInputChange}
+                                                className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                                                placeholder="Dirección exacta, referencia, notas..."
+                                            />
+                                        </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="grid gap-2 relative">
+                                    <div className="space-y-4 border p-4 rounded-md bg-white flex-1">
+                                        <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
+                                            <MapPin className="h-4 w-4 text-chimiteal" />
+                                            Logística de Entrega
+                                        </h3>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="grid gap-2 relative">
                                             <Label className="text-xs font-bold text-slate-700">Dirección de Partida</Label>
                                             <div className="relative">
                                                 <Input 
@@ -932,33 +960,31 @@ export default function ParcelsPage() {
                                             </div>
                                             {showDestinationList && (
                                                 <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                    {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.destination_address.toLowerCase())).map((opt, idx) => (
+                                                    {[...SEDE_IT_OPTIONS, "Dirección de cliente"].filter(opt => opt.toLowerCase().includes(formData.destination_address.toLowerCase())).map((opt, idx) => (
                                                         <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
                                                             setFormData(p => ({ ...p, destination_address: opt }))
                                                             setShowDestinationList(false)
-                                                        }}>{opt}</div>
+                                                        }}>
+                                                            {opt === "Dirección de cliente" ? "✓ Dirección de cliente" : opt}
+                                                        </div>
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
                                     </div>
-
-                                    <div className="grid gap-2">
-                                        <Label>Teléfono</Label>
-                                        <Input name="recipient_phone" value={formData.recipient_phone} onChange={handleInputChange} />
+                                    {formData.destination_address === 'Dirección de cliente' && (
+                                        <div className="grid gap-2 animate-in fade-in slide-in-from-top-2 col-span-1 sm:col-span-2">
+                                                <Label className="text-xs font-bold text-chimipink uppercase tracking-tight italic">Ingrese la dirección exacta del cliente</Label>
+                                                <textarea 
+                                                    name="destination_address_client"
+                                                    value={formData.destination_address_client}
+                                                    onChange={handleInputChange}
+                                                    className="min-h-[60px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:ring-chimipink focus:border-chimipink outline-none shadow-sm"
+                                                    placeholder="Calle, número, piso, referencia..."
+                                                />
+                                            </div>
+                                        )}
                                     </div>
-
-                                    <div className="grid gap-2">
-                                        <Label>Notas de Envio</Label>
-                                        <textarea 
-                                            name="recipient_address"
-                                            value={formData.recipient_address}
-                                            onChange={handleInputChange}
-                                            className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                                            placeholder="Dirección exacta, referencia, notas..."
-                                        />
-                                    </div>
-                                    
                                 </div>
                             </div>
 

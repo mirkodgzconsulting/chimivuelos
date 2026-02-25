@@ -15,6 +15,7 @@ export async function getParcels() {
             *,
             origin_address,
             destination_address,
+            destination_address_client,
             payment_details,
             profiles:sender_id (
                 first_name,
@@ -58,6 +59,7 @@ export async function createParcel(formData: FormData) {
     const recipient_address = formData.get('recipient_address') as string
     const origin_address = formData.get('origin_address') as string
     const destination_address = formData.get('destination_address') as string
+    const destination_address_client = formData.get('destination_address_client') as string
     
     // 2. Package Details (Simplified)
     const package_type = formData.get('package_type') as string
@@ -122,6 +124,7 @@ export async function createParcel(formData: FormData) {
         recipient_address,
         origin_address,
         destination_address,
+        destination_address_client,
         package_type,
         package_weight,
         package_description,
@@ -212,6 +215,7 @@ export async function updateParcel(formData: FormData) {
     const recipient_address = formData.get('recipient_address') as string
     const origin_address = formData.get('origin_address') as string
     const destination_address = formData.get('destination_address') as string
+    const destination_address_client = formData.get('destination_address_client') as string
     
     const package_type = formData.get('package_type') as string
     const package_weight = formData.get('package_weight') as string
@@ -265,6 +269,7 @@ export async function updateParcel(formData: FormData) {
         recipient_address,
         origin_address,
         destination_address,
+        destination_address_client,
         package_type,
         package_weight,
         package_description,

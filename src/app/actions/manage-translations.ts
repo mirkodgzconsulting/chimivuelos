@@ -58,6 +58,9 @@ export async function createTranslation(formData: FormData) {
     const document_types_other = formData.get('document_types_other') as string
     const work_types = JSON.parse(formData.get('work_types') as string || '[]')
     const work_types_other = formData.get('work_types_other') as string
+    const source_language = formData.get('source_language') as string
+    const target_language = formData.get('target_language') as string
+    const notes = formData.get('notes') as string
     
     const quantity = parseInt(formData.get('quantity') as string) || 1
     
@@ -121,6 +124,9 @@ export async function createTranslation(formData: FormData) {
         documents,
         work_types,
         work_types_other,
+        source_language,
+        target_language,
+        notes,
         origin_address,
         destination_address,
         destination_address_client,
@@ -201,6 +207,9 @@ export async function updateTranslation(formData: FormData) {
         const document_types_other = formData.get('document_types_other') as string
         const work_types = JSON.parse(formData.get('work_types') as string || '[]')
         const work_types_other = formData.get('work_types_other') as string
+        const source_language = formData.get('source_language') as string
+        const target_language = formData.get('target_language') as string
+        const notes = formData.get('notes') as string
         const quantity = parseInt(formData.get('quantity') as string) || 1
         
         const origin_address = formData.get('origin_address') as string
@@ -254,6 +263,9 @@ export async function updateTranslation(formData: FormData) {
             document_types_other,
             work_types,
             work_types_other,
+            source_language,
+            target_language,
+            notes,
             quantity,
             documents: newDocuments,
             origin_address,

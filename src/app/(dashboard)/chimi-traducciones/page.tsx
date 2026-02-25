@@ -87,6 +87,8 @@ interface Translation {
     documents?: TranslationDocument[]
     work_types: string[]
     work_types_other?: string
+    source_language?: string
+    target_language?: string
     origin_address: string
     destination_address: string
     destination_address_client?: string
@@ -94,6 +96,7 @@ interface Translation {
     total_amount: number
     on_account: number
     balance: number
+    notes?: string
     status: 'pending' | 'in_progress' | 'completed' | 'delivered' | 'cancelled'
     payment_details?: PaymentDetail[]
     profiles?: {
@@ -116,7 +119,8 @@ interface ClientProfile {
     phone: string | null
 }
 
-const DOCUMENT_TYPE_OPTIONS = ["Pasaporte", "DNI", "Título", "Otros"]
+const LANGUAGE_OPTIONS = ["Español", "Italiano", "Inglés", "Francés", "Portugués"]
+const DOCUMENT_TYPE_OPTIONS = ["Certificados de estudios", "Acta de matrimonio", "Certificados médicos", "Brevete", "Partida de nacimiento", "Otros documentos"]
 const WORK_TYPE_OPTIONS = ["Traducir", "Legalizar", "Apostillar", "Entrega física", "Entrega digital", "Envío digital", "Consigna", "Otros"]
 const SEDE_IT_OPTIONS = ["turro milano", "corsico milano", "roma", "lima"]
 
@@ -205,6 +209,8 @@ export default function TranslationsPage() {
         quantity: "1",
         work_types: [] as string[],
         work_types_other: "",
+        source_language: "",
+        target_language: "",
         origin_address: "",
         destination_address: "",
         destination_address_client: "",
@@ -213,6 +219,7 @@ export default function TranslationsPage() {
         on_account: "0.00",
         balance: "0.00",
         tracking_code: "",
+        notes: "",
         status: "pending",
         sede_it: "",
         sede_pe: "",
@@ -375,6 +382,8 @@ export default function TranslationsPage() {
             quantity: "1",
             work_types: [],
             work_types_other: "",
+            source_language: "",
+            target_language: "",
             origin_address: "",
             destination_address: "",
             destination_address_client: "",
@@ -383,6 +392,7 @@ export default function TranslationsPage() {
             on_account: "0.00",
             balance: "0.00",
             tracking_code: "",
+            notes: "",
             status: "pending",
             sede_it: "",
             sede_pe: "",
@@ -416,6 +426,8 @@ export default function TranslationsPage() {
             quantity: trans.quantity.toString(),
             work_types: trans.work_types || [],
             work_types_other: trans.work_types_other || "",
+            source_language: trans.source_language || "",
+            target_language: trans.target_language || "",
             origin_address: trans.origin_address || "",
             destination_address: trans.destination_address || "",
             destination_address_client: trans.destination_address_client || "",
@@ -424,6 +436,7 @@ export default function TranslationsPage() {
             on_account: trans.on_account.toString(),
             balance: trans.balance.toString(),
             tracking_code: trans.tracking_code || "",
+            notes: trans.notes || "",
             status: trans.status,
             sede_it: "",
             sede_pe: "",
@@ -698,7 +711,7 @@ export default function TranslationsPage() {
                                 {/* Document Details (Left) */}
                                 <div className="space-y-4 border p-4 rounded-md bg-slate-50 flex flex-col h-full">
                                     <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
-                                        <FileText className="h-4 w-4 text-chimipink" />
+                                        <FileText className="h-4 w-4 text-chimicyan" />
                                         Detalles de la Traducción
                                     </h3>
 
@@ -718,7 +731,7 @@ export default function TranslationsPage() {
                                                     </label>
                                                 ))}
                                             </div>
-                                            {formData.document_types.includes('Otros') && (
+                                            {formData.document_types.includes('Otros documentos') && (
                                                 <Input 
                                                     placeholder="Especifique otro..." 
                                                     value={formData.document_types_other}
@@ -769,8 +782,8 @@ export default function TranslationsPage() {
 
                                     {/* Costos section strictly as requested */}
                                     <div className="border-t border-slate-200 pt-3 mt-2">
-                                        <h4 className="font-semibold text-slate-700 text-xs mb-2 uppercase flex items-center gap-2">
-                                            <Wallet className="h-3 w-3 text-chimipink" /> Costos
+                                        <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-3">
+                                            <Wallet className="h-4 w-4 text-emerald-500" /> Costos
                                         </h4>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             <div className="grid gap-2">
@@ -897,6 +910,50 @@ export default function TranslationsPage() {
                                                 />
                                             </div>
                                         )}
+
+                                        <div className="space-y-3 pt-4 border-t border-slate-100">
+                                            <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><Languages className="h-4 w-4 text-chimipink" /> Idioma</Label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="grid gap-2">
+                                                    <Label className="text-[10px] text-slate-400 font-semibold uppercase">Idioma Origen</Label>
+                                                    <Input 
+                                                        list="language-options"
+                                                        name="source_language"
+                                                        value={formData.source_language}
+                                                        onChange={handleInputChange}
+                                                        className="h-10 text-sm bg-slate-50 border-slate-200"
+                                                        placeholder="Ej. Español"
+                                                        autoComplete="off"
+                                                    />
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label className="text-[10px] text-slate-400 font-semibold uppercase">Idioma a Traducir</Label>
+                                                    <Input 
+                                                        list="language-options"
+                                                        name="target_language"
+                                                        value={formData.target_language}
+                                                        onChange={handleInputChange}
+                                                        className="h-10 text-sm bg-slate-50 border-slate-200"
+                                                        placeholder="Ej. Italiano"
+                                                        autoComplete="off"
+                                                    />
+                                                </div>
+                                                <datalist id="language-options">
+                                                    {LANGUAGE_OPTIONS.map(opt => <option key={opt} value={opt} />)}
+                                                </datalist>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3 pt-4 border-t border-slate-100">
+                                            <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><NotebookPen className="h-4 w-4 text-chimiteal" /> Notas Adicionales</Label>
+                                            <textarea 
+                                                name="notes"
+                                                value={formData.notes}
+                                                onChange={handleInputChange}
+                                                className="min-h-[80px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:ring-chimiteal focus:border-chimiteal outline-none shadow-sm"
+                                                placeholder="Cualquier aclaración requerida..."
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
