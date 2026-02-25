@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 // Simple highly-reusable button based on Chimivuelos Branding
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'icon';
   asChild?: boolean;
 }
 
@@ -25,9 +25,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     }
     
     const sizes = {
-      sm: "h-9 rounded-md px-3",
+      sm: "h-9 rounded-md px-3 text-xs",
       md: "h-10 px-4 py-2",
       lg: "h-11 rounded-md px-8",
+      icon: "h-10 w-10",
     }
 
     const Comp = asChild ? Slot : "button"

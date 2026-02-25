@@ -15,9 +15,10 @@ interface EditRequestModalProps {
     resourceType: string
     resourceId: string
     resourceName?: string
+    onSuccess?: () => void
 }
 
-export function EditRequestModal({ isOpen, onClose, resourceType, resourceId, resourceName }: EditRequestModalProps) {
+export function EditRequestModal({ isOpen, onClose, resourceType, resourceId, resourceName, onSuccess }: EditRequestModalProps) {
     const [reason, setReason] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -36,6 +37,7 @@ export function EditRequestModal({ isOpen, onClose, resourceType, resourceId, re
                 })
                 setReason("")
                 onClose()
+                if (onSuccess) onSuccess()
             } else {
                 toast.error("Error al enviar", {
                     description: result.error

@@ -1,0 +1,38 @@
+{
+    "files.watcherExclude": {
+        "**/.next/**": true,
+        "**/node_modules/**": true,
+        "**/supabase/**": true,
+        "**/dist/**": true,
+        "**/build/**": true,
+        "**/*.sql": true,
+        "**/*.txt": true,
+        "**/tsconfig.tsbuildinfo": true,
+        "**/.git/**": true
+    },
+    "files.exclude": {
+        "**/.next": true,
+        "**/tsconfig.tsbuildinfo": true,
+        "**/.git": true,
+        "**/node_modules": false
+    },
+    "typescript.referencesCodeLens.enabled": false,
+    "typescript.implementationsCodeLens.enabled": false,
+    "typescript.tsserver.maxMemory": 4096,
+    "typescript.tsserver.useSeparateSyntaxServer": true,
+    "typescript.tsserver.experimental.enableProjectDiagnostics": false,
+    "typescript.suggest.enabled": true,
+    "eslint.run": "onSave",
+    "eslint.onIgnoredFiles": "off",
+    "editor.codeLens": false,
+    "git.autorefresh": false,
+    "git.enabled": true,
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+    "typescript.updateImportsOnFileMove.enabled": "never",
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/bower_components": true,
+        "**/*.code-search": true,
+        "**/.next": true
+    }
+}

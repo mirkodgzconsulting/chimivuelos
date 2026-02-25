@@ -32,7 +32,8 @@ import {
     Building2,
     NotebookPen,
     Wallet,
-    Check
+    Check,
+    ArrowRight
 } from 'lucide-react'
 import { getParcels, createParcel, updateParcel, deleteParcel, updateParcelStatus, deleteParcelDocument, getParcelDocumentUrl } from '@/app/actions/manage-parcels'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
@@ -288,6 +289,15 @@ export default function ParcelsPage() {
             balance: (cost - totalOnAccount).toFixed(2)
         }
     }, [tempPayments, showPaymentFields, formData.payment_quantity, formData.payment_total, formData.shipping_cost])
+
+    // Sync financial summary to formData for submission
+    useEffect(() => {
+        setFormData(prev => ({ 
+            ...prev, 
+            on_account: financials.on_account,
+            balance: financials.balance
+        }))
+    }, [financials.on_account, financials.balance])
 
     // Handlers
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -726,7 +736,7 @@ export default function ParcelsPage() {
                                             disabled={!!selectedParcelId}
                                             className={`${selectedParcelId ? "bg-slate-100 text-slate-500 cursor-not-allowed" : ""} pr-8`}
                                         />
-                                        {searchClientTerm && !selectedParcelId && (
+                                        {searchClientTerm && !selectedParcelId ? (
                                             <button 
                                                 type="button"
                                                 onClick={() => {
@@ -737,6 +747,8 @@ export default function ParcelsPage() {
                                             >
                                                 <X size={14} strokeWidth={3} />
                                             </button>
+                                        ) : (
+                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                         )}
                                     </div>
                                 {isClientDropdownOpen && (
@@ -823,7 +835,7 @@ export default function ParcelsPage() {
                                                 <Label>A Cuenta (€)</Label>
                                                 <Input 
                                                     name="on_account" 
-                                                    value={formData.on_account} 
+                                                    value={financials.on_account} 
                                                     readOnly 
                                                     className="bg-slate-100 font-bold text-slate-700"
                                                 />
@@ -831,7 +843,7 @@ export default function ParcelsPage() {
                                         </div>
                                         <div className="grid gap-2 mt-2">
                                             <Label>Saldo Pendiente (€)</Label>
-                                            <Input name="balance" value={formData.balance} readOnly className={`bg-slate-100 font-bold ${Number(formData.balance) > 0 ? 'text-red-600' : 'text-emerald-600'}`} />
+                                            <Input name="balance" value={financials.balance} readOnly className={`bg-slate-100 font-bold ${Number(financials.balance) > 0 ? 'text-red-600' : 'text-emerald-600'}`} />
                                         </div>
                                     </div>
                                 </div>
@@ -864,9 +876,9 @@ export default function ParcelsPage() {
                                                     onBlur={() => setTimeout(() => setShowOriginList(false), 200)}
                                                     placeholder="Buscar origen..."
                                                     autoComplete="off"
-                                                    className="h-10 text-sm bg-white"
+                                                    className="h-10 text-sm bg-white pr-8"
                                                 />
-                                                {formData.origin_address && (
+                                                {formData.origin_address ? (
                                                     <button 
                                                         type="button" 
                                                         onClick={() => setFormData(p => ({ ...p, origin_address: '' }))}
@@ -874,6 +886,8 @@ export default function ParcelsPage() {
                                                     >
                                                         <X size={14} strokeWidth={3} />
                                                     </button>
+                                                ) : (
+                                                    <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
                                                 )}
                                             </div>
                                             {showOriginList && (
@@ -902,9 +916,9 @@ export default function ParcelsPage() {
                                                     onBlur={() => setTimeout(() => setShowDestinationList(false), 200)}
                                                     placeholder="Buscar destino..."
                                                     autoComplete="off"
-                                                    className="h-10 text-sm bg-white"
+                                                    className="h-10 text-sm bg-white pr-8"
                                                 />
-                                                {formData.destination_address && (
+                                                {formData.destination_address ? (
                                                     <button 
                                                         type="button" 
                                                         onClick={() => setFormData(p => ({ ...p, destination_address: '' }))}
@@ -912,6 +926,8 @@ export default function ParcelsPage() {
                                                     >
                                                         <X size={14} strokeWidth={3} />
                                                     </button>
+                                                ) : (
+                                                    <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
                                                 )}
                                             </div>
                                             {showDestinationList && (
@@ -1069,7 +1085,7 @@ export default function ParcelsPage() {
                                                         autoComplete="off"
                                                         className="bg-slate-50 border-slate-200 focus:ring-slate-500 pr-8 h-10 text-sm"
                                                     />
-                                                    {formData.sede_it && (
+                                                    {formData.sede_it ? (
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setFormData(p => ({ ...p, sede_it: '' }))}
@@ -1077,6 +1093,8 @@ export default function ParcelsPage() {
                                                         >
                                                             <X size={14} strokeWidth={3} />
                                                         </button>
+                                                    ) : (
+                                                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                                     )}
                                                 </div>
                                                 {showSedeITList && (
@@ -1112,7 +1130,7 @@ export default function ParcelsPage() {
                                                             autoComplete="off"
                                                             className="bg-blue-50/50 border-blue-200 focus:ring-blue-500 pr-8 h-10 text-sm"
                                                         />
-                                                        {formData.payment_method_it && (
+                                                        {formData.payment_method_it ? (
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => setFormData(p => ({ ...p, payment_method_it: '' }))}
@@ -1120,6 +1138,8 @@ export default function ParcelsPage() {
                                                             >
                                                                 <X size={14} strokeWidth={3} />
                                                             </button>
+                                                        ) : (
+                                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                                         )}
                                                     </div>
                                                     {showMetodoITList && (
@@ -1153,7 +1173,7 @@ export default function ParcelsPage() {
                                                             autoComplete="off"
                                                             className="bg-rose-50/50 border-rose-200 focus:ring-rose-500 pr-8 h-10 text-sm"
                                                         />
-                                                        {formData.payment_method_pe && (
+                                                        {formData.payment_method_pe ? (
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => setFormData(p => ({ ...p, payment_method_pe: '' }))}
@@ -1161,6 +1181,8 @@ export default function ParcelsPage() {
                                                             >
                                                                 <X size={14} strokeWidth={3} />
                                                             </button>
+                                                        ) : (
+                                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                                         )}
                                                     </div>
                                                     {showMetodoPEList && (

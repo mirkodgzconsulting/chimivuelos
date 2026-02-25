@@ -65,7 +65,7 @@ const FIELD_LABELS: Record<string, string> = {
     amount_sent: 'Monto Enviado',
     amount_received: 'Monto Recibido',
     exchange_rate: 'Tipo de Cambio',
-    total_amount: 'Total (Modo Envío)',
+    total_amount: 'Monto Total',
     beneficiary_name: 'Nombre Beneficiario',
     beneficiary_document: 'Doc. Beneficiario',
     beneficiary_phone: 'Telf. Beneficiario',
@@ -99,7 +99,10 @@ const FIELD_LABELS: Record<string, string> = {
     net_profit: 'Utilidad Neta (Profit)',
     commission: 'Comisión AGV',
     commission_percentage: '% Comisión',
-    updated_at: 'Marca de Tiempo'
+    updated_at: 'Marca de Tiempo',
+    service_type: 'Tipo de Servicio',
+    service_type_other: 'Detalle Servicio',
+    note: 'Notas/Observaciones'
 };
 
 const DETAIL_MAP: Record<string, string> = {
@@ -160,6 +163,11 @@ const RESOURCE_FIELD_ORDER: Record<string, string[]> = {
         'tracking_code', 'sender_id', 'recipient_name', 'recipient_phone', 
         'origin_address', 'destination_address', 'package_type', 'package_weight',
         'package_description', 'shipping_cost', 'on_account', 'balance', 'status', 
+        'payment_details', 'documents'
+    ],
+    other_services: [
+        'tracking_code', 'client_id', 'service_type', 'service_type_other', 
+        'note', 'total_amount', 'on_account', 'balance', 'status', 
         'payment_details', 'documents'
     ]
 };
@@ -543,7 +551,8 @@ export default function AdminPermissionsPage() {
                                                     <span className="text-slate-700 font-bold uppercase text-[10px]">
                                                         {req.resource_type === 'flights' ? 'Vuelos' : 
                                                          req.resource_type === 'money_transfers' ? 'Giros' : 
-                                                         req.resource_type === 'parcels' ? 'Encomiendas' : req.resource_type}
+                                                         req.resource_type === 'parcels' ? 'Encomiendas' : 
+                                                         req.resource_type === 'other_services' ? 'Otros Servicios' : req.resource_type}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4">
@@ -624,7 +633,8 @@ export default function AdminPermissionsPage() {
                                                         <span className="text-[10px] text-slate-500 font-bold">
                                                             {log.resource_type === 'flights' ? 'Vuelos' : 
                                                              log.resource_type === 'money_transfers' ? 'Giros' : 
-                                                             log.resource_type === 'parcels' ? 'Encomiendas' : log.resource_type}
+                                                             log.resource_type === 'parcels' ? 'Encomiendas' : 
+                                                             log.resource_type === 'other_services' ? 'Otros Servicios' : log.resource_type}
                                                         </span>
                                                     </div>
                                                 </td>

@@ -792,9 +792,10 @@ export default function MoneyTransfersPage() {
                                             placeholder="Buscar cliente..." 
                                             value={searchClientTerm}
                                             onChange={(e) => {
-                                                setSearchClientTerm(e.target.value)
-                                                setIsClientDropdownOpen(true)
-                                                if (e.target.value === '') {
+                                                const val = e.target.value;
+                                                setSearchClientTerm(val); 
+                                                setIsClientDropdownOpen(true); 
+                                                if (!val) {
                                                     setFormData(prev => ({ ...prev, client_id: '' }))
                                                 }
                                             }}
@@ -805,7 +806,7 @@ export default function MoneyTransfersPage() {
                                             disabled={!!selectedTransferId} // Lock if editing
                                             className={`${selectedTransferId ? "bg-slate-100 text-slate-500 cursor-not-allowed" : ""} pr-8`}
                                         />
-                                        {searchClientTerm && !selectedTransferId && (
+                                        {searchClientTerm && !selectedTransferId ? (
                                             <button 
                                                 type="button"
                                                 onClick={() => {
@@ -816,6 +817,8 @@ export default function MoneyTransfersPage() {
                                             >
                                                 <X size={14} strokeWidth={3} />
                                             </button>
+                                        ) : (
+                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                         )}
                                     </div>
                                 {isClientDropdownOpen && (
@@ -996,8 +999,9 @@ export default function MoneyTransfersPage() {
                                                 onBlur={() => setTimeout(() => setShowBankList(false), 200)}
                                                 placeholder="Buscar banco..." 
                                                 autoComplete="off"
+                                                className="pr-8"
                                             />
-                                            {formData.beneficiary_bank && (
+                                            {formData.beneficiary_bank ? (
                                                 <button 
                                                     type="button" 
                                                     onClick={() => setFormData(p => ({ ...p, beneficiary_bank: '' }))}
@@ -1005,6 +1009,8 @@ export default function MoneyTransfersPage() {
                                                 >
                                                     <X size={14} strokeWidth={3} />
                                                 </button>
+                                            ) : (
+                                                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                             )}
                                         </div>
                                         {showBankList && (
@@ -1156,7 +1162,7 @@ export default function MoneyTransfersPage() {
                                                         autoComplete="off"
                                                         className="h-10 text-sm border-slate-200 focus:ring-chimipink pr-8"
                                                     />
-                                                    {formData.sede_it && (
+                                                    {formData.sede_it ? (
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setFormData(p => ({ ...p, sede_it: '' }))}
@@ -1164,6 +1170,8 @@ export default function MoneyTransfersPage() {
                                                         >
                                                             <X size={14} strokeWidth={3} />
                                                         </button>
+                                                    ) : (
+                                                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                                     )}
                                                 </div>
                                                 {showSedeITList && (
@@ -1198,7 +1206,7 @@ export default function MoneyTransfersPage() {
                                                             autoComplete="off"
                                                             className="bg-blue-50/50 border-blue-200 focus:ring-blue-500 pr-8 h-10 text-sm"
                                                         />
-                                                        {formData.payment_method_it && (
+                                                        {formData.payment_method_it ? (
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => setFormData(p => ({ ...p, payment_method_it: '' }))}
@@ -1206,6 +1214,8 @@ export default function MoneyTransfersPage() {
                                                             >
                                                                 <X size={14} strokeWidth={3} />
                                                             </button>
+                                                        ) : (
+                                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                                         )}
                                                     </div>
                                                     {showMetodoITList && (
@@ -1238,7 +1248,7 @@ export default function MoneyTransfersPage() {
                                                             autoComplete="off"
                                                             className="bg-rose-50/50 border-rose-200 focus:ring-rose-500 pr-8 h-10 text-sm"
                                                         />
-                                                        {formData.payment_method_pe && (
+                                                        {formData.payment_method_pe ? (
                                                             <button 
                                                                 type="button" 
                                                                 onClick={() => setFormData(p => ({ ...p, payment_method_pe: '' }))}
@@ -1246,6 +1256,8 @@ export default function MoneyTransfersPage() {
                                                             >
                                                                 <X size={14} strokeWidth={3} />
                                                             </button>
+                                                        ) : (
+                                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                                         )}
                                                     </div>
                                                     {showMetodoPEList && (
@@ -1454,7 +1466,7 @@ export default function MoneyTransfersPage() {
                                                         autoComplete="off"
                                                         className="h-10 text-sm border-slate-200 focus:ring-chimipink pr-8" 
                                                     />
-                                                    {formData.expense_sede_it && (
+                                                    {formData.expense_sede_it ? (
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setFormData(p => ({ ...p, expense_sede_it: '' }))}
@@ -1462,6 +1474,8 @@ export default function MoneyTransfersPage() {
                                                         >
                                                             <X size={14} strokeWidth={3} />
                                                         </button>
+                                                    ) : (
+                                                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                                     )}
                                                 </div>
                                                 {showExSedeITList && (
@@ -1800,19 +1814,19 @@ export default function MoneyTransfersPage() {
                      {/* Filters */}
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-1">
                          <div className="relative min-w-[200px] flex-1 group">
-                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                            <Input 
+                             <Input 
                                 placeholder="Buscar por código, beneficiario..." 
                                 className="pl-10 pr-10 border-slate-200 bg-white focus:ring-chimiteal"
                                 value={searchTerm}
                                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1) }}
                             />
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             {searchTerm && (
                                 <button 
                                     onClick={() => {setSearchTerm(''); setCurrentPage(1);}}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
                                 >
-                                    <X size={14} strokeWidth={3} />
+                                    <X size={16} />
                                 </button>
                             )}
                         </div>

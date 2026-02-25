@@ -1251,7 +1251,7 @@ export default function FlightsPage() {
                                         disabled={!!selectedFlightId} 
                                         className="pr-8"
                                     />
-                                    {clientSearch && !selectedFlightId && (
+                                    {clientSearch && !selectedFlightId ? (
                                         <button 
                                             type="button"
                                             onClick={() => {
@@ -1262,6 +1262,8 @@ export default function FlightsPage() {
                                         >
                                             <X size={14} strokeWidth={3} />
                                         </button>
+                                    ) : (
+                                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                     )}
                                 </div>
                                 {showClientList && filteredClients.length > 0 && !selectedFlightId && (
@@ -1356,7 +1358,7 @@ export default function FlightsPage() {
                                             autoComplete="off"
                                             className="border-slate-300 focus:ring-chimiteal pr-8"
                                         />
-                                        {formData.ticket_type && (
+                                        {formData.ticket_type ? (
                                             <button 
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, ticket_type: '' }))}
@@ -1364,6 +1366,8 @@ export default function FlightsPage() {
                                             >
                                                 <X size={14} strokeWidth={3} />
                                             </button>
+                                        ) : (
+                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                         )}
                                     </div>
                                     {showTicketTypeList && (
@@ -1403,7 +1407,7 @@ export default function FlightsPage() {
                                             autoComplete="off"
                                             className="border-slate-300 focus:ring-chimiteal pr-8"
                                         />
-                                        {formData.iata_gds && (
+                                        {formData.iata_gds ? (
                                             <button 
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, iata_gds: '' }))}
@@ -1411,6 +1415,8 @@ export default function FlightsPage() {
                                             >
                                                 <X size={14} strokeWidth={3} />
                                             </button>
+                                        ) : (
+                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                         )}
                                     </div>
                                     {showIATAOptions && (
@@ -1510,7 +1516,7 @@ export default function FlightsPage() {
                                             autoComplete="off"
                                             className="pr-8"
                                         />
-                                        {formData.itinerary && (
+                                        {formData.itinerary ? (
                                             <button 
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, itinerary: '' }))}
@@ -1518,6 +1524,8 @@ export default function FlightsPage() {
                                             >
                                                 <X size={14} strokeWidth={3} />
                                             </button>
+                                        ) : (
+                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                         )}
                                     </div>
                                     {showItineraryList && (
@@ -2550,8 +2558,7 @@ export default function FlightsPage() {
                     {/* Filters Group */}
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-1">
                         <div className="relative min-w-[200px] flex-1 group">
-                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                            <Input 
+                             <Input 
                                 placeholder="Buscar por PNR o nombre..." 
                                 className="pl-10 pr-10 border-slate-200 bg-white focus:ring-chimiteal"
                                 value={searchTerm}
@@ -2560,12 +2567,13 @@ export default function FlightsPage() {
                                     setCurrentPage(1) 
                                 }}
                             />
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             {searchTerm && (
                                 <button 
                                     onClick={() => {setSearchTerm(''); setCurrentPage(1);}}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
                                 >
-                                    <X size={14} strokeWidth={3} />
+                                    <X size={16} />
                                 </button>
                             )}
                         </div>
