@@ -13,7 +13,10 @@ import {
   Menu,
   X,
   MessageCircle,
-  ShieldCheck
+  ShieldCheck,
+  Languages,
+  Briefcase,
+  Calculator
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -105,7 +108,7 @@ export function MobileSidebar({ role }: MobileSidebarProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
+        <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {isClientView ? (
                 /* CLIENT MENU */
                 <>
@@ -121,11 +124,13 @@ export function MobileSidebar({ role }: MobileSidebarProps) {
                     <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Principal</div>
                     
                     <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} onClick={() => setIsOpen(false)} />
-                    {role === 'admin' && (
+                    {(role === 'admin' || role === 'agent') && (
                         <>
                             <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} onClick={() => setIsOpen(false)} />
                             <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} onClick={() => setIsOpen(false)} />
-                            <SidebarItem icon={ShieldCheck} label="Permisos" href="/admin/permissions" isActive={pathname.startsWith('/admin/permissions')} onClick={() => setIsOpen(false)} />
+                            {role === 'admin' && (
+                                <SidebarItem icon={ShieldCheck} label="Permisos" href="/admin/permissions" isActive={pathname.startsWith('/admin/permissions')} onClick={() => setIsOpen(false)} />
+                            )}
                         </>
                     )}
                     <SidebarItem icon={MessageCircle} label="Mensajes" href="/admin/chat" isActive={pathname.startsWith('/admin/chat')} onClick={() => setIsOpen(false)} />
@@ -136,6 +141,9 @@ export function MobileSidebar({ role }: MobileSidebarProps) {
                     <SidebarItem icon={Plane} label="Vuelos" href="/chimi-vuelos" isActive={pathname.startsWith('/chimi-vuelos')} onClick={() => setIsOpen(false)} />
                     <SidebarItem icon={Banknote} label="Giros" href="/chimi-giros" isActive={pathname.startsWith('/chimi-giros')} onClick={() => setIsOpen(false)} />
                     <SidebarItem icon={Package} label="Encomiendas" href="/chimi-encomiendas" isActive={pathname.startsWith('/chimi-encomiendas')} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={Languages} label="Traducciones" href="/chimi-traducciones" isActive={pathname.startsWith('/chimi-traducciones')} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={Briefcase} label="Otros Servicios" href="/chimi-otros-servicios" isActive={pathname.startsWith('/chimi-otros-servicios')} onClick={() => setIsOpen(false)} />
+                    <SidebarItem icon={Calculator} label="Contabilidad" href="/chimi-contabilidad" isActive={pathname.startsWith('/chimi-contabilidad')} onClick={() => setIsOpen(false)} />
 
                     <div className="my-4 border-t border-sidebar-border mx-2" />
                 </>

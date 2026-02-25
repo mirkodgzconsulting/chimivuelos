@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { uploadFileToR2, getFileUrl, type StorageType } from '@/lib/storage'
 import { revalidatePath } from 'next/cache'
 import { createClient } from "@/lib/supabase/server"
-import { checkEditPermission, consumeEditPermission } from "./manage-permissions"
+import { getActivePermissionDetails, consumeEditPermission } from "./manage-permissions"
 import { recordAuditLog } from "@/lib/audit"
 
 export async function getParcels() {
@@ -29,6 +29,22 @@ export async function getParcels() {
         console.error('Error fetching parcels:', error)
         return []
     }
+
+    if (data && data.length > 0) {
+        const agentIds = [...new Set(data.map(d => d.agent_id).filter(Boolean))] as string[];
+        if (agentIds.length > 0) {
+            const { data: agents } = await supabase.from('profiles').select('id, first_name, last_name').in('id', agentIds);
+            if (agents) {
+                const agentMap = Object.fromEntries(agents.map(a => [a.id, a]));
+                data.forEach(d => {
+                    if (d.agent_id && agentMap[d.agent_id]) {
+                        d.agent = agentMap[d.agent_id];
+                    }
+                })
+            }
+        }
+    }
+
     return data
 }
 
@@ -99,28 +115,46 @@ export async function createParcel(formData: FormData) {
         index++
     }
 
+    const insertData = {
+        sender_id,
+        recipient_name,
+        recipient_phone,
+        recipient_address,
+        origin_address,
+        destination_address,
+        package_type,
+        package_weight,
+        package_description,
+        shipping_cost,
+        on_account,
+        status,
+        tracking_code,
+        documents,
+        payment_details
+    }
+
     const { error } = await supabase
         .from('parcels')
-        .insert({
-            sender_id,
-            recipient_name,
-            recipient_phone,
-            recipient_address,
-            origin_address,
-            destination_address,
-            package_type,
-            package_weight,
-            package_description,
-            shipping_cost,
-            on_account,
-            status,
-            tracking_code,
-            documents,
-            payment_details
-        })
+        .insert(insertData)
 
     if (error) {
         return { error: error.message }
+    }
+
+    // Record Audit Log (Need to get user first, usually parcels has it)
+    const { data: { user } } = await createClient().then(c => c.auth.getUser())
+    if (user) {
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'create',
+            resourceType: 'parcels',
+            resourceId: tracking_code || 'new',
+            newValues: insertData as unknown as Record<string, unknown>,
+            metadata: { 
+                method: 'createParcel',
+                displayId: tracking_code || 'Encomienda Nueva'
+            }
+        })
     }
 
     revalidatePath('/chimi-encomiendas')
@@ -139,12 +173,23 @@ export async function updateParcel(formData: FormData) {
         const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
         const userRole = profile?.role || 'client'
 
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Edición Directa';
+
         if (userRole === 'agent' || userRole === 'usuario') {
-            const hasPermission = await checkEditPermission('parcels', id)
-            if (!hasPermission) {
+            const permission = await getActivePermissionDetails('parcels', id)
+            if (!permission.hasPermission) {
                 throw new Error('No tienes permiso para editar esta encomienda. Debes solicitar autorización.')
             }
-        } else if (userRole !== 'admin') {
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+            // Consumir permiso inmediatamente en la acción principal de guardado
+            await consumeEditPermission('parcels', id)
+        } else if (userRole === 'admin') {
+            const permission = await getActivePermissionDetails('parcels', id)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        } else {
             throw new Error('Acceso denegado')
         }
 
@@ -214,24 +259,26 @@ export async function updateParcel(formData: FormData) {
         index++
     }
 
+    const updateData = {
+        recipient_name,
+        recipient_phone,
+        recipient_address,
+        origin_address,
+        destination_address,
+        package_type,
+        package_weight,
+        package_description,
+        shipping_cost,
+        on_account,
+        status,
+        documents: currentDocs,
+        payment_details,
+        updated_at: new Date().toISOString()
+    }
+
     const { error } = await supabase
         .from('parcels')
-        .update({
-            recipient_name,
-            recipient_phone,
-            recipient_address,
-            origin_address,
-            destination_address,
-            package_type,
-            package_weight,
-            package_description,
-            shipping_cost,
-            on_account,
-            status,
-            documents: currentDocs,
-            payment_details,
-            updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', id)
 
     if (error) {
@@ -244,32 +291,17 @@ export async function updateParcel(formData: FormData) {
         resourceType: 'parcels',
         resourceId: id,
         oldValues: oldValues,
-        newValues: { 
-            recipient_name,
-            recipient_phone,
-            recipient_address,
-            origin_address,
-            destination_address,
-            package_type,
-            package_weight,
-            package_description,
-            shipping_cost,
-            on_account,
-            status,
-            payment_details
-        },
+        newValues: updateData,
         metadata: { 
             method: 'updateParcel',
-            displayId: existing?.tracking_number || undefined
+            displayId: existing?.tracking_code || undefined,
+            requestId: activeRequestId,
+            reason: activeReason
         }
     })
 
-    // Consume permission if agent
-    if (userRole === 'agent') {
-        await consumeEditPermission('parcels', id)
-    }
-
     revalidatePath('/chimi-encomiendas')
+
     return { success: true }
     } catch (error: unknown) {
         console.error('Error updating parcel:', error)
@@ -290,6 +322,9 @@ export async function deleteParcel(id: string) {
             throw new Error('Solo los administradores pueden eliminar encomiendas.')
         }
 
+        const { data: parcel } = await adminSupabase.from('parcels').select('*').eq('id', id).single()
+        if (!parcel) throw new Error('Encomienda no encontrada')
+
         const { error } = await adminSupabase
             .from('parcels')
             .delete()
@@ -303,7 +338,11 @@ export async function deleteParcel(id: string) {
             action: 'delete',
             resourceType: 'parcels',
             resourceId: id,
-            metadata: { method: 'deleteParcel' }
+            oldValues: parcel,
+            metadata: { 
+                method: 'deleteParcel',
+                displayId: parcel?.tracking_code || undefined
+            }
         })
 
         revalidatePath('/chimi-encomiendas')
@@ -347,6 +386,26 @@ export async function updateParcelStatus(id: string, status: string) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Unauthorized')
 
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Actualización de Estado Rápida';
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const permission = await getActivePermissionDetails('parcels', id)
+            if (permission.hasPermission) {
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+            } else {
+                throw new Error('No tienes permiso para editar esta encomienda.')
+            }
+        } else if (userRole === 'admin') {
+            const permission = await getActivePermissionDetails('parcels', id)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        }
+
         // Fetch parcel info for audit log
         const { data: parcelRecord } = await adminSupabase.from('parcels').select('*').eq('id', id).single()
 
@@ -367,7 +426,9 @@ export async function updateParcelStatus(id: string, status: string) {
             newValues: { status },
             metadata: { 
                 method: 'updateParcelStatus',
-                displayId: parcelRecord?.tracking_number || undefined
+                displayId: parcelRecord?.tracking_code || undefined,
+                requestId: activeRequestId,
+                reason: activeReason
             }
         })
 

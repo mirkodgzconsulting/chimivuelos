@@ -6,7 +6,7 @@ import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
 import { EditRequestModal } from '@/components/permissions/EditRequestModal'
-import { checkEditPermission, getActivePermissions } from '@/app/actions/manage-permissions'
+import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
 import { cn } from '@/lib/utils'
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -655,7 +655,8 @@ export default function FlightsPage() {
         }
 
         if (userRole === 'agent') {
-            const isUnlocked = unlockedResources.has(flight.id) || await checkEditPermission('flights', flight.id)
+            const permission = await getActivePermissionDetails('flights', flight.id)
+            const isUnlocked = unlockedResources.has(flight.id) || permission.hasPermission
             if (isUnlocked) {
                 setUnlockedResources(prev => new Set(prev).add(flight.id))
                 handleEdit(flight)

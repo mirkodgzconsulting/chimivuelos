@@ -128,35 +128,42 @@ export async function consumeEditPermission(resourceType: string, resourceId: st
 }
 
 /**
- * Checks if an agent has an active approved permission for a resource
+ * Checks if an agent has an active approved permission for a resource, and returns details to tie to audit logs.
  */
-export async function checkEditPermission(resourceType: string, resourceId: string) {
+export async function getActivePermissionDetails(resourceType: string, resourceId: string) {
     const supabase = await createClient()
     try {
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return false
+        if (!user) return { hasPermission: false }
 
         const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
-        
-        // Admins always have permission
-        if (profile?.role === 'admin') return true
-        if (profile?.role !== 'agent' && profile?.role !== 'usuario') return false
+        const isAdmin = profile?.role === 'admin'
 
-        // Check for approved and non-expired request
-        const { data: request } = await supabaseAdmin
+        // Check for ANY approved and non-expired request (even for admins, to track their explicit requests)
+        const { data: req } = await supabaseAdmin
             .from('edit_requests')
-            .select('*')
+            .select('id, reason')
             .eq('agent_id', user.id)
             .eq('resource_type', resourceType)
             .eq('resource_id', resourceId)
             .eq('status', 'approved')
             .gt('expires_at', new Date().toISOString())
-            .maybeSingle()
+            .order('approved_at', { ascending: false })
+            .limit(1)
+            .single()
 
-        return !!request
+        if (req) {
+            return { hasPermission: true, requestId: req.id, reason: req.reason }
+        }
+
+        if (isAdmin) {
+            return { hasPermission: true, requestId: 'admin_direct', reason: 'Edición Directa' }
+        }
+
+        return { hasPermission: false }
     } catch (error) {
-        console.error('Error checking edit permission:', error)
-        return false
+        console.error('Error fetching permission details:', error)
+        return { hasPermission: false }
     }
 }
 

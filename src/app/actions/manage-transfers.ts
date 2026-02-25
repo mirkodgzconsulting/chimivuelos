@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { uploadClientFile, deleteFileFromR2, deleteImageFromCloudflare, getFileUrl } from "@/lib/storage"
-import { checkEditPermission, consumeEditPermission } from "./manage-permissions"
+import { getActivePermissionDetails, consumeEditPermission } from "./manage-permissions"
 import { recordAuditLog } from "@/lib/audit"
 
 /**
@@ -84,6 +84,10 @@ export interface MoneyTransfer {
         email: string
         phone: string
     }
+    agent?: {
+        first_name: string
+        last_name: string
+    }
 }
 
 
@@ -106,6 +110,10 @@ export async function createTransfer(formData: FormData) {
         
         // Payment Control
         const total_amount = parseFloat(formData.get('total_amount') as string) || (amount_sent + commission)
+
+        const { data: { user } } = await (await createClient()).auth.getUser()
+        if (!user) throw new Error('Unauthorized')
+
         // Beneficiary Details
         const beneficiary_name = formData.get('beneficiary_name') as string
         const beneficiary_document = formData.get('beneficiary_document') as string
@@ -190,7 +198,7 @@ export async function createTransfer(formData: FormData) {
             index++
         }
 
-        const { error } = await supabase.from('money_transfers').insert({
+        const insertData = {
             client_id,
             transfer_mode,
             amount_sent,
@@ -213,7 +221,24 @@ export async function createTransfer(formData: FormData) {
             documents: documents as unknown,
             total_expenses,
             net_profit,
-            agent_id: (await (await createClient()).auth.getUser()).data.user?.id
+            agent_id: user.id
+        }
+
+        const { error } = await supabase.from('money_transfers').insert(insertData)
+
+        if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'create',
+            resourceType: 'money_transfers',
+            resourceId: transfer_code || 'new',
+            newValues: insertData as unknown as Record<string, unknown>,
+            metadata: { 
+                method: 'createTransfer',
+                displayId: transfer_code || beneficiary_name || 'Giro Nuevo'
+            }
         })
 
         if (error) throw error
@@ -243,12 +268,23 @@ export async function updateTransfer(formData: FormData) {
         const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
         const userRole = profile?.role || 'client'
 
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Edición Directa';
+
         if (userRole === 'agent' || userRole === 'usuario') {
-            const hasPermission = await checkEditPermission('money_transfers', id)
-            if (!hasPermission) {
+            const permission = await getActivePermissionDetails('money_transfers', id)
+            if (!permission.hasPermission) {
                 throw new Error('No tienes permiso para editar este giro. Debes solicitar autorización.')
             }
-        } else if (userRole !== 'admin') {
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+            // Consumir permiso inmediatamente en la acción principal de guardado
+            await consumeEditPermission('money_transfers', id)
+        } else if (userRole === 'admin') {
+            const permission = await getActivePermissionDetails('money_transfers', id)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        } else {
             throw new Error('Acceso denegado')
         }
 
@@ -357,7 +393,7 @@ export async function updateTransfer(formData: FormData) {
             index++
         }
 
-        const { error } = await supabase.from('money_transfers').update({
+        const updateData = {
             transfer_mode,
             amount_sent,
             exchange_rate,
@@ -380,7 +416,9 @@ export async function updateTransfer(formData: FormData) {
             total_expenses,
             net_profit,
             agent_id: agent_id || (await (await createClient()).auth.getUser()).data.user?.id
-        }).eq('id', id)
+        }
+
+        const { error } = await supabase.from('money_transfers').update(updateData).eq('id', id)
 
         if (error) throw error
 
@@ -391,32 +429,19 @@ export async function updateTransfer(formData: FormData) {
             resourceType: 'money_transfers',
             resourceId: id,
             oldValues: oldValues,
-            newValues: { 
-                status, 
-                amount_sent, 
-                amount_received,
-                exchange_rate,
-                total_amount,
-                on_account,
-                balance,
-                beneficiary_name,
-                transfer_code,
-                payment_details,
-                expense_details
-            },
+            newValues: updateData,
             metadata: { 
                 method: 'updateTransfer',
-                displayId: transfer_code || beneficiary_name || undefined
+                displayId: transfer_code || beneficiary_name || undefined,
+                requestId: activeRequestId,
+                reason: activeReason
             }
         })
 
-        // Consume permission if agent
-        if (userRole === 'agent') {
-            await consumeEditPermission('money_transfers', id)
-        }
-
         revalidatePath('/chimi-transfers')
+
         return { success: true }
+
 
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error updating transfer'
@@ -434,6 +459,26 @@ export async function updateTransferStatus(id: string, status: string) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Unauthorized')
 
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Actualización de Estado Rápida';
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const permission = await getActivePermissionDetails('money_transfers', id)
+            if (permission.hasPermission) {
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+            } else {
+                throw new Error('No tienes permiso para editar este giro.')
+            }
+        } else if (userRole === 'admin') {
+            const permission = await getActivePermissionDetails('money_transfers', id)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        }
+
         // Fetch transfer info for audit log
         const { data: transferRecord } = await adminSupabase.from('money_transfers').select('*').eq('id', id).single()
 
@@ -450,7 +495,9 @@ export async function updateTransferStatus(id: string, status: string) {
             newValues: { status },
             metadata: { 
                 method: 'updateTransferStatus',
-                displayId: transferRecord?.transfer_code || transferRecord?.beneficiary_name || undefined
+                displayId: transferRecord?.transfer_code || transferRecord?.beneficiary_name || undefined,
+                requestId: activeRequestId,
+                reason: activeReason
             }
         })
         revalidatePath('/chimi-transfers')
@@ -477,7 +524,8 @@ export async function deleteTransfer(id: string) {
             throw new Error('Solo los administradores pueden eliminar giros.')
         }
 
-        const { data: transfer } = await adminSupabase.from('money_transfers').select('documents').eq('id', id).single()
+        const { data: transfer } = await adminSupabase.from('money_transfers').select('*').eq('id', id).single()
+        if (!transfer) throw new Error('Giro no encontrado')
         
         if (transfer && transfer.documents) {
             const docs = transfer.documents as unknown as TransferDocument[]
@@ -503,7 +551,11 @@ export async function deleteTransfer(id: string) {
             action: 'delete',
             resourceType: 'money_transfers',
             resourceId: id,
-            metadata: { method: 'deleteTransfer' }
+            oldValues: transfer as unknown as Record<string, unknown>,
+            metadata: { 
+                method: 'deleteTransfer',
+                displayId: transfer?.transfer_code || transfer?.beneficiary_name || undefined
+            }
         })
 
         revalidatePath('/chimi-transfers')
@@ -576,6 +628,22 @@ export async function getTransfers() {
         console.error('Error fetching transfers:', error)
         return []
     }
+    
+    if (data && data.length > 0) {
+        const agentIds = [...new Set(data.map(d => d.agent_id).filter(Boolean))] as string[];
+        if (agentIds.length > 0) {
+            const { data: agents } = await supabase.from('profiles').select('id, first_name, last_name').in('id', agentIds);
+            if (agents) {
+                const agentMap = Object.fromEntries(agents.map(a => [a.id, a]));
+                data.forEach(d => {
+                    if (d.agent_id && agentMap[d.agent_id]) {
+                        d.agent = agentMap[d.agent_id];
+                    }
+                })
+            }
+        }
+    }
+    
     return data
 }
 

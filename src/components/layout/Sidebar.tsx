@@ -10,7 +10,10 @@ import {
   LogOut,
   UserCog,
   MessageCircle,
-  ShieldCheck
+  ShieldCheck,
+  Languages,
+  Briefcase,
+  Calculator
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -68,7 +71,7 @@ export function Sidebar({ role }: SidebarProps) {
         </Link>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
+      <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {/* Logic to switch between Admin and Client Menus */}
         {isClientView ? (
             /* CLIENT MENU */
@@ -85,11 +88,13 @@ export function Sidebar({ role }: SidebarProps) {
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Principal</div>
                 
                 <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} />
-                {role === 'admin' && (
+                {(role === 'admin' || role === 'agent') && (
                     <>
                         <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} />
                         <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} />
-                        <SidebarItem icon={ShieldCheck} label="Permisos" href="/admin/permissions" isActive={pathname.startsWith('/admin/permissions')} />
+                        {role === 'admin' && (
+                            <SidebarItem icon={ShieldCheck} label="Permisos" href="/admin/permissions" isActive={pathname.startsWith('/admin/permissions')} />
+                        )}
                     </>
                 )}
                 <SidebarItem icon={MessageCircle} label="Mensajes" href="/admin/chat" isActive={pathname.startsWith('/admin/chat')} />
@@ -98,8 +103,11 @@ export function Sidebar({ role }: SidebarProps) {
                 
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2 mt-6">Operaciones</div>
                 <SidebarItem icon={Plane} label="Vuelos" href="/chimi-vuelos" isActive={pathname.startsWith('/chimi-vuelos')} />
-                 <SidebarItem icon={Banknote} label="Giros" href="/chimi-giros" isActive={pathname.startsWith('/chimi-giros')} />
+                <SidebarItem icon={Banknote} label="Giros" href="/chimi-giros" isActive={pathname.startsWith('/chimi-giros')} />
                 <SidebarItem icon={Package} label="Encomiendas" href="/chimi-encomiendas" isActive={pathname.startsWith('/chimi-encomiendas')} />
+                <SidebarItem icon={Languages} label="Traducciones" href="/chimi-traducciones" isActive={pathname.startsWith('/chimi-traducciones')} />
+                <SidebarItem icon={Briefcase} label="Otros Servicios" href="/chimi-otros-servicios" isActive={pathname.startsWith('/chimi-otros-servicios')} />
+                <SidebarItem icon={Calculator} label="Contabilidad" href="/chimi-contabilidad" isActive={pathname.startsWith('/chimi-contabilidad')} />
         
                 <div className="my-4 border-t border-sidebar-border mx-2" />
             </>

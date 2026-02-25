@@ -53,7 +53,7 @@ export function EditRequestModal({ isOpen, onClose, resourceType, resourceId, re
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-amber-600">
+                    <DialogTitle className="flex items-center gap-2 text-chimipink">
                         <ShieldAlert className="h-5 w-5" />
                         Permiso de Edición Requerido
                     </DialogTitle>
@@ -72,7 +72,7 @@ export function EditRequestModal({ isOpen, onClose, resourceType, resourceId, re
                             placeholder="Ej: El cliente solicitó cambio de fecha por motivos de salud..."
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            className="min-h-[120px] bg-slate-50 border-slate-200 focus:ring-amber-500"
+                            className="min-h-[120px] bg-slate-50 border-slate-200 focus:ring-chimipink"
                         />
                         {resourceName && (
                             <p className="text-[10px] text-slate-400 italic">
@@ -88,7 +88,7 @@ export function EditRequestModal({ isOpen, onClose, resourceType, resourceId, re
                     <Button 
                         onClick={handleSubmit} 
                         disabled={isSubmitting}
-                        className="bg-amber-500 hover:bg-amber-600 text-white gap-2"
+                        className="bg-chimipink hover:opacity-90 text-white gap-2 shadow-md"
                     >
                         <Send className="h-4 w-4" />
                         {isSubmitting ? "Enviando..." : "Enviar Solicitud"}

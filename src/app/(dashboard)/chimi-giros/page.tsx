@@ -10,7 +10,7 @@ import {
 import * as XLSX from "xlsx"
 import { createClient } from '@/lib/supabase/client'
 import { EditRequestModal } from '@/components/permissions/EditRequestModal'
-import { checkEditPermission, getActivePermissions } from '@/app/actions/manage-permissions'
+import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
 import { cn } from '@/lib/utils'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -588,7 +588,8 @@ export default function MoneyTransfersPage() {
         }
 
         if (userRole === 'agent') {
-            const isUnlocked = unlockedResources.has(transfer.id) || await checkEditPermission('money_transfers', transfer.id)
+            const permission = await getActivePermissionDetails('money_transfers', transfer.id)
+            const isUnlocked = unlockedResources.has(transfer.id) || permission.hasPermission
             if (isUnlocked) {
                 setUnlockedResources(prev => new Set(prev).add(transfer.id))
                 handleEdit(transfer)
@@ -733,6 +734,7 @@ export default function MoneyTransfersPage() {
             Codigo: t.transfer_code,
             Modo: t.transfer_mode === 'eur_to_pen' ? 'Euro -> Soles' : 'Soles -> Euro',
             Cliente: `${t.profiles?.first_name} ${t.profiles?.last_name}`,
+            Agente: t.agent ? `${t.agent.first_name} ${t.agent.last_name}` : '-',
             Beneficiario: t.beneficiary_name,
             Enviado: `${t.transfer_mode === 'eur_to_pen' ? '€' : 'S/'} ${t.amount_sent}`,
             Tasa: t.exchange_rate,
@@ -1887,6 +1889,7 @@ export default function MoneyTransfersPage() {
                                     <th className="px-6 py-4 font-medium">Fecha</th>
                                     <th className="px-6 py-4 font-medium">Código</th>
                                     <th className="px-6 py-4 font-medium">Cliente</th>
+                                    <th className="px-6 py-4 font-medium">Agente</th>
                                     <th className="px-6 py-4 font-medium">Beneficiario</th>
                                     <th className="px-6 py-4 font-medium">Enviado</th>
                                     <th className="px-6 py-4 font-medium">Comisión</th>
@@ -1939,6 +1942,11 @@ export default function MoneyTransfersPage() {
                                             <td className="px-6 py-4">
                                                 <div className="font-medium text-slate-900">{transfer.profiles?.first_name} {transfer.profiles?.last_name}</div>
                                                 <div className="text-xs text-slate-500">{transfer.profiles?.email}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="text-xs text-slate-600 font-medium whitespace-nowrap">
+                                                    {transfer.agent ? `${transfer.agent.first_name} ${transfer.agent.last_name}` : '-'}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <button 

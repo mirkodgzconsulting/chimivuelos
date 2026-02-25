@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { uploadClientFile, deleteFileFromR2, deleteImageFromCloudflare, getFileUrl } from "@/lib/storage"
-import { checkEditPermission, consumeEditPermission } from "./manage-permissions"
+import { getActivePermissionDetails, consumeEditPermission } from "./manage-permissions"
 import { recordAuditLog } from "@/lib/audit"
 
 /**
@@ -153,7 +153,7 @@ export async function createFlight(formData: FormData) {
 
         const ticket_type = formData.get('ticket_type') as string
 
-        const { error } = await adminSupabase.from('flights').insert({
+        const insertData = {
             client_id,
             travel_date,
             pnr,
@@ -178,6 +178,23 @@ export async function createFlight(formData: FormData) {
             pax_inf: parseInt(formData.get('pax_inf') as string) || 0,
             pax_total: parseInt(formData.get('pax_total') as string) || 0,
             iata_gds: formData.get('iata_gds') as string
+        }
+
+        const { error } = await adminSupabase.from('flights').insert(insertData)
+
+        if (error) throw error
+
+        // Record Audit Log
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'create',
+            resourceType: 'flights',
+            resourceId: pnr || 'new',
+            newValues: insertData,
+            metadata: { 
+                method: 'createFlight',
+                displayId: pnr || 'Vuelo Nuevo'
+            }
         })
 
         if (error) throw error
@@ -207,12 +224,23 @@ export async function updateFlight(formData: FormData) {
         const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
         const userRole = profile?.role || 'client'
 
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Edición Directa';
+
         if (userRole === 'agent' || userRole === 'usuario') {
-            const hasPermission = await checkEditPermission('flights', id)
-            if (!hasPermission) {
+            const permission = await getActivePermissionDetails('flights', id)
+            if (!permission.hasPermission) {
                 throw new Error('No tienes permiso para editar este vuelo. Debes solicitar autorización.')
             }
-        } else if (userRole !== 'admin') {
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+            // Consumir permiso inmediatamente en la acción principal de guardado
+            await consumeEditPermission('flights', id)
+        } else if (userRole === 'admin') {
+            const permission = await getActivePermissionDetails('flights', id)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        } else {
             throw new Error('Acceso denegado')
         }
 
@@ -332,7 +360,8 @@ export async function updateFlight(formData: FormData) {
 
         const ticket_type = formData.get('ticket_type') as string
 
-        const { error } = await adminSupabase.from('flights').update({
+        const updateData = {
+            client_id,
             travel_date,
             pnr,
             itinerary,
@@ -355,8 +384,11 @@ export async function updateFlight(formData: FormData) {
             pax_chd: parseInt(formData.get('pax_chd') as string) || 0,
             pax_inf: parseInt(formData.get('pax_inf') as string) || 0,
             pax_total: parseInt(formData.get('pax_total') as string) || 0,
-            iata_gds: formData.get('iata_gds') as string
-        }).eq('id', id)
+            iata_gds: formData.get('iata_gds') as string,
+            updated_at: new Date().toISOString()
+        }
+
+        const { error } = await adminSupabase.from('flights').update(updateData).eq('id', id)
 
         if (error) throw error
 
@@ -367,31 +399,19 @@ export async function updateFlight(formData: FormData) {
             resourceType: 'flights',
             resourceId: id,
             oldValues: oldValues,
-            newValues: { 
-                travel_date, 
-                return_date,
-                pnr, 
-                itinerary, 
-                cost, 
-                sold_price, 
-                status,
-                on_account,
-                balance,
-                payment_details: currentPayments
-            },
+            newValues: updateData,
             metadata: { 
                 method: 'updateFlight',
-                displayId: pnr || undefined
+                displayId: pnr || undefined,
+                requestId: activeRequestId,
+                reason: activeReason
             }
         })
 
-        // Consume permission if agent
-        if (userRole === 'agent') {
-            await consumeEditPermission('flights', id)
-        }
-
         revalidatePath('/chimi-vuelos')
+
         return { success: true }
+
 
     } catch (error: unknown) {
         console.error('Error updating flight:', error)
@@ -410,6 +430,26 @@ export async function updateFlightStatus(id: string, status: string) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Unauthorized')
 
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Actualización de Estado Rápida';
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const permission = await getActivePermissionDetails('flights', id)
+            if (permission.hasPermission) {
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+            } else {
+                throw new Error('No tienes permiso para editar este vuelo.')
+            }
+        } else if (userRole === 'admin') {
+            const permission = await getActivePermissionDetails('flights', id)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        }
+
         // Fetch flight info for audit log
         const { data: flightRecord } = await adminSupabase.from('flights').select('*').eq('id', id).single()
 
@@ -426,7 +466,9 @@ export async function updateFlightStatus(id: string, status: string) {
             newValues: { status },
             metadata: { 
                 method: 'updateFlightStatus',
-                displayId: flightRecord?.pnr || undefined
+                displayId: flightRecord?.pnr || undefined,
+                requestId: activeRequestId,
+                reason: activeReason
             }
         })
 
@@ -453,8 +495,9 @@ export async function deleteFlight(id: string) {
             throw new Error('Solo los administradores pueden eliminar vuelos.')
         }
 
-        // Get documents to delete them from storage
-        const { data: flight } = await supabase.from('flights').select('documents').eq('id', id).single()
+        // Get flight for audit log and document deletion
+        const { data: flight } = await supabase.from('flights').select('*').eq('id', id).single()
+        if (!flight) throw new Error('Vuelo no encontrado')
         
         if (flight && flight.documents) {
             const docs = flight.documents as unknown as FlightDocument[]
@@ -480,7 +523,11 @@ export async function deleteFlight(id: string) {
             action: 'delete',
             resourceType: 'flights',
             resourceId: id,
-            metadata: { method: 'deleteFlight' }
+            oldValues: flight,
+            metadata: { 
+                method: 'deleteFlight',
+                displayId: flight?.pnr || undefined
+            }
         })
 
         revalidatePath('/chimi-vuelos')
@@ -592,6 +639,26 @@ export async function deleteFlightPayment(flightId: string, paymentIndex: number
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Unauthorized')
 
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Edición Directa';
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const permission = await getActivePermissionDetails('flights', flightId)
+            if (permission.hasPermission) {
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+            } else {
+                throw new Error('No tienes permiso para editar este vuelo.')
+            }
+        } else if (userRole === 'admin') {
+            const permission = await getActivePermissionDetails('flights', flightId)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        }
+
         const { data: flight } = await adminSupabase.from('flights').select('*').eq('id', flightId).single()
         if (!flight) throw new Error('Flight not found')
 
@@ -631,7 +698,9 @@ export async function deleteFlightPayment(flightId: string, paymentIndex: number
             newValues: { payment_details: payments, on_account, balance },
             metadata: { 
                 method: 'deleteFlightPayment',
-                displayId: flight.pnr || undefined
+                displayId: flight.pnr || undefined,
+                requestId: activeRequestId,
+                reason: activeReason
             }
         })
         
@@ -656,6 +725,26 @@ export async function updateFlightPayment(formData: FormData) {
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Unauthorized')
+
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Edición Directa';
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const permission = await getActivePermissionDetails('flights', flightId)
+            if (permission.hasPermission) {
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+            } else {
+                throw new Error('No tienes permiso para editar este vuelo.')
+            }
+        } else if (userRole === 'admin') {
+            const permission = await getActivePermissionDetails('flights', flightId)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        }
 
         const { data: flight } = await adminSupabase.from('flights').select('*').eq('id', flightId).single()
         if (!flight) throw new Error('Flight not found')
@@ -717,7 +806,9 @@ export async function updateFlightPayment(formData: FormData) {
             newValues: { payment_details: payments, on_account, balance },
             metadata: { 
                 method: 'updateFlightPayment',
-                displayId: flight.pnr || undefined
+                displayId: flight.pnr || undefined,
+                requestId: activeRequestId,
+                reason: activeReason
             }
         })
         

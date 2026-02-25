@@ -37,10 +37,10 @@ import {
 import { getParcels, createParcel, updateParcel, deleteParcel, updateParcelStatus, deleteParcelDocument, getParcelDocumentUrl } from '@/app/actions/manage-parcels'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
 import * as XLSX from 'xlsx'
-import { createClient } from '@/lib/supabase/client'
 import { EditRequestModal } from '@/components/permissions/EditRequestModal'
-import { checkEditPermission, getActivePermissions } from '@/app/actions/manage-permissions'
+import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 import { Lock, Unlock } from 'lucide-react'
 
 // Interfaces
@@ -93,6 +93,10 @@ interface Parcel {
         last_name: string | null
         email: string | null
         phone: string | null
+    }
+    agent?: {
+        first_name: string | null
+        last_name: string | null
     }
 }
 
@@ -449,7 +453,8 @@ export default function ParcelsPage() {
         }
 
         if (userRole === 'agent') {
-            const isUnlocked = unlockedResources.has(parcel.id) || await checkEditPermission('parcels', parcel.id)
+            const permission = await getActivePermissionDetails('parcels', parcel.id)
+            const isUnlocked = unlockedResources.has(parcel.id) || permission.hasPermission
             if (isUnlocked) {
                 setUnlockedResources(prev => new Set(prev).add(parcel.id))
                 handleEdit(parcel)
@@ -662,6 +667,7 @@ export default function ParcelsPage() {
             Fecha: new Date(p.created_at).toLocaleDateString('es-PE'),
             Codigo: p.tracking_code,
             Remitente: `${p.profiles?.first_name} ${p.profiles?.last_name}`,
+            Agente: p.agent ? `${p.agent.first_name} ${p.agent.last_name}` : '-',
             Destinatario: p.recipient_name,
             Direccion: p.recipient_address,
             Tipo: p.package_type,
@@ -1521,6 +1527,7 @@ export default function ParcelsPage() {
                                     <th className="px-6 py-4 font-medium">Fecha</th>
                                     <th className="px-6 py-4 font-medium">Tracking</th>
                                     <th className="px-6 py-4 font-medium">Remitente</th>
+                                    <th className="px-6 py-4 font-medium">Agente</th>
                                     <th className="px-6 py-4 font-medium">Destinatario</th>
                                     <th className="px-6 py-4 font-medium">Paquete</th>
                                     <th className="px-6 py-4 font-medium">Descripción</th>
@@ -1564,6 +1571,11 @@ export default function ParcelsPage() {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="font-medium text-slate-900 truncate max-w-[150px]" title={`${parcel.profiles?.first_name} ${parcel.profiles?.last_name}`}>
                                                     {parcel.profiles?.first_name} {parcel.profiles?.last_name}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="text-xs text-slate-600 font-medium whitespace-nowrap">
+                                                    {parcel.agent ? `${parcel.agent.first_name} ${parcel.agent.last_name}` : '-'}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">

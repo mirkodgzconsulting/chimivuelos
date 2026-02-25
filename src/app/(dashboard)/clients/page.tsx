@@ -41,6 +41,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<ClientProfile[]>(initialClients)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
   
   // Docs Viewer State
   const [docsViewerClient, setDocsViewerClient] = useState<ClientProfile | null>(null)
@@ -87,6 +88,14 @@ export default function ClientsPage() {
 
   useEffect(() => {
     let mounted = true
+    
+    // Get user role
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (mounted && user) {
+        setUserRole(user.user_metadata?.role || 'agent')
+      }
+    })
+
     getClientsList().then(({ data, error }) => {
       if (mounted) {
         if (error) {
@@ -98,7 +107,7 @@ export default function ClientsPage() {
       }
     })
     return () => { mounted = false }
-  }, [getClientsList])
+  }, [getClientsList, supabase])
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1)
@@ -342,135 +351,137 @@ export default function ClientsPage() {
       </Dialog>
 
       <div className="flex items-center justify-center">
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleOpenDialog} className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 gap-2 font-bold shadow-md border-none">
-              <Plus className="h-4 w-4" />
-              Nuevo Cliente
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{selectedClientId ? 'Editar Cliente' : 'Registrar Nuevo Cliente'}</DialogTitle>
-              <DialogDescription>
-                {selectedClientId ? 'Actualiza los datos del cliente.' : 'Ingresa los datos del nuevo cliente.'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="first_name">Nombres <span className="text-red-500">*</span></Label>
-                  <Input id="first_name" name="first_name" required value={formData.first_name} onChange={handleInputChange} placeholder="Ej. Maria" />
+        {userRole === 'admin' && (
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={handleOpenDialog} className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 gap-2 font-bold shadow-md border-none">
+                <Plus className="h-4 w-4" />
+                Nuevo Cliente
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{selectedClientId ? 'Editar Cliente' : 'Registrar Nuevo Cliente'}</DialogTitle>
+                <DialogDescription>
+                  {selectedClientId ? 'Actualiza los datos del cliente.' : 'Ingresa los datos del nuevo cliente.'}
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="first_name">Nombres <span className="text-red-500">*</span></Label>
+                    <Input id="first_name" name="first_name" required value={formData.first_name} onChange={handleInputChange} placeholder="Ej. Maria" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="last_name">Apellidos <span className="text-red-500">*</span></Label>
+                    <Input id="last_name" name="last_name" required value={formData.last_name} onChange={handleInputChange} placeholder="Ej. Lopez" />
+                  </div>
                 </div>
+                
                 <div className="grid gap-2">
-                  <Label htmlFor="last_name">Apellidos <span className="text-red-500">*</span></Label>
-                  <Input id="last_name" name="last_name" required value={formData.last_name} onChange={handleInputChange} placeholder="Ej. Lopez" />
+                  <Label htmlFor="email">Correo Electrónico <span className="text-red-500">*</span></Label>
+                  <Input id="email" name="email" type="email" required value={formData.email} onChange={handleInputChange} placeholder="maria@chimivuelos.pe" disabled={!!selectedClientId} />
                 </div>
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="email">Correo Electrónico <span className="text-red-500">*</span></Label>
-                <Input id="email" name="email" type="email" required value={formData.email} onChange={handleInputChange} placeholder="maria@chimivuelos.pe" disabled={!!selectedClientId} />
-              </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="password">Contraseña {selectedClientId ? '(Dejar en blanco para mantener)' : <span className="text-red-500">*</span>}</Label>
-                <Input id="password" name="password" type="password" required={!selectedClientId} value={formData.password} onChange={handleInputChange} />
-              </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="password">Contraseña {selectedClientId ? '(Dejar en blanco para mantener)' : <span className="text-red-500">*</span>}</Label>
+                  <Input id="password" name="password" type="password" required={!selectedClientId} value={formData.password} onChange={handleInputChange} />
+                </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                 <div className="grid gap-2 col-span-1">
-                    <Label htmlFor="document_type">Tipo Doc <span className="text-red-500">*</span></Label>
-                    <select
-                      id="document_type"
-                      name="document_type"
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chimipink focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={formData.document_type}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="" disabled>Seleccione</option>
-                      <option value="DNI">DNI</option>
-                      <option value="PASAPORTE">Pasaporte</option>
-                      <option value="CE">CE</option>
-                      <option value="RUC">RUC</option>
-                    </select>
-                 </div>
-                 <div className="grid gap-2 col-span-2">
-                    <Label htmlFor="document_number">Nro. Documento <span className="text-red-500">*</span></Label>
-                    <Input id="document_number" name="document_number" type="tel" inputMode="numeric" required value={formData.document_number} onChange={handleInputChange} placeholder="Ej. 78945612" />
-                 </div>
-              </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="grid gap-2 col-span-1">
+                      <Label htmlFor="document_type">Tipo Doc <span className="text-red-500">*</span></Label>
+                      <select
+                        id="document_type"
+                        name="document_type"
+                        className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chimipink focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        value={formData.document_type}
+                        onChange={handleInputChange}
+                        required
+                      >
+                        <option value="" disabled>Seleccione</option>
+                        <option value="DNI">DNI</option>
+                        <option value="PASAPORTE">Pasaporte</option>
+                        <option value="CE">CE</option>
+                        <option value="RUC">RUC</option>
+                      </select>
+                  </div>
+                  <div className="grid gap-2 col-span-2">
+                      <Label htmlFor="document_number">Nro. Documento <span className="text-red-500">*</span></Label>
+                      <Input id="document_number" name="document_number" type="tel" inputMode="numeric" required value={formData.document_number} onChange={handleInputChange} placeholder="Ej. 78945612" />
+                  </div>
+                </div>
 
-              <div className="grid gap-2">
-                 <Label htmlFor="phone">Celular</Label>
-                 <Input id="phone" name="phone" type="tel" inputMode="numeric" value={formData.phone} onChange={handleInputChange} placeholder="Ej. 987654321" />
-              </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="phone">Celular</Label>
+                  <Input id="phone" name="phone" type="tel" inputMode="numeric" value={formData.phone} onChange={handleInputChange} placeholder="Ej. 987654321" />
+                </div>
 
-              <div className="grid gap-2">
-                 <Label htmlFor="documents">Adjuntar Documentos (Max 5)</Label>
-                 <Input 
-                   id="documents" 
-                   name="documents" 
-                   type="file" 
-                   multiple
-                   accept="image/*,.pdf,.doc,.docx"
-                   className="cursor-pointer p-0 text-slate-500 file:h-full file:mr-4 file:py-2 file:px-4 file:border-0 file:border-r file:border-slate-200 file:text-sm file:font-medium file:bg-slate-50 file:text-slate-700 hover:file:bg-slate-100" 
-                   onChange={handleFileChange}
-                 />
-                 <div className="text-xs text-slate-500">
-                    Permitido: Imágenes, PDF, Word.
-                 </div>
-                 
-                 {/* Files List - New */}
-                 {newFiles.length > 0 && (
-                     <div className="mt-2 space-y-2">
-                         <p className="text-xs font-semibold text-slate-700">Archivos Nuevos:</p>
-                         {newFiles.map((file, idx) => (
-                             <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-md border border-slate-200 text-sm">
-                                 <span className="truncate max-w-[200px]">{file.name}</span>
-                                 <Button type="button" variant="ghost" size="sm" onClick={() => removeNewFile(idx)} className="h-6 w-6 p-0 text-slate-400 hover:text-red-500">
-                                     <X className="h-4 w-4" />
-                                 </Button>
-                             </div>
-                         ))}
-                     </div>
-                 )}
-
-                 {/* Files List - Existing (Edit Mode) */}
-                 {existingFiles.length > 0 && (
+                <div className="grid gap-2">
+                  <Label htmlFor="documents">Adjuntar Documentos (Max 5)</Label>
+                  <Input 
+                    id="documents" 
+                    name="documents" 
+                    type="file" 
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx"
+                    className="cursor-pointer p-0 text-slate-500 file:h-full file:mr-4 file:py-2 file:px-4 file:border-0 file:border-r file:border-slate-200 file:text-sm file:font-medium file:bg-slate-50 file:text-slate-700 hover:file:bg-slate-100" 
+                    onChange={handleFileChange}
+                  />
+                  <div className="text-xs text-slate-500">
+                      Permitido: Imágenes, PDF, Word.
+                  </div>
+                  
+                  {/* Files List - New */}
+                  {newFiles.length > 0 && (
                       <div className="mt-2 space-y-2">
-                          <p className="text-xs font-semibold text-slate-700">Archivos Actuales:</p>
-                          {existingFiles.map((file, idx) => (
-                              <div key={idx} className="flex items-center justify-between p-2 bg-blue-50 rounded-md border border-blue-100 text-sm">
-                                  <div className="flex flex-col">
-                                      <button 
-                                        type="button"
-                                        onClick={() => handleViewFile(file)}
-                                        className="truncate max-w-[200px] text-blue-600 hover:underline font-medium text-left cursor-pointer focus:outline-none"
-                                      >
-                                          {file.name}
-                                      </button>
-                                      <span className="text-[10px] text-slate-500">{(file.size / 1024).toFixed(1)} KB</span>
-                                      {file.storage && <span className="text-[9px] text-slate-400 capitalize">{file.storage === 'images' ? 'Imagen' : 'Doc'}</span>}
-                                  </div>
-                                  <Button type="button" variant="ghost" size="sm" onClick={() => removeExistingFile(file)} className="h-6 w-6 p-0 text-slate-400 hover:text-red-500">
-                                      <Trash2 className="h-4 w-4" />
+                          <p className="text-xs font-semibold text-slate-700">Archivos Nuevos:</p>
+                          {newFiles.map((file, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-md border border-slate-200 text-sm">
+                                  <span className="truncate max-w-[200px]">{file.name}</span>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => removeNewFile(idx)} className="h-6 w-6 p-0 text-slate-400 hover:text-red-500">
+                                      <X className="h-4 w-4" />
                                   </Button>
                               </div>
                           ))}
                       </div>
-                 )}
-              </div>
+                  )}
 
-              <DialogFooter>
-                <Button type="submit" className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 w-full sm:w-auto font-bold shadow-md">
-                   {selectedClientId ? 'Actualizar Cliente' : 'Crear Cliente'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                  {/* Files List - Existing (Edit Mode) */}
+                  {existingFiles.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                            <p className="text-xs font-semibold text-slate-700">Archivos Actuales:</p>
+                            {existingFiles.map((file, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-2 bg-blue-50 rounded-md border border-blue-100 text-sm">
+                                    <div className="flex flex-col">
+                                        <button 
+                                          type="button"
+                                          onClick={() => handleViewFile(file)}
+                                          className="truncate max-w-[200px] text-blue-600 hover:underline font-medium text-left cursor-pointer focus:outline-none"
+                                        >
+                                            {file.name}
+                                        </button>
+                                        <span className="text-[10px] text-slate-500">{(file.size / 1024).toFixed(1)} KB</span>
+                                        {file.storage && <span className="text-[9px] text-slate-400 capitalize">{file.storage === 'images' ? 'Imagen' : 'Doc'}</span>}
+                                    </div>
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => removeExistingFile(file)} className="h-6 w-6 p-0 text-slate-400 hover:text-red-500">
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                  )}
+                </div>
+
+                <DialogFooter>
+                  <Button type="submit" className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 w-full sm:w-auto font-bold shadow-md">
+                    {selectedClientId ? 'Actualizar Cliente' : 'Crear Cliente'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -509,7 +520,7 @@ export default function ClientsPage() {
                   <th className="px-6 py-4 font-medium">Celular</th>
                   <th className="px-6 py-4 font-medium text-center">Docs</th>
                   <th className="px-6 py-4 font-medium text-center">Accesos</th>
-                  <th className="px-6 py-4 font-medium text-right">Acciones</th>
+                  {userRole === 'admin' && <th className="px-6 py-4 font-medium text-right">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -567,16 +578,18 @@ export default function ClientsPage() {
                         )}
                       </Button>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(client)} className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600">
-                          <UserCog className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(client.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
+                    {userRole === 'admin' && (
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(client)} className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600">
+                            <UserCog className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(client.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {currentClients.length === 0 && (

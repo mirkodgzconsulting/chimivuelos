@@ -32,6 +32,7 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<Profile[]>(initialAgents)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
   
   const [formData, setFormData] = useState({
     first_name: "",
@@ -64,13 +65,21 @@ export default function AgentsPage() {
 
   useEffect(() => {
     let mounted = true
+    
+    // Get user role
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (mounted && user) {
+        setUserRole(user.user_metadata?.role || 'agent')
+      }
+    })
+
     getAgentsList().then(({ data, error }) => {
       if (mounted && !error && data) {
         setAgents(data)
       }
     })
     return () => { mounted = false }
-  }, [getAgentsList])
+  }, [getAgentsList, supabase])
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1)
@@ -193,82 +202,84 @@ export default function AgentsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-center">
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleOpenDialog} className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 gap-2 font-bold shadow-md border-none">
-              <Plus className="h-4 w-4" />
-              Nuevo Agente
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>{selectedAgentId ? 'Editar Agente' : 'Registrar Nuevo Agente'}</DialogTitle>
-              <DialogDescription>
-                {selectedAgentId ? 'Actualiza los datos del usuario.' : 'Ingresa los datos del nuevo usuario del sistema.'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="first_name">Nombres <span className="text-red-500">*</span></Label>
-                  <Input id="first_name" name="first_name" required value={formData.first_name} onChange={handleInputChange} placeholder="Ej. Juan" />
+        {userRole === 'admin' && (
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={handleOpenDialog} className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 gap-2 font-bold shadow-md border-none">
+                <Plus className="h-4 w-4" />
+                Nuevo Agente
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>{selectedAgentId ? 'Editar Agente' : 'Registrar Nuevo Agente'}</DialogTitle>
+                <DialogDescription>
+                  {selectedAgentId ? 'Actualiza los datos del usuario.' : 'Ingresa los datos del nuevo usuario del sistema.'}
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="first_name">Nombres <span className="text-red-500">*</span></Label>
+                    <Input id="first_name" name="first_name" required value={formData.first_name} onChange={handleInputChange} placeholder="Ej. Juan" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="last_name">Apellidos <span className="text-red-500">*</span></Label>
+                    <Input id="last_name" name="last_name" required value={formData.last_name} onChange={handleInputChange} placeholder="Ej. Pérez" />
+                  </div>
                 </div>
+                
                 <div className="grid gap-2">
-                  <Label htmlFor="last_name">Apellidos <span className="text-red-500">*</span></Label>
-                  <Input id="last_name" name="last_name" required value={formData.last_name} onChange={handleInputChange} placeholder="Ej. Pérez" />
+                  <Label htmlFor="email">Correo Electrónico <span className="text-red-500">*</span></Label>
+                  <Input id="email" name="email" type="email" required value={formData.email} onChange={handleInputChange} placeholder="juan@chimivuelos.pe" disabled={!!selectedAgentId} />
                 </div>
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="email">Correo Electrónico <span className="text-red-500">*</span></Label>
-                <Input id="email" name="email" type="email" required value={formData.email} onChange={handleInputChange} placeholder="juan@chimivuelos.pe" disabled={!!selectedAgentId} />
-              </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="password">Contraseña {selectedAgentId ? '(Dejar en blanco para mantener)' : <span className="text-red-500">*</span>}</Label>
-                <Input id="password" name="password" type="password" required={!selectedAgentId} value={formData.password} onChange={handleInputChange} />
-              </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="password">Contraseña {selectedAgentId ? '(Dejar en blanco para mantener)' : <span className="text-red-500">*</span>}</Label>
+                  <Input id="password" name="password" type="password" required={!selectedAgentId} value={formData.password} onChange={handleInputChange} />
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="grid gap-2">
-                    <Label htmlFor="role">Rol <span className="text-red-500">*</span></Label>
-                    <select
-                      id="role"
-                      name="role"
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chimipink focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={formData.role}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="" disabled>Seleccione un rol</option>
-                      <option value="agent">Usuario</option>
-                      <option value="admin">Administrador</option>
-                    </select>
-                 </div>
-                 <div className="grid gap-2">
-                    <Label htmlFor="phone">Celular</Label>
-                    <Input id="phone" name="phone" type="tel" inputMode="numeric" value={formData.phone} onChange={handleInputChange} placeholder="Ej. 987654321" />
-                 </div>
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                      <Label htmlFor="role">Rol <span className="text-red-500">*</span></Label>
+                      <select
+                        id="role"
+                        name="role"
+                        className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chimipink focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        value={formData.role}
+                        onChange={handleInputChange}
+                        required
+                      >
+                        <option value="" disabled>Seleccione un rol</option>
+                        <option value="agent">Usuario</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                  </div>
+                  <div className="grid gap-2">
+                      <Label htmlFor="phone">Celular</Label>
+                      <Input id="phone" name="phone" type="tel" inputMode="numeric" value={formData.phone} onChange={handleInputChange} placeholder="Ej. 987654321" />
+                  </div>
+                </div>
 
-              <div className="grid gap-2">
-                 <Label htmlFor="photo">Foto de Perfil</Label>
-                 <Input 
-                   id="photo" 
-                   name="photo" 
-                   type="file" 
-                   className="cursor-pointer p-0 text-slate-500 file:h-full file:mr-4 file:py-2 file:px-4 file:border-0 file:border-r file:border-slate-200 file:text-sm file:font-medium file:bg-slate-50 file:text-slate-700 hover:file:bg-slate-100" 
-                 />
-              </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="photo">Foto de Perfil</Label>
+                  <Input 
+                    id="photo" 
+                    name="photo" 
+                    type="file" 
+                    className="cursor-pointer p-0 text-slate-500 file:h-full file:mr-4 file:py-2 file:px-4 file:border-0 file:border-r file:border-slate-200 file:text-sm file:font-medium file:bg-slate-50 file:text-slate-700 hover:file:bg-slate-100" 
+                  />
+                </div>
 
-              <DialogFooter>
-                <Button type="submit" className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 w-full sm:w-auto font-bold shadow-md">
-                   {selectedAgentId ? 'Actualizar Agente' : 'Crear Agente'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                  <Button type="submit" className="bg-linear-to-r from-chimipink to-chimicyan hover:opacity-90 transition-opacity text-slate-700 w-full sm:w-auto font-bold shadow-md">
+                    {selectedAgentId ? 'Actualizar Agente' : 'Crear Agente'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -312,7 +323,7 @@ export default function AgentsPage() {
                   <th className="px-6 py-4 font-medium">Rol</th>
                   <th className="px-6 py-4 font-medium">Celular</th>
                   <th className="px-6 py-4 font-medium text-center">Estado</th>
-                  <th className="px-6 py-4 font-medium text-right">Acciones</th>
+                  {userRole === 'admin' && <th className="px-6 py-4 font-medium text-right">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -354,16 +365,18 @@ export default function AgentsPage() {
                          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100" />
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(agent)} className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600">
-                          <UserCog className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(agent.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
+                    {userRole === 'admin' && (
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(agent)} className="h-8 w-8 p-0 text-slate-400 hover:text-slate-600">
+                            <UserCog className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(agent.id)} className="h-8 w-8 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
