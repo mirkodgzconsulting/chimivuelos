@@ -61,6 +61,8 @@ export async function createTranslation(formData: FormData) {
     const source_language = formData.get('source_language') as string
     const target_language = formData.get('target_language') as string
     const notes = formData.get('notes') as string
+    const recipient_name = formData.get('recipient_name') as string
+    const recipient_phone = formData.get('recipient_phone') as string
     
     const quantity = parseInt(formData.get('quantity') as string) || 1
     
@@ -127,6 +129,8 @@ export async function createTranslation(formData: FormData) {
         source_language,
         target_language,
         notes,
+        recipient_name,
+        recipient_phone,
         origin_address,
         destination_address,
         destination_address_client,
@@ -210,6 +214,8 @@ export async function updateTranslation(formData: FormData) {
         const source_language = formData.get('source_language') as string
         const target_language = formData.get('target_language') as string
         const notes = formData.get('notes') as string
+        const recipient_name = formData.get('recipient_name') as string
+        const recipient_phone = formData.get('recipient_phone') as string
         const quantity = parseInt(formData.get('quantity') as string) || 1
         
         const origin_address = formData.get('origin_address') as string
@@ -266,6 +272,8 @@ export async function updateTranslation(formData: FormData) {
             source_language,
             target_language,
             notes,
+            recipient_name,
+            recipient_phone,
             quantity,
             documents: newDocuments,
             origin_address,

@@ -5,7 +5,6 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -33,7 +32,10 @@ import {
     X,
     Check,
     Building2,
-    Briefcase
+    Briefcase,
+    User,
+    MapPin,
+    ArrowRight
 } from 'lucide-react'
 import { 
     getOtherServices, 
@@ -82,6 +84,11 @@ interface OtherService {
     service_type: string
     service_type_other?: string
     note?: string
+    recipient_name?: string
+    recipient_phone?: string
+    origin_address?: string
+    destination_address?: string
+    destination_address_client?: string
     documents?: ServiceDocument[]
     total_amount: number
     on_account: number
@@ -129,9 +136,7 @@ const PAYMENT_METHOD_IT_OPTIONS = [
     "UNICREDIT CHIMI",
     "BANK WISE",
     "BONIFICO SUEMA",
-    "POS — UNICREDIT CHIMI",
-    "WESTERN UNION",
-    "RIA",
+    "WESTERN / RIA A PERSONAL",
     "OTRO GIRO"
 ]
 const PAYMENT_METHOD_PE_OPTIONS = [
@@ -140,11 +145,7 @@ const PAYMENT_METHOD_PE_OPTIONS = [
     "EFEC LIMA DOLAR",
     "BCP SOLES CHIMI",
     "BCP DOLAR",
-    "BANCA EURO PERÚ",
-    "POS / LINK — BCP CHIMI",
-    "WESTERN UNION",
-    "RIA",
-    "OTRO GIRO"
+    "BANCA EURO PERÚ"
 ]
 const CURRENCY_OPTIONS = ["EUR", "PEN", "USD"]
 
@@ -167,6 +168,8 @@ export default function OtherServicesPage() {
     const [isLoading, setIsLoading] = useState(false)
     const [searchClientTerm, setSearchClientTerm] = useState('')
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false)
+    const [showOriginList, setShowOriginList] = useState(false)
+    const [showDestinationList, setShowDestinationList] = useState(false)
     
     // Pagination & Filters
     const [currentPage, setCurrentPage] = useState(1)
@@ -199,6 +202,11 @@ export default function OtherServicesPage() {
         service_type: "",
         service_type_other: "",
         note: "",
+        recipient_name: "",
+        recipient_phone: "",
+        origin_address: "",
+        destination_address: "",
+        destination_address_client: "",
         total_amount: "0.00",
         on_account: "0.00",
         balance: "0.00",
@@ -344,6 +352,11 @@ export default function OtherServicesPage() {
             service_type: "",
             service_type_other: "",
             note: "",
+            recipient_name: "",
+            recipient_phone: "",
+            origin_address: "",
+            destination_address: "",
+            destination_address_client: "",
             total_amount: "0.00",
             on_account: "0.00",
             balance: "0.00",
@@ -379,6 +392,11 @@ export default function OtherServicesPage() {
             service_type: serv.service_type || "",
             service_type_other: serv.service_type_other || "",
             note: serv.note || "",
+            recipient_name: serv.recipient_name || "",
+            recipient_phone: serv.recipient_phone || "",
+            origin_address: serv.origin_address || "",
+            destination_address: serv.destination_address || "",
+            destination_address_client: serv.destination_address_client || "",
             total_amount: serv.total_amount.toString(),
             on_account: serv.on_account.toString(),
             balance: serv.balance.toString(),
@@ -713,36 +731,30 @@ export default function OtherServicesPage() {
                                             </div>
                                         )}
 
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-500 uppercase">Notas / Observaciones</Label>
-                                            <Textarea 
-                                                name="note" 
-                                                value={formData.note}
-                                                onChange={handleInputChange}
-                                                className="min-h-[100px] bg-white text-sm"
-                                                placeholder="Detalles adicionales..."
-                                            />
+
+
+                                    </div>
+
+                                    {/* Datos del Destinatario */}
+                                    <div className="space-y-3 border p-4 rounded-md bg-white mt-4">
+                                        <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
+                                            <User className="h-4 w-4 text-violet-500" />
+                                            Datos del Destinatario
+                                        </h3>
+                                        
+                                        <div className="grid gap-2 mb-2">
+                                            <Label className="text-[10px] text-slate-400 font-semibold uppercase">Nombre Completo</Label>
+                                            <Input name="recipient_name" value={formData.recipient_name} onChange={handleInputChange} className="h-10 text-sm bg-slate-50 border-slate-200" autoComplete="off" />
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-500 uppercase">Estado <span className="text-red-500">*</span></Label>
-                                            <select 
-                                                name="status" 
-                                                value={formData.status} 
-                                                onChange={handleInputChange}
-                                                className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-bold text-slate-700"
-                                            >
-                                                <option value="pending">Pendiente</option>
-                                                <option value="in_progress">En Proceso</option>
-                                                <option value="completed">Listo</option>
-                                                <option value="delivered">Entregado</option>
-                                                <option value="cancelled">Cancelado</option>
-                                            </select>
+                                        <div className="grid gap-2">
+                                            <Label className="text-[10px] text-slate-400 font-semibold uppercase">Teléfono</Label>
+                                            <Input name="recipient_phone" value={formData.recipient_phone} onChange={handleInputChange} className="h-10 text-sm bg-slate-50 border-slate-200" autoComplete="off" />
                                         </div>
                                     </div>
 
                                     {/* Costos section */}
-                                    <div className="border-t border-slate-200 pt-3 mt-2">
+                                    <div className="border-t border-slate-200 pt-3 mt-4">
                                         <h4 className="font-semibold text-slate-700 text-xs mb-2 uppercase flex items-center gap-2">
                                             <Wallet className="h-3 w-3 text-chimipink" /> Costos
                                         </h4>
@@ -780,68 +792,129 @@ export default function OtherServicesPage() {
 
                                 {/* Column 2: Files & Payments (Right) */}
                                 <div className="space-y-4 flex flex-col h-full">
-                                    {/* Files Section */}
-                                    <div className="space-y-4 border p-4 rounded-md bg-slate-50 flex-1">
-                                        <Label className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
-                                            <Package className="h-4 w-4 text-chimicyan" /> Archivos del Servicio
-                                        </Label>
 
-                                        {/* Existing Documents */}
-                                        {existingDocuments.length > 0 && (
-                                            <div className="mb-4 space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                {existingDocuments.map((doc, idx) => (
-                                                    <div key={idx} className="flex items-center justify-between p-3 bg-white border rounded shadow-sm text-xs">
-                                                        <div className="flex items-center gap-2 truncate">
-                                                            <FileText className="h-5 w-5 text-slate-400" />
-                                                            <span className="truncate font-bold text-slate-700">{doc.title || doc.name}</span>
-                                                        </div>
-                                                        <div className="flex gap-1">
-                                                            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 text-blue-500 hover:bg-blue-50" onClick={async () => {
-                                                                const url = await getOtherServiceDocumentUrl(doc.path, doc.storage)
-                                                                window.open(url, '_blank')
-                                                            }}>
-                                                                <Download className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={async () => {
-                                                                    if(confirm('¿Borrar archivo?')) {
-                                                                        await deleteOtherServiceDocument(selectedId!, doc.path)
-                                                                        setExistingDocuments(prev => prev.filter(d => d.path !== doc.path))
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                    {/* Logistics (Right) */}
+                                    <div className="space-y-4 border p-4 rounded-md bg-white flex flex-col">
+                                        <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
+                                            <MapPin className="h-4 w-4 text-chimiteal" />
+                                            Logística de Entrega
+                                        </h3>
 
-                                        <div className="flex items-center gap-4 mb-2 p-3 bg-white border border-dashed rounded-md border-slate-300">
-                                            <div className="flex flex-col gap-1">
-                                                <Label className="text-xs font-bold text-slate-500 uppercase">Adjuntar archivos</Label>
-                                            </div>
-                                            <Input type="number" min="0" max="10" className="w-20 h-10 text-center font-bold text-chimicyan text-lg" value={numDocs} onChange={handleNumDocsChange} />
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-3">
-                                            {documentInputs.map((input, index) => (
-                                                <div key={index} className="space-y-3 p-4 bg-white rounded border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                                        <div className="space-y-4 flex-1">
+                                            <div className="grid gap-2 relative">
+                                                <Label className="text-xs font-bold text-slate-500 uppercase">Dirección de Partida</Label>
+                                                <div className="relative">
                                                     <Input 
-                                                        value={input.title}
-                                                        onChange={e => handleDocInputChange(index, 'title', e.target.value)}
-                                                        placeholder="Título del documento..."
-                                                        className="h-9 text-xs"
+                                                        name="origin_address"
+                                                        value={formData.origin_address}
+                                                        onChange={(e) => { handleInputChange(e); setShowOriginList(true); }}
+                                                        onFocus={() => setShowOriginList(true)}
+                                                        onBlur={() => setTimeout(() => setShowOriginList(false), 200)}
+                                                        placeholder="Buscar oficina..."
+                                                        autoComplete="off"
+                                                        className="bg-slate-50 border-slate-200 h-10 pr-8"
                                                     />
+                                                    {formData.origin_address ? (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setFormData(prev => ({ ...prev, origin_address: '' }))}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                        >
+                                                            <X size={14} strokeWidth={3} />
+                                                        </button>
+                                                    ) : (
+                                                        <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                                                    )}
+                                                </div>
+                                                {showOriginList && (
+                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto font-medium">
+                                                        {SEDE_IT_OPTIONS.filter(o => o.toLowerCase().includes(formData.origin_address.toLowerCase())).map(o => (
+                                                            <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => setFormData(p => ({ ...p, origin_address: o }))}>{o}</div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="grid gap-2 relative">
+                                                <Label className="text-xs font-bold text-slate-500 uppercase">Llegada / Recojo</Label>
+                                                <div className="relative">
                                                     <Input 
-                                                        type="file" 
-                                                        onChange={e => handleDocInputChange(index, 'file', e.target.files?.[0] || null)}
-                                                        className="h-9 text-[10px] bg-slate-50 cursor-pointer"
+                                                        name="destination_address"
+                                                        value={formData.destination_address}
+                                                        onChange={(e) => { handleInputChange(e); setShowDestinationList(true); }}
+                                                        onFocus={() => setShowDestinationList(true)}
+                                                        onBlur={() => setTimeout(() => setShowDestinationList(false), 200)}
+                                                        placeholder="Sede o Dirección..."
+                                                        autoComplete="off"
+                                                        className="bg-slate-50 border-slate-200 h-10 pr-8"
+                                                    />
+                                                    {formData.destination_address ? (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setFormData(prev => ({ ...prev, destination_address: '' }))}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                        >
+                                                            <X size={14} strokeWidth={3} />
+                                                        </button>
+                                                    ) : (
+                                                        <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                                                    )}
+                                                </div>
+                                                {showDestinationList && (
+                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto font-medium">
+                                                        {[...SEDE_IT_OPTIONS, "Dirección de cliente"].filter(o => o.toLowerCase().includes(formData.destination_address.toLowerCase())).map(o => (
+                                                            <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm font-bold border-b last:border-0" onClick={() => setFormData(p => ({ ...p, destination_address: o }))}>
+                                                                {o === "Dirección de cliente" ? "✓ Dirección de cliente" : o}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {formData.destination_address === 'Dirección de cliente' && (
+                                                <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
+                                                    <Label className="text-xs font-bold text-chimipink uppercase tracking-tight italic">Ingrese la dirección exacta del cliente</Label>
+                                                    <textarea 
+                                                        name="destination_address_client"
+                                                        value={formData.destination_address_client}
+                                                        onChange={handleInputChange}
+                                                        className="min-h-[100px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:ring-chimipink focus:border-chimipink outline-none shadow-sm"
+                                                        placeholder="Calle, número, piso, referencia..."
                                                     />
                                                 </div>
-                                            ))}
+                                            )}
+
+                                            <div className="space-y-3 pt-4 border-t border-slate-100">
+                                                <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><NotebookPen className="h-4 w-4 text-chimiteal" /> Notas Adicionales</Label>
+                                                <textarea 
+                                                    name="note"
+                                                    value={formData.note}
+                                                    onChange={handleInputChange}
+                                                    className="min-h-[80px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:ring-chimiteal focus:border-chimiteal outline-none shadow-sm"
+                                                    placeholder="Cualquier aclaración requerida..."
+                                                />
+                                            </div>
                                         </div>
                                     </div>
+
+                                    {/* Estado (Moved to Bottom) */}
+                                    <div className="space-y-2 border p-4 rounded-md bg-white">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase">Estado del Servicio <span className="text-red-500">*</span></Label>
+                                        <select 
+                                            name="status" 
+                                            value={formData.status} 
+                                            onChange={handleInputChange}
+                                            className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm font-bold text-slate-700 mt-1 focus:ring-chimiteal focus:border-chimiteal outline-none"
+                                        >
+                                            <option value="pending">Pendiente</option>
+                                            <option value="in_progress">En Proceso</option>
+                                            <option value="completed">Listo</option>
+                                            <option value="delivered">Entregado</option>
+                                            <option value="cancelled">Cancelado</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
 
                                     {/* REGISTRO DE PAGO */}
                                     <div className="space-y-4 pt-4 border-t border-slate-200">
@@ -1091,8 +1164,70 @@ export default function OtherServicesPage() {
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
+
+                                    {/* Section: Archivos/Fotos */}
+                                    <div className="space-y-4 border p-4 rounded-md bg-slate-50 mt-6">
+                                        <Label className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
+                                            <Package className="h-4 w-4 text-chimicyan" /> Archivos del Servicio
+                                        </Label>
+
+                                        {/* Existing Documents */}
+                                        {existingDocuments.length > 0 && (
+                                            <div className="mb-4 space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {existingDocuments.map((doc, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between p-3 bg-white border rounded shadow-sm text-xs">
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            <FileText className="h-5 w-5 text-slate-400" />
+                                                            <span className="truncate font-bold text-slate-700">{doc.title || doc.name}</span>
+                                                        </div>
+                                                        <div className="flex gap-1">
+                                                            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 text-blue-500 hover:bg-blue-50" onClick={async () => {
+                                                                const url = await getOtherServiceDocumentUrl(doc.path, doc.storage)
+                                                                window.open(url, '_blank')
+                                                            }}>
+                                                                <Download className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={async () => {
+                                                                    if(confirm('¿Borrar archivo?')) {
+                                                                        await deleteOtherServiceDocument(selectedId!, doc.path)
+                                                                        setExistingDocuments(prev => prev.filter(d => d.path !== doc.path))
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center gap-4 mb-2 p-3 bg-white border border-dashed rounded-md border-slate-300">
+                                            <div className="flex flex-col gap-1">
+                                                <Label className="text-xs font-bold text-slate-500 uppercase">Adjuntar archivos</Label>
+                                            </div>
+                                            <Input type="number" min="0" max="10" className="w-20 h-10 text-center font-bold text-chimicyan text-lg" value={numDocs} onChange={handleNumDocsChange} />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {documentInputs.map((input, index) => (
+                                                <div key={index} className="space-y-3 p-4 bg-white rounded border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                                                    <Input 
+                                                        value={input.title}
+                                                        onChange={e => handleDocInputChange(index, 'title', e.target.value)}
+                                                        placeholder="Título del documento..."
+                                                        className="h-9 text-xs"
+                                                    />
+                                                    <Input 
+                                                        type="file" 
+                                                        onChange={e => handleDocInputChange(index, 'file', e.target.files?.[0] || null)}
+                                                        className="h-9 text-[10px] bg-slate-50 cursor-pointer"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
 
                             <DialogFooter>
                                 <Button type="submit" disabled={isLoading} className="bg-linear-to-r from-chimipink to-chimicyan text-slate-700 w-full sm:w-auto px-8 font-bold h-12">

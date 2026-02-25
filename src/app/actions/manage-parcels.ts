@@ -117,8 +117,11 @@ export async function createParcel(formData: FormData) {
         index++
     }
 
+    const { data: { user } } = await createClient().then(c => c.auth.getUser())
+
     const insertData = {
         sender_id,
+        agent_id: user?.id,
         recipient_name,
         recipient_phone,
         recipient_address,
@@ -145,7 +148,6 @@ export async function createParcel(formData: FormData) {
     }
 
     // Record Audit Log (Need to get user first, usually parcels has it)
-    const { data: { user } } = await createClient().then(c => c.auth.getUser())
     if (user) {
         await recordAuditLog({
             actorId: user.id,

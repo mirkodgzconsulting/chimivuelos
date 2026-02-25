@@ -58,6 +58,13 @@ export async function createOtherService(formData: FormData) {
     const service_type_other = formData.get('service_type_other') as string
     const note = formData.get('note') as string
     
+    // 2.5 Logistics & Recipient
+    const recipient_name = formData.get('recipient_name') as string
+    const recipient_phone = formData.get('recipient_phone') as string
+    const origin_address = formData.get('origin_address') as string
+    const destination_address = formData.get('destination_address') as string
+    const destination_address_client = formData.get('destination_address_client') as string
+    
     // 3. Economics
     const total_amount = parseFloat(formData.get('total_amount') as string) || 0
     const on_account = parseFloat(formData.get('on_account') as string) || 0
@@ -109,6 +116,11 @@ export async function createOtherService(formData: FormData) {
         service_type,
         service_type_other,
         note,
+        recipient_name,
+        recipient_phone,
+        origin_address,
+        destination_address,
+        destination_address_client,
         documents,
         total_amount,
         on_account,
@@ -186,6 +198,12 @@ export async function updateOtherService(formData: FormData) {
         const service_type_other = formData.get('service_type_other') as string
         const note = formData.get('note') as string
         
+        const recipient_name = formData.get('recipient_name') as string
+        const recipient_phone = formData.get('recipient_phone') as string
+        const origin_address = formData.get('origin_address') as string
+        const destination_address = formData.get('destination_address') as string
+        const destination_address_client = formData.get('destination_address_client') as string
+        
         const total_amount = parseFloat(formData.get('total_amount') as string) || 0
         const on_account = parseFloat(formData.get('on_account') as string) || 0
         const status = formData.get('status') as string
@@ -231,6 +249,11 @@ export async function updateOtherService(formData: FormData) {
             service_type,
             service_type_other,
             note,
+            recipient_name,
+            recipient_phone,
+            origin_address,
+            destination_address,
+            destination_address_client,
             documents: newDocuments,
             total_amount,
             on_account,
@@ -346,7 +369,7 @@ export async function deleteOtherServiceDocument(id: string, path: string) {
         const { data: existing } = await adminSupabase.from('other_services').select('documents').eq('id', id).single()
         if (!existing) throw new Error('Servicio no encontrado')
 
-        const newDocs = existing.documents.filter((d: any) => d.path !== path)
+        const newDocs = existing.documents.filter((d: { path: string }) => d.path !== path)
 
         const { error } = await adminSupabase
             .from('other_services')

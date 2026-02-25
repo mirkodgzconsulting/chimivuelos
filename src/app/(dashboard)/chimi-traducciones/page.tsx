@@ -35,7 +35,9 @@ import {
     Building2,
     Package,
     Lock,
-    Unlock
+    Unlock,
+    User,
+    Image as ImageIcon
 } from 'lucide-react'
 import { 
     getTranslations, 
@@ -97,6 +99,8 @@ interface Translation {
     on_account: number
     balance: number
     notes?: string
+    recipient_name?: string
+    recipient_phone?: string
     status: 'pending' | 'in_progress' | 'completed' | 'delivered' | 'cancelled'
     payment_details?: PaymentDetail[]
     profiles?: {
@@ -131,9 +135,7 @@ const PAYMENT_METHOD_IT_OPTIONS = [
     "UNICREDIT CHIMI",
     "BANK WISE",
     "BONIFICO SUEMA",
-    "POS — UNICREDIT CHIMI",
-    "WESTERN UNION",
-    "RIA",
+    "WESTERN / RIA A PERSONAL",
     "OTRO GIRO"
 ]
 const PAYMENT_METHOD_PE_OPTIONS = [
@@ -142,13 +144,50 @@ const PAYMENT_METHOD_PE_OPTIONS = [
     "EFEC LIMA DOLAR",
     "BCP SOLES CHIMI",
     "BCP DOLAR",
-    "BANCA EURO PERÚ",
-    "POS / LINK — BCP CHIMI",
-    "WESTERN UNION",
-    "RIA",
-    "OTRO GIRO"
+    "BANCA EURO PERÚ"
 ]
 const CURRENCY_OPTIONS = ["EUR", "PEN", "USD"]
+
+const DocumentPreview = ({ 
+    doc, 
+    onDownload, 
+    onDelete 
+}: { 
+    doc: TranslationDocument, 
+    onDownload: () => void, 
+    onDelete: () => void 
+}) => {
+    const [url, setUrl] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (doc.type.startsWith('image/')) {
+            getTranslationDocumentUrl(doc.path, doc.storage).then(res => {
+                if(res) setUrl(res)
+            }).catch(() => {})
+        }
+    }, [doc])
+
+    return (
+        <div className="flex items-center justify-between p-3 bg-white border rounded shadow-sm text-xs">
+            <div className="flex items-center gap-2 truncate">
+                {doc.type.startsWith('image/') ? (
+                    <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center overflow-hidden relative">
+                        {url ? <Image src={url} alt="preview" fill className="object-cover" /> : <ImageIcon className="h-5 w-5 text-slate-400" />}
+                    </div>
+                ) : <FileText className="h-5 w-5 text-slate-400" />}
+                <span className="truncate font-bold text-slate-700">{doc.title || doc.name}</span>
+            </div>
+            <div className="flex gap-1">
+                <Button type="button" variant="ghost" size="sm" className="h-8 w-8 text-blue-500 hover:bg-blue-50" onClick={onDownload}>
+                    <Download className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={onDelete}>
+                    <Trash2 className="h-4 w-4" />
+                </Button>
+            </div>
+        </div>
+    )
+}
 
 export default function TranslationsPage() {
     // Main Data State
@@ -160,6 +199,8 @@ export default function TranslationsPage() {
     const [isLoading, setIsLoading] = useState(false)
     const [searchClientTerm, setSearchClientTerm] = useState('')
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false)
+    const [showSourceLanguageList, setShowSourceLanguageList] = useState(false)
+    const [showTargetLanguageList, setShowTargetLanguageList] = useState(false)
     
     // Pagination & Filters
     const [currentPage, setCurrentPage] = useState(1)
@@ -220,6 +261,8 @@ export default function TranslationsPage() {
         balance: "0.00",
         tracking_code: "",
         notes: "",
+        recipient_name: "",
+        recipient_phone: "",
         status: "pending",
         sede_it: "",
         sede_pe: "",
@@ -258,14 +301,7 @@ export default function TranslationsPage() {
         }
     }, [tempPayments, showPaymentFields, formData.payment_quantity, formData.payment_total, formData.total_amount])
 
-    // Sync financial summary to formData for submission
-    useEffect(() => {
-        setFormData(prev => ({ 
-            ...prev, 
-            on_account: financials.on_account,
-            balance: financials.balance
-        }))
-    }, [financials.on_account, financials.balance])
+
 
     // Address Lists
     const [showOriginList, setShowOriginList] = useState(false)
@@ -393,6 +429,8 @@ export default function TranslationsPage() {
             balance: "0.00",
             tracking_code: "",
             notes: "",
+            recipient_name: "",
+            recipient_phone: "",
             status: "pending",
             sede_it: "",
             sede_pe: "",
@@ -437,6 +475,8 @@ export default function TranslationsPage() {
             balance: trans.balance.toString(),
             tracking_code: trans.tracking_code || "",
             notes: trans.notes || "",
+            recipient_name: trans.recipient_name || "",
+            recipient_phone: trans.recipient_phone || "",
             status: trans.status,
             sede_it: "",
             sede_pe: "",
@@ -820,12 +860,32 @@ export default function TranslationsPage() {
                                     </div>
                                 </div>
 
-                                {/* Logistics (Right) */}
-                                <div className="space-y-4 border p-4 rounded-md bg-white flex flex-col h-full">
-                                    <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
-                                        <MapPin className="h-4 w-4 text-chimiteal" />
-                                        Logística de Entrega
-                                    </h3>
+                                {/* Right Column containing Recipient and Logistics */}
+                                <div className="flex flex-col gap-4 h-full">
+                                    {/* Datos del Destinatario */}
+                                    <div className="space-y-3 border p-4 rounded-md bg-white">
+                                        <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
+                                            <User className="h-4 w-4 text-violet-500" />
+                                            Datos del Destinatario
+                                        </h3>
+                                        
+                                        <div className="grid gap-2 mb-2">
+                                            <Label className="text-[10px] text-slate-400 font-semibold uppercase">Nombre Completo</Label>
+                                            <Input name="recipient_name" value={formData.recipient_name} onChange={handleInputChange} required className="h-10 text-sm bg-slate-50 border-slate-200" autoComplete="off" />
+                                        </div>
+
+                                        <div className="grid gap-2">
+                                            <Label className="text-[10px] text-slate-400 font-semibold uppercase">Teléfono</Label>
+                                            <Input name="recipient_phone" value={formData.recipient_phone} onChange={handleInputChange} className="h-10 text-sm bg-slate-50 border-slate-200" autoComplete="off" />
+                                        </div>
+                                    </div>
+
+                                    {/* Logistics (Right) */}
+                                    <div className="space-y-4 border p-4 rounded-md bg-white flex flex-col flex-1">
+                                        <h3 className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
+                                            <MapPin className="h-4 w-4 text-chimiteal" />
+                                            Logística de Entrega
+                                        </h3>
 
                                     <div className="space-y-4 flex-1">
                                         <div className="grid gap-2 relative">
@@ -914,33 +974,72 @@ export default function TranslationsPage() {
                                         <div className="space-y-3 pt-4 border-t border-slate-100">
                                             <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><Languages className="h-4 w-4 text-chimipink" /> Idioma</Label>
                                             <div className="grid grid-cols-2 gap-2">
-                                                <div className="grid gap-2">
+                                                <div className="grid gap-2 relative">
                                                     <Label className="text-[10px] text-slate-400 font-semibold uppercase">Idioma Origen</Label>
-                                                    <Input 
-                                                        list="language-options"
-                                                        name="source_language"
-                                                        value={formData.source_language}
-                                                        onChange={handleInputChange}
-                                                        className="h-10 text-sm bg-slate-50 border-slate-200"
-                                                        placeholder="Ej. Español"
-                                                        autoComplete="off"
-                                                    />
+                                                    <div className="relative">
+                                                        <Input 
+                                                            name="source_language"
+                                                            value={formData.source_language}
+                                                            onChange={(e) => { handleInputChange(e); setShowSourceLanguageList(true); }}
+                                                            onFocus={() => setShowSourceLanguageList(true)}
+                                                            onBlur={() => setTimeout(() => setShowSourceLanguageList(false), 200)}
+                                                            className="h-10 text-sm bg-slate-50 border-slate-200 pr-8"
+                                                            placeholder="Ej. Español"
+                                                            autoComplete="off"
+                                                        />
+                                                        {formData.source_language ? (
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => setFormData(prev => ({ ...prev, source_language: '' }))}
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                            >
+                                                                <X size={14} strokeWidth={3} />
+                                                            </button>
+                                                        ) : (
+                                                            <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                                                        )}
+                                                    </div>
+                                                    {showSourceLanguageList && (
+                                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto font-medium">
+                                                            {LANGUAGE_OPTIONS.filter(o => o.toLowerCase().includes(formData.source_language.toLowerCase())).map(o => (
+                                                                <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => setFormData(p => ({ ...p, source_language: o }))}>{o}</div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div className="grid gap-2">
+                                                <div className="grid gap-2 relative">
                                                     <Label className="text-[10px] text-slate-400 font-semibold uppercase">Idioma a Traducir</Label>
-                                                    <Input 
-                                                        list="language-options"
-                                                        name="target_language"
-                                                        value={formData.target_language}
-                                                        onChange={handleInputChange}
-                                                        className="h-10 text-sm bg-slate-50 border-slate-200"
-                                                        placeholder="Ej. Italiano"
-                                                        autoComplete="off"
-                                                    />
+                                                    <div className="relative">
+                                                        <Input 
+                                                            name="target_language"
+                                                            value={formData.target_language}
+                                                            onChange={(e) => { handleInputChange(e); setShowTargetLanguageList(true); }}
+                                                            onFocus={() => setShowTargetLanguageList(true)}
+                                                            onBlur={() => setTimeout(() => setShowTargetLanguageList(false), 200)}
+                                                            className="h-10 text-sm bg-slate-50 border-slate-200 pr-8"
+                                                            placeholder="Ej. Italiano"
+                                                            autoComplete="off"
+                                                        />
+                                                        {formData.target_language ? (
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => setFormData(prev => ({ ...prev, target_language: '' }))}
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                            >
+                                                                <X size={14} strokeWidth={3} />
+                                                            </button>
+                                                        ) : (
+                                                            <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                                                        )}
+                                                    </div>
+                                                    {showTargetLanguageList && (
+                                                        <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto font-medium">
+                                                            {LANGUAGE_OPTIONS.filter(o => o.toLowerCase().includes(formData.target_language.toLowerCase())).map(o => (
+                                                                <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => setFormData(p => ({ ...p, target_language: o }))}>{o}</div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <datalist id="language-options">
-                                                    {LANGUAGE_OPTIONS.map(opt => <option key={opt} value={opt} />)}
-                                                </datalist>
                                             </div>
                                         </div>
 
@@ -957,8 +1056,9 @@ export default function TranslationsPage() {
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Section: Archivos/Fotos */}
+                        {/* Section: Archivos/Fotos */}
                             <div className="space-y-4 border p-4 rounded-md bg-slate-50">
                                 <Label className="font-bold text-slate-700 text-sm flex items-center gap-2 mb-2">
                                     <Package className="h-4 w-4 text-chimicyan" /> Archivos de los documentos
@@ -968,30 +1068,17 @@ export default function TranslationsPage() {
                                 {existingDocuments.length > 0 && (
                                     <div className="mb-4 space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         {existingDocuments.map((doc, idx) => (
-                                            <div key={idx} className="flex items-center justify-between p-3 bg-white border rounded shadow-sm text-xs">
-                                                <div className="flex items-center gap-2 truncate">
-                                                    {doc.type.startsWith('image/') ? (
-                                                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center overflow-hidden">
-                                                            <Image src="/img-placeholder.png" alt="preview" width={32} height={32} className="object-cover" />
-                                                        </div>
-                                                    ) : <FileText className="h-5 w-5 text-slate-400" />}
-                                                    <span className="truncate font-bold text-slate-700">{doc.title || doc.name}</span>
-                                                </div>
-                                                <div className="flex gap-1">
-                                                    <Button type="button" variant="ghost" size="sm" className="h-8 w-8 text-blue-500 hover:bg-blue-50" onClick={() => handleDownload(doc)}>
-                                                        <Download className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button type="button" variant="ghost" size="sm" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={async () => {
-                                                            if(confirm('¿Borrar archivo?')) {
-                                                                await deleteTranslationDocument(selectedId!, doc.path)
-                                                                setExistingDocuments(prev => prev.filter(d => d.path !== doc.path))
-                                                            }
-                                                        }}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
+                                            <DocumentPreview 
+                                                key={idx} 
+                                                doc={doc} 
+                                                onDownload={() => handleDownload(doc)} 
+                                                onDelete={async () => {
+                                                    if(confirm('¿Borrar archivo?')) {
+                                                        await deleteTranslationDocument(selectedId!, doc.path)
+                                                        setExistingDocuments(prev => prev.filter(d => d.path !== doc.path))
+                                                    }
+                                                }} 
+                                            />
                                         ))}
                                     </div>
                                 )}
@@ -1020,8 +1107,8 @@ export default function TranslationsPage() {
                                                     className="h-9 text-[10px] bg-slate-50 cursor-pointer border-slate-100 flex-1"
                                                 />
                                                 {input.file && input.file.type.startsWith('image/') && (
-                                                    <div className="w-10 h-10 rounded-md border bg-slate-100 overflow-hidden shrink-0 shadow-sm">
-                                                        <Image src="/img-placeholder.png" alt="preview" width={40} height={40} className="object-cover" />
+                                                    <div className="w-10 h-10 rounded-md border bg-slate-100 overflow-hidden shrink-0 shadow-sm relative">
+                                                        <Image src={URL.createObjectURL(input.file)} alt="preview" fill className="object-cover" />
                                                     </div>
                                                 )}
                                             </div>
@@ -1323,6 +1410,7 @@ export default function TranslationsPage() {
                             <tr className="bg-slate-50/80 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-100">
                                 <th className="p-4">CÓDIGO</th>
                                 <th className="p-4">CLIENTE</th>
+                                <th className="p-4">AGENTE</th>
                                 <th className="p-4">TOTAL A PAGAR</th>
                                 <th className="p-4">A CUENTA</th>
                                 <th className="p-4">SALDO PENDIENTE</th>
@@ -1338,6 +1426,11 @@ export default function TranslationsPage() {
                                         <div className="flex flex-col">
                                             <span className="font-bold text-slate-700">{t.profiles?.first_name} {t.profiles?.last_name}</span>
                                             <span className="text-[10px] text-slate-400 font-medium italic">{t.profiles?.email}</span>
+                                        </div>
+                                    </td>
+                                    <td className="p-4 py-3">
+                                        <div className="flex flex-col text-[10px] font-bold text-slate-500 uppercase">
+                                            {t.agent ? `${t.agent.first_name} ${t.agent.last_name}` : '-'}
                                         </div>
                                     </td>
                                     <td className="p-4 py-3 font-bold text-slate-700">€ {t.total_amount.toFixed(2)}</td>

@@ -118,9 +118,7 @@ const PAYMENT_METHOD_IT_OPTIONS = [
     "UNICREDIT CHIMI",
     "BANK WISE",
     "BONIFICO SUEMA",
-    "POS — UNICREDIT CHIMI",
-    "WESTERN UNION",
-    "RIA",
+    "WESTERN / RIA A PERSONAL",
     "OTRO GIRO"
 ]
 const PAYMENT_METHOD_PE_OPTIONS = [
@@ -129,11 +127,7 @@ const PAYMENT_METHOD_PE_OPTIONS = [
     "EFEC LIMA DOLAR",
     "BCP SOLES CHIMI",
     "BCP DOLAR",
-    "BANCA EURO PERÚ",
-    "POS / LINK — BCP CHIMI",
-    "WESTERN UNION",
-    "RIA",
-    "OTRO GIRO"
+    "BANCA EURO PERÚ"
 ]
 const CURRENCY_OPTIONS = ["EUR", "PEN", "USD"]
 
@@ -203,6 +197,8 @@ export default function ParcelsPage() {
     const [formData, setFormData] = useState({
         // Sender
         sender_id: "",
+        client_email: "",
+        client_phone: "",
         
         // Recipient
         recipient_name: "",
@@ -292,14 +288,7 @@ export default function ParcelsPage() {
         }
     }, [tempPayments, showPaymentFields, formData.payment_quantity, formData.payment_total, formData.shipping_cost])
 
-    // Sync financial summary to formData for submission
-    useEffect(() => {
-        setFormData(prev => ({ 
-            ...prev, 
-            on_account: financials.on_account,
-            balance: financials.balance
-        }))
-    }, [financials.on_account, financials.balance])
+
 
     // Handlers
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -364,6 +353,8 @@ export default function ParcelsPage() {
     const resetForm = () => {
         setFormData({
             sender_id: "",
+            client_email: "",
+            client_phone: "",
             recipient_name: "",
             recipient_phone: "",
             recipient_address: "",
@@ -401,9 +392,13 @@ export default function ParcelsPage() {
     }
 
     const handleEdit = (parcel: Parcel) => {
+        const cl = clients.find(c => c.id === parcel.sender_id)
+        
         setSelectedParcelId(parcel.id)
         setFormData({
             sender_id: parcel.sender_id,
+            client_email: cl?.email || "",
+            client_phone: cl?.phone || "",
             recipient_name: parcel.recipient_name,
             recipient_phone: parcel.recipient_phone || "",
             recipient_address: parcel.recipient_address || "",
@@ -428,7 +423,6 @@ export default function ParcelsPage() {
             destination_address_client: parcel.destination_address_client || ""
         })
         
-        const cl = clients.find(c => c.id === parcel.sender_id)
         if (cl) setSearchClientTerm(`${cl.first_name} ${cl.last_name}`)
         
         if (parcel.documents) {
@@ -721,62 +715,80 @@ export default function ParcelsPage() {
 
                         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
                             {/* Client (Sender) Selection */}
-                             <div className="grid gap-2 relative">
-                                <Label className="flex items-center gap-2 font-bold text-slate-700 text-sm mb-1"><User className="h-4 w-4 text-chimipink" /> Remitente (Cliente) <span className="text-red-500">*</span></Label>
-                                    <div className="relative">
-                                        <Input 
-                                            placeholder="Buscar cliente..." 
-                                            value={searchClientTerm}
-                                            onChange={(e) => {
-                                                setSearchClientTerm(e.target.value)
-                                                setIsClientDropdownOpen(true)
-                                                if (e.target.value === '') {
-                                                    setFormData(prev => ({ ...prev, sender_id: '' }))
-                                                }
-                                            }}
-                                            onClick={() => !selectedParcelId && setIsClientDropdownOpen(true)}
-                                            onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
-                                            required={!formData.sender_id}
-                                            disabled={!!selectedParcelId}
-                                            className={`${selectedParcelId ? "bg-slate-100 text-slate-500 cursor-not-allowed" : ""} pr-8`}
-                                        />
-                                        {searchClientTerm && !selectedParcelId ? (
-                                            <button 
-                                                type="button"
-                                                onClick={() => {
-                                                    setSearchClientTerm('')
-                                                    setFormData(prev => ({ ...prev, sender_id: '' }))
+                            <div className="space-y-4 border p-4 rounded-md bg-slate-50">
+                                <Label className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                                    <User className="h-4 w-4 text-chimipink" /> Datos del Cliente
+                                </Label>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="space-y-2 relative">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase">Remitente (Cliente) <span className="text-red-500">*</span></Label>
+                                        <div className="relative">
+                                            <Input 
+                                                placeholder="Buscar cliente..." 
+                                                value={searchClientTerm}
+                                                onChange={(e) => { 
+                                                    setSearchClientTerm(e.target.value); 
+                                                    setIsClientDropdownOpen(true); 
                                                 }}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
-                                            >
-                                                <X size={14} strokeWidth={3} />
-                                            </button>
-                                        ) : (
-                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                                onClick={() => setIsClientDropdownOpen(true)}
+                                                autoComplete="off"
+                                                className="bg-white pr-8"
+                                            />
+                                            {searchClientTerm ? (
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSearchClientTerm('')
+                                                        setFormData(prev => ({ ...prev, sender_id: '', client_email: '', client_phone: '' }))
+                                                    }}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                >
+                                                    <X size={14} strokeWidth={3} />
+                                                </button>
+                                            ) : (
+                                                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                            )}
+                                        </div>
+                                        {isClientDropdownOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setIsClientDropdownOpen(false)} />
+                                                <div className="absolute z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-48 overflow-y-auto">
+                                                    {clients
+                                                        .filter(c => {
+                                                            const term = searchClientTerm.toLowerCase()
+                                                            return `${c.first_name} ${c.last_name}`.toLowerCase().includes(term) ||
+                                                                   c.email?.toLowerCase().includes(term)
+                                                        })
+                                                        .map(client => (
+                                                            <div key={client.id} className="p-3 hover:bg-slate-50 cursor-pointer border-b last:border-0" onClick={() => {
+                                                                setFormData(prev => ({ 
+                                                                    ...prev, 
+                                                                    sender_id: client.id,
+                                                                    client_email: client.email || "",
+                                                                    client_phone: client.phone || ""
+                                                                }))
+                                                                setSearchClientTerm(`${client.first_name} ${client.last_name}`)
+                                                                setIsClientDropdownOpen(false)
+                                                            }}>
+                                                                <p className="font-bold text-slate-700 text-sm">{client.first_name} {client.last_name}</p>
+                                                                <p className="text-xs text-slate-500">{client.email}</p>
+                                                            </div>
+                                                        ))
+                                                    }
+                                                </div>
+                                            </>
                                         )}
                                     </div>
-                                {isClientDropdownOpen && (
-                                    <div className="absolute top-[70px] z-50 w-full max-h-40 overflow-y-auto bg-white border border-slate-200 rounded-md shadow-lg">
-                                        {clients.filter(c => {
-                                            if (!searchClientTerm) return true
-                                            const term = searchClientTerm.toLowerCase()
-                                            return c.first_name?.toLowerCase().includes(term) || 
-                                                   c.last_name?.toLowerCase().includes(term)
-                                        }).map(client => (
-                                            <div 
-                                                key={client.id}
-                                                className="px-3 py-2 cursor-pointer hover:bg-slate-50 text-sm"
-                                                onClick={() => {
-                                                    setFormData(prev => ({ ...prev, sender_id: client.id }))
-                                                    setSearchClientTerm(`${client.first_name} ${client.last_name}`)
-                                                    setIsClientDropdownOpen(false)
-                                                }}
-                                            >
-                                                <div className="font-medium">{client.first_name} {client.last_name}</div>
-                                            </div>
-                                        ))}
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase">Correo</Label>
+                                        <Input value={formData.client_email} readOnly className="bg-slate-100 h-10" />
                                     </div>
-                                )}
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase">Teléfono</Label>
+                                        <Input value={formData.client_phone} readOnly className="bg-slate-100 h-10" />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Two Column Layout */}

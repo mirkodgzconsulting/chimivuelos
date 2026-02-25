@@ -24,6 +24,11 @@ const nextConfig: NextConfig = {
         hostname: 'flagcdn.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'chimivuelos.2356dcbe896023e07c9cfddfee7855f5.r2.cloudflarestorage.com',
+        pathname: '/**',
+      },
     ],
   },
   experimental: {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2, Lock, Unlock } from 'lucide-react'
+import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2, Lock, Unlock, User } from 'lucide-react'
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
@@ -196,9 +196,7 @@ const PAYMENT_METHOD_IT_OPTIONS = [
     "UNICREDIT CHIMI",
     "BANK WISE",
     "BONIFICO SUEMA",
-    "POS — UNICREDIT CHIMI",
-    "WESTERN UNION",
-    "RIA",
+    "WESTERN / RIA A PERSONAL",
     "OTRO GIRO"
 ]
 const PAYMENT_METHOD_PE_OPTIONS = [
@@ -207,11 +205,7 @@ const PAYMENT_METHOD_PE_OPTIONS = [
     "EFEC LIMA DOLAR",
     "BCP SOLES CHIMI",
     "BCP DOLAR",
-    "BANCA EURO PERÚ",
-    "POS / LINK — BCP CHIMI",
-    "WESTERN UNION",
-    "RIA",
-    "OTRO GIRO"
+    "BANCA EURO PERÚ"
 ]
 
 const FLIGHT_STATUSES = [
@@ -1235,62 +1229,66 @@ export default function FlightsPage() {
                         </DialogHeader>
                         
                         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-                            {/* Client Search */}
-                            <div className="grid gap-2 relative">
-                                <Label>Cliente <span className="text-red-500">*</span></Label>
-                                <div className="relative">
-                                    <Input 
-                                        placeholder="Buscar cliente..." 
-                                        value={clientSearch}
-                                        onChange={(e) => {
-                                            setClientSearch(e.target.value)
-                                            setShowClientList(true)
-                                        }}
-                                        onFocus={() => setShowClientList(true)}
-                                        onBlur={() => setTimeout(() => setShowClientList(false), 200)}
-                                        disabled={!!selectedFlightId} 
-                                        className="pr-8"
-                                    />
-                                    {clientSearch && !selectedFlightId ? (
-                                        <button 
-                                            type="button"
-                                            onClick={() => {
-                                                setClientSearch('')
-                                                setFormData(prev => ({ ...prev, client_id: '', client_email: '', client_phone: '' }))
-                                            }}
-                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
-                                        >
-                                            <X size={14} strokeWidth={3} />
-                                        </button>
-                                    ) : (
-                                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                    )}
-                                </div>
-                                {showClientList && filteredClients.length > 0 && !selectedFlightId && (
-                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-lg rounded-md mt-1 max-h-40 overflow-y-auto [&::-webkit-scrollbar]:hidden">
-                                        {filteredClients.map(client => (
-                                            <div 
-                                                key={client.id}
-                                                className="p-2 hover:bg-slate-50 cursor-pointer text-sm"
-                                                onClick={() => selectClient(client)}
-                                            >
-                                                <div className="font-medium">{client.first_name} {client.last_name}</div>
-                                                <div className="text-xs text-slate-500">{client.email}</div>
+                            {/* Client Search and Details */}
+                            <div className="space-y-4 border p-4 rounded-md bg-slate-50">
+                                <Label className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                                    <User className="h-4 w-4 text-chimipink" /> Datos del Cliente
+                                </Label>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="grid gap-2 relative">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase">Cliente <span className="text-red-500">*</span></Label>
+                                        <div className="relative">
+                                            <Input 
+                                                placeholder="Buscar cliente..." 
+                                                value={clientSearch}
+                                                onChange={(e) => {
+                                                    setClientSearch(e.target.value)
+                                                    setShowClientList(true)
+                                                }}
+                                                onFocus={() => setShowClientList(true)}
+                                                onBlur={() => setTimeout(() => setShowClientList(false), 200)}
+                                                disabled={!!selectedFlightId} 
+                                                className="bg-white pr-8"
+                                            />
+                                            {clientSearch && !selectedFlightId ? (
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setClientSearch('')
+                                                        setFormData(prev => ({ ...prev, client_id: '', client_email: '', client_phone: '' }))
+                                                    }}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                >
+                                                    <X size={14} strokeWidth={3} />
+                                                </button>
+                                            ) : (
+                                                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                            )}
+                                        </div>
+                                        {showClientList && filteredClients.length > 0 && !selectedFlightId && (
+                                            <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-lg rounded-md mt-1 max-h-40 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+                                                {filteredClients.map(client => (
+                                                    <div 
+                                                        key={client.id}
+                                                        className="p-2 hover:bg-slate-50 cursor-pointer text-sm"
+                                                        onClick={() => selectClient(client)}
+                                                    >
+                                                        <div className="font-medium">{client.first_name} {client.last_name}</div>
+                                                        <div className="text-xs text-slate-500">{client.email}</div>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
-                                )}
-                            </div>
 
-                            {/* Auto-filled Fields */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="grid gap-2">
-                                    <Label>Correo</Label>
-                                    <Input value={formData.client_email} readOnly className="bg-slate-50 text-slate-500" />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label>Teléfono</Label>
-                                    <Input value={formData.client_phone} readOnly className="bg-slate-50 text-slate-500" />
+                                    <div className="grid gap-2">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase">Correo</Label>
+                                        <Input value={formData.client_email} readOnly className="bg-slate-100 h-10" />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase">Teléfono</Label>
+                                        <Input value={formData.client_phone} readOnly className="bg-slate-100 h-10" />
+                                    </div>
                                 </div>
                             </div>
                             
