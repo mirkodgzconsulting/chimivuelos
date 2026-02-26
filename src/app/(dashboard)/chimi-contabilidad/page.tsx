@@ -3,16 +3,19 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import Image from "next/image"
 import { 
-    Calculator, 
     ChevronLeft, 
     TrendingUp, 
+    TrendingDown,
     History,
     ArrowUpRight,
     Loader2,
     Building2,
     CalendarDays,
-    Filter
+    X,
+    ArrowDownUp,
+    FileSpreadsheet
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -52,6 +55,7 @@ export default function ContabilidadPage() {
         return `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
     })
     const [selectedBranch, setSelectedBranch] = useState<string>('all')
+    const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all')
 
     const loadData = useCallback(async () => {
         setIsLoading(true)
@@ -73,20 +77,46 @@ export default function ContabilidadPage() {
 
     // Helpers for calculations
     const getStatsForMethod = (methodName: string, country: 'IT' | 'PE') => {
-        const today = new Date().toISOString().split('T')[0]
+        const methodPayments = payments.filter(p => {
+            const paymentDate = p.date.split('T')[0]
+            const isInRange = paymentDate >= startDate && paymentDate <= endDate
+            return p.method === methodName && p.country === country && isInRange
+        })
         
-        const methodPayments = payments.filter(p => p.method === methodName && p.country === country)
-        
-        const totalGeneral = methodPayments.reduce((sum, p) => sum + p.amountEur, 0)
-        const entradaDia = methodPayments
-            .filter(p => p.date.startsWith(today))
-            .reduce((sum, p) => sum + p.amountEur, 0)
+        const totalIncome = methodPayments.filter(p => p.amountEur > 0).reduce((sum, p) => sum + p.amountEur, 0)
+        const totalExpenses = methodPayments.filter(p => p.amountEur < 0).reduce((sum, p) => sum + Math.abs(p.amountEur), 0)
+        const balance = methodPayments.reduce((sum, p) => sum + p.amountEur, 0)
 
         return {
-            entradaDia,
-            totalGeneral
+            totalIncome,
+            totalExpenses,
+            balance
         }
     }
+
+    const countryStats = useMemo(() => {
+        const stats = {
+            IT: { income: 0, expenses: 0, balance: 0 },
+            PE: { income: 0, expenses: 0, balance: 0 }
+        }
+
+        payments.forEach(p => {
+            const paymentDate = p.date.split('T')[0]
+            if (paymentDate >= startDate && paymentDate <= endDate) {
+                if (p.country === 'IT') {
+                    if (p.amountEur > 0) stats.IT.income += p.amountEur
+                    else stats.IT.expenses += Math.abs(p.amountEur)
+                    stats.IT.balance += p.amountEur
+                } else if (p.country === 'PE') {
+                    if (p.amountEur > 0) stats.PE.income += p.amountEur
+                    else stats.PE.expenses += Math.abs(p.amountEur)
+                    stats.PE.balance += p.amountEur
+                }
+            }
+        })
+
+        return stats
+    }, [payments, startDate, endDate])
 
     const branches = useMemo(() => {
         if (!selectedMethod || !selectedCountry) return []
@@ -104,15 +134,39 @@ export default function ContabilidadPage() {
                 const paymentDate = p.date.split('T')[0]
                 const isInRange = paymentDate >= startDate && paymentDate <= endDate
                 const isCorrectBranch = selectedBranch === 'all' || p.branch === selectedBranch
+                const isCorrectType = typeFilter === 'all' || (typeFilter === 'income' ? p.amountEur > 0 : p.amountEur < 0)
                 
-                return isInRange && isCorrectBranch
+                return isInRange && isCorrectBranch && isCorrectType
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    }, [payments, selectedMethod, selectedCountry, startDate, endDate, selectedBranch])
+    }, [payments, selectedMethod, selectedCountry, startDate, endDate, selectedBranch, typeFilter])
 
-    const totalDetail = useMemo(() => {
-        return filteredDetailPayments.reduce((sum: number, p: PaymentEntry) => sum + p.amountEur, 0)
+    const { totalIncome, totalExpenses, totalDetail } = useMemo(() => {
+        return filteredDetailPayments.reduce((acc, p) => {
+            if (p.amountEur > 0) acc.totalIncome += p.amountEur
+            else acc.totalExpenses += Math.abs(p.amountEur)
+            acc.totalDetail += p.amountEur
+            return acc
+        }, { totalIncome: 0, totalExpenses: 0, totalDetail: 0 })
     }, [filteredDetailPayments])
+
+    const handleExportExcel = () => {
+        const dataToExport = filteredDetailPayments.map(p => ({
+            Fecha: new Date(p.date).toLocaleDateString('es-ES'),
+            Servicio: p.serviceType,
+            PNR_CODI: p.pnr || '--',
+            Sede: p.branch || '--',
+            Cliente_Proveedor: p.clientName,
+            Moneda: p.currency,
+            Monto_Original: p.originalAmount,
+            Tipo_Cambio: p.exchangeRate.toFixed(2),
+            Total_EUR: p.amountEur.toFixed(2)
+        }))
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport)
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Contabilidad")
+        XLSX.writeFile(workbook, `Contabilidad_${selectedMethod}_${new Date().toISOString().split('T')[0]}.xlsx`)
+    }
 
     if (isLoading) {
         return (
@@ -176,16 +230,16 @@ export default function ContabilidadPage() {
                                     </div>
                                 </div>
 
-                                <div className="space-y-1.5 min-w-[200px]">
+                                <div className="space-y-1.5 min-w-[140px]">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-0.5">
-                                        <Building2 size={12} className="text-chimicyan" /> Filtrar por Sede
+                                        <Building2 size={12} className="text-chimicyan" /> Sede
                                     </label>
                                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                                         <SelectTrigger className="h-9 text-xs border-slate-200 hover:border-chimicyan/40 focus:border-chimicyan/60 transition-all bg-white font-bold w-full rounded-lg shadow-sm">
-                                            <SelectValue placeholder="Todas las sedes" />
+                                            <SelectValue placeholder="Todas" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">Todas las sedes</SelectItem>
+                                            <SelectItem value="all">Todas</SelectItem>
                                             {branches.map((b) => (
                                                 <SelectItem key={b} value={b}>{b}</SelectItem>
                                             ))}
@@ -193,9 +247,25 @@ export default function ContabilidadPage() {
                                     </Select>
                                 </div>
 
+                                <div className="space-y-1.5 min-w-[120px]">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-0.5">
+                                        <ArrowDownUp size={12} className="text-chimipink" /> Tipo
+                                    </label>
+                                    <Select value={typeFilter} onValueChange={(v: 'all' | 'income' | 'expense') => setTypeFilter(v)}>
+                                        <SelectTrigger className="h-9 text-xs border-slate-200 hover:border-chimipink/40 focus:border-chimipink/60 transition-all bg-white font-bold w-full rounded-lg shadow-sm">
+                                            <SelectValue placeholder="Todos" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos</SelectItem>
+                                            <SelectItem value="income">Entradas</SelectItem>
+                                            <SelectItem value="expense">Gastos</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
                                 <Button 
                                     variant="ghost" 
-                                    size="sm"
+                                    size="icon"
                                     onClick={() => {
                                         const now = new Date()
                                         const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -204,18 +274,49 @@ export default function ContabilidadPage() {
                                         setStartDate(`${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, '0')}-01`)
                                         setEndDate(`${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`)
                                         setSelectedBranch('all')
+                                        setTypeFilter('all')
                                     }}
-                                    className="text-[10px] font-black text-slate-400 hover:text-chimipink h-9 uppercase px-4 hover:bg-pink-50 rounded-lg transition-all mb-px"
+                                    className="h-9 w-9 text-slate-400 hover:text-chimipink hover:bg-pink-50 rounded-lg transition-all mb-px"
+                                    title="Limpiar Filtros"
                                 >
-                                    <Filter className="h-3.5 w-3.5 mr-2" /> Limpiar Filtros
+                                    <X className="h-4 w-4" />
+                                </Button>
+
+                                <Button 
+                                    variant="outline" 
+                                    size="icon"
+                                    onClick={handleExportExcel}
+                                    className="h-9 w-9 text-emerald-600 border-slate-200 hover:bg-emerald-50 hover:border-emerald-200 transition-all shadow-sm"
+                                    title="Exportar a Excel"
+                                >
+                                    <FileSpreadsheet className="h-4 w-4" />
                                 </Button>
                             </div>
 
-                            <div className="flex flex-col items-end pb-0.5">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none mb-1">TOTAL CONSOLIDADO</span>
-                                <span className="text-3xl font-black text-chimiteal leading-none drop-shadow-sm">
-                                    € {totalDetail.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
+                            <div className="flex items-center gap-6 border-l border-slate-200 pl-6 ml-auto">
+                                <div className="flex flex-col items-end pb-0.5">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">TOTAL INGRESOS</span>
+                                    <span className="text-lg font-bold text-emerald-600 leading-none">
+                                        € {totalIncome.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+
+                                <div className="flex flex-col items-end pb-0.5">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">TOTAL GASTOS</span>
+                                    <span className="text-lg font-bold text-rose-600 leading-none">
+                                        - € {totalExpenses.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+
+                                <div className="flex flex-col items-end pb-0.5">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none mb-1">TOTAL CONSOLIDADO</span>
+                                    <span className={cn(
+                                        "text-3xl font-black leading-none drop-shadow-sm",
+                                        totalDetail >= 0 ? "text-chimiteal" : "text-rose-600"
+                                    )}>
+                                        {totalDetail < 0 ? '- ' : ''}€ {Math.abs(totalDetail).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -244,13 +345,16 @@ export default function ContabilidadPage() {
                                             </td>
                                             <td className="p-4">
                                                 <span className={cn(
-                                                    "px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-tighter",
-                                                    p.serviceType === 'Vuelo' && "bg-blue-50 text-blue-600",
-                                                    p.serviceType === 'Giro' && "bg-emerald-50 text-emerald-600",
-                                                    p.serviceType === 'Encomienda' && "bg-amber-50 text-amber-600",
-                                                    p.serviceType === 'Traducción' && "bg-purple-50 text-purple-600",
-                                                    p.serviceType === 'Otro Servicio' && "bg-slate-100 text-slate-600"
+                                                    "px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-tighter flex items-center gap-1 w-fit",
+                                                    p.amountEur >= 0 ? (
+                                                        p.serviceType === 'Vuelo' ? "bg-blue-50 text-blue-600" :
+                                                        p.serviceType === 'Giro' ? "bg-emerald-50 text-emerald-600" :
+                                                        p.serviceType === 'Encomienda' ? "bg-amber-50 text-amber-600" :
+                                                        p.serviceType === 'Traducción' ? "bg-purple-50 text-purple-600" :
+                                                        "bg-slate-100 text-slate-600"
+                                                    ) : "bg-rose-50 text-rose-600 border border-rose-100"
                                                 )}>
+                                                    {p.amountEur >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                                                     {p.serviceType}
                                                 </span>
                                             </td>
@@ -274,16 +378,16 @@ export default function ContabilidadPage() {
                                                 </span>
                                             </td>
                                             <td className="p-4 text-center">
-                                                <div className="font-bold text-xs text-slate-700">
-                                                    {p.currency === 'PEN' ? 'S/' : p.currency === 'USD' ? '$' : '€'} {parseFloat(p.originalAmount).toFixed(2)}
+                                                <div className={cn("font-bold text-xs", p.amountEur < 0 ? "text-rose-600" : "text-slate-700")}>
+                                                    {p.amountEur < 0 ? '-' : ''}{p.currency === 'PEN' ? 'S/' : p.currency === 'USD' ? '$' : '€'} {Math.abs(parseFloat(p.originalAmount)).toFixed(2)}
                                                 </div>
                                             </td>
                                             <td className="p-4 text-center font-mono text-[11px] text-slate-500">
                                                 {p.exchangeRate.toFixed(2)}
                                             </td>
                                             <td className="p-4 text-right">
-                                                <span className="text-sm font-black text-chimiteal">
-                                                    € {p.amountEur.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                <span className={cn("text-sm font-black", p.amountEur < 0 ? "text-rose-600" : "text-chimiteal")}>
+                                                    {p.amountEur < 0 ? '- ' : ''}€ {Math.abs(p.amountEur).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </span>
                                             </td>
                                         </tr>
@@ -305,22 +409,67 @@ export default function ContabilidadPage() {
 
     return (
         <div className="space-y-12 animate-in fade-in duration-700">
-            {/* Header */}
-            <div className="text-center space-y-1">
-                <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center justify-center gap-2">
-                    <Calculator className="h-6 w-6 text-chimipink" />
-                    CONTABILIDAD
-                </h1>
-                <p className="text-slate-400 font-medium uppercase tracking-[0.2em] text-[10px]">
-                    Ingresos por Métodos de Pago
-                </p>
-            </div>
-
             {/* Italia Section */}
             <div className="space-y-6">
-                <div className="flex flex-col items-center justify-center gap-2 px-2">
-                    <Image src="https://flagcdn.com/w40/it.png" width={40} height={30} alt="Italia" className="rounded shadow-sm" />
-                    <h2 className="text-xl font-bold text-slate-800 uppercase tracking-tight">Italia</h2>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-2 border-b border-slate-100 pb-4">
+                    <div className="flex items-center gap-3">
+                        <Image src="https://flagcdn.com/w40/it.png" width={40} height={30} alt="Italia" className="rounded shadow-sm" />
+                        <h2 className="text-xl font-bold text-slate-800 uppercase tracking-tight">Italia</h2>
+                    </div>
+
+                    {/* Country Totals */}
+                    <div className="flex items-center gap-8 bg-slate-50/50 p-2 px-6 rounded-2xl border border-slate-100 shadow-xs animate-in fade-in slide-in-from-top-4 duration-500">
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Ingresos</span>
+                            <span className="text-sm font-black text-emerald-600">€ {countryStats.IT.income.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Gastos</span>
+                            <span className="text-sm font-black text-rose-500">- € {countryStats.IT.expenses.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex flex-col pl-6 border-l border-slate-200">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Balance General</span>
+                            <span className={cn("text-lg font-black tracking-tight leading-none", countryStats.IT.balance >= 0 ? "text-slate-800" : "text-rose-600")}>
+                                {countryStats.IT.balance < 0 ? '- ' : ''}€ {Math.abs(countryStats.IT.balance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Compact Date Filter aligned with Header */}
+                    <div className="flex items-center gap-2 bg-white/60 p-1 px-3 rounded-full border border-slate-200/60 shadow-xs backdrop-blur-md">
+                        <CalendarDays size={10} className="text-chimipink" />
+                        <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-1">Filtrar:</span>
+                            <input 
+                                type="date" 
+                                value={startDate} 
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="h-5 w-24 text-[10px] border-none bg-transparent font-black text-slate-600 focus:ring-0 cursor-pointer p-0"
+                            />
+                            <span className="text-slate-300 mx-0.5">—</span>
+                            <input 
+                                type="date" 
+                                value={endDate} 
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="h-5 w-24 text-[10px] border-none bg-transparent font-black text-slate-600 focus:ring-0 cursor-pointer p-0"
+                            />
+                        </div>
+                        <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => {
+                                const now = new Date()
+                                const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+                                const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+                                setStartDate(`${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, '0')}-01`)
+                                setEndDate(`${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`)
+                            }}
+                            className="h-5 w-5 text-slate-300 hover:text-chimipink hover:bg-pink-50 rounded-full transition-all"
+                            title="Mes Actual"
+                        >
+                            <X className="h-3 w-3" />
+                        </Button>
+                    </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -345,9 +494,32 @@ export default function ContabilidadPage() {
 
             {/* Perú Section */}
             <div className="space-y-6 pt-6">
-                <div className="flex flex-col items-center justify-center gap-2 px-2 border-t border-slate-100 pt-12">
-                    <Image src="https://flagcdn.com/w40/pe.png" width={40} height={30} alt="Perú" className="rounded shadow-sm" />
-                    <h2 className="text-xl font-bold text-slate-800 uppercase tracking-tight">Perú</h2>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-2 border-t border-slate-100 pt-12">
+                    <div className="flex items-center gap-3">
+                        <Image src="https://flagcdn.com/w40/pe.png" width={40} height={30} alt="Perú" className="rounded shadow-sm" />
+                        <h2 className="text-xl font-bold text-slate-800 uppercase tracking-tight">Perú</h2>
+                    </div>
+
+                    {/* Country Totals */}
+                    <div className="flex items-center gap-8 bg-slate-50/50 p-2 px-6 rounded-2xl border border-slate-100 shadow-xs animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Ingresos</span>
+                            <span className="text-sm font-black text-emerald-600">€ {countryStats.PE.income.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Gastos</span>
+                            <span className="text-sm font-black text-rose-500">- € {countryStats.PE.expenses.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex flex-col pl-6 border-l border-slate-200">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Balance General</span>
+                            <span className={cn("text-lg font-black tracking-tight leading-none", countryStats.PE.balance >= 0 ? "text-slate-800" : "text-rose-600")}>
+                                {countryStats.PE.balance < 0 ? '- ' : ''}€ {Math.abs(countryStats.PE.balance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Placeholder for symmetry if needed, or just spacers */}
+                    <div className="hidden md:block w-[300px]" />
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -376,7 +548,7 @@ export default function ContabilidadPage() {
 function MethodCard({ name, stats, onVerDetalle, country }: { 
     name: string, 
     country: 'IT' | 'PE',
-    stats: { entradaDia: number, totalGeneral: number }, 
+    stats: { totalIncome: number, totalExpenses: number, balance: number }, 
     onVerDetalle: () => void 
 }) {
     return (
@@ -399,22 +571,30 @@ function MethodCard({ name, stats, onVerDetalle, country }: {
                     </div>
                 </div>
 
-                <div className="space-y-3">
-                    <div className="flex justify-between items-center bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
-                        <div className="flex items-center gap-1.5">
-                            <TrendingUp size={12} className="text-emerald-500" />
-                            <span className="text-[9px] font-medium text-slate-500 uppercase">Entrada hoy</span>
+                <div className="space-y-4">
+                    <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100/50 space-y-2.5">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ingresos</span>
+                            <span className="text-xs font-bold text-emerald-600">
+                                € {stats.totalIncome.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            </span>
                         </div>
-                        <span className="text-xs font-bold text-emerald-600">
-                            € {stats.entradaDia.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
-                        </span>
+                        <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Gastos</span>
+                            <span className="text-xs font-bold text-rose-500">
+                                - € {stats.totalExpenses.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            </span>
+                        </div>
                     </div>
 
-                    <div className="pt-1">
+                    <div className="px-1 pt-1 border-t border-slate-100">
                         <div className="flex justify-between items-end">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total Acumulado</span>
-                            <span className="text-base font-semibold text-slate-800">
-                                € {stats.totalGeneral.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            <div className="flex items-center gap-1.5">
+                                {stats.balance >= 0 ? <TrendingUp size={12} className="text-emerald-500" /> : <TrendingDown size={12} className="text-rose-500" />}
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Balance</span>
+                            </div>
+                            <span className={cn("text-lg font-black tracking-tight", stats.balance >= 0 ? "text-slate-800" : "text-rose-600")}>
+                                {stats.balance < 0 ? '- ' : ''}€ {Math.abs(stats.balance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                             </span>
                         </div>
                     </div>

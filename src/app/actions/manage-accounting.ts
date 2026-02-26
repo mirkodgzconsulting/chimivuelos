@@ -28,7 +28,8 @@ export async function getConsolidatedAccounting() {
         { data: translations },
         { data: others },
         { data: methodsIT },
-        { data: methodsPE }
+        { data: methodsPE },
+        { data: expenses }
     ] = await Promise.all([
         supabase.from('flights').select('id, created_at, payment_details, pnr, profiles:client_id(first_name, last_name)'),
         supabase.from('money_transfers').select('id, created_at, payment_details, transfer_code, profiles:client_id(first_name, last_name)'),
@@ -36,7 +37,8 @@ export async function getConsolidatedAccounting() {
         supabase.from('translations').select('id, created_at, payment_details, tracking_code, profiles:client_id(first_name, last_name)'),
         supabase.from('other_services').select('id, created_at, payment_details, tracking_code, profiles:client_id(first_name, last_name)'),
         supabase.from('payment_methods_it').select('*').eq('is_active', true).order('sort_order'),
-        supabase.from('payment_methods_pe').select('*').eq('is_active', true).order('sort_order')
+        supabase.from('payment_methods_pe').select('*').eq('is_active', true).order('sort_order'),
+        supabase.from('corporate_expenses').select('*')
     ]);
 
     const allPayments: PaymentEntry[] = [];
@@ -120,6 +122,50 @@ export async function getConsolidatedAccounting() {
     processPayments(parcels, 'Encomienda');
     processPayments(translations, 'Traducción');
     processPayments(others, 'Otro Servicio');
+
+    // Process Expenses (Negative entries)
+    if (expenses) {
+        expenses.forEach(exp => {
+            const amountEur = parseFloat(exp.amount_eur) || 0;
+            const originalAmount = parseFloat(exp.original_amount) || amountEur;
+            
+            // If it has IT payment method
+            if (exp.metodo_it) {
+                allPayments.push({
+                    id: `${exp.id}-Expense-IT`,
+                    serviceType: exp.connected_service || exp.category || 'Gasto',
+                    clientName: exp.provider_name || 'Proveedor Desconocido',
+                    amountEur: -amountEur, 
+                    originalAmount: `-${originalAmount}`, 
+                    currency: exp.currency || 'EUR',
+                    exchangeRate: exp.exchange_rate || 1,
+                    method: exp.metodo_it,
+                    country: 'IT',
+                    date: exp.expense_date || exp.created_at,
+                    pnr: exp.reference_number || '--',
+                    branch: exp.sede_it
+                });
+            }
+
+            // If it has PE payment method
+            if (exp.metodo_pe) {
+                allPayments.push({
+                    id: `${exp.id}-Expense-PE`,
+                    serviceType: exp.connected_service || exp.category || 'Gasto',
+                    clientName: exp.provider_name || 'Proveedor Desconocido',
+                    amountEur: -amountEur, 
+                    originalAmount: `-${originalAmount}`, 
+                    currency: exp.currency || 'EUR',
+                    exchangeRate: exp.exchange_rate || 1,
+                    method: exp.metodo_pe,
+                    country: 'PE',
+                    date: exp.expense_date || exp.created_at,
+                    pnr: exp.reference_number || '--',
+                    branch: exp.sede_pe
+                });
+            }
+        });
+    }
 
     return {
         payments: allPayments,

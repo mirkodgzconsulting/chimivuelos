@@ -97,7 +97,8 @@ export default function GastosPage() {
         original_amount: '',
         currency: 'EUR',
         exchange_rate: '1.00',
-        amount_eur: ''
+        amount_eur: '',
+        provider_name: ''
     })
 
     const [proofFile, setProofFile] = useState<File | null>(null)
@@ -171,7 +172,8 @@ export default function GastosPage() {
             original_amount: '',
             currency: 'EUR',
             exchange_rate: '1.00',
-            amount_eur: ''
+            amount_eur: '',
+            provider_name: ''
         })
         setProofFile(null)
         setExistingProof(null)
@@ -200,7 +202,8 @@ export default function GastosPage() {
             original_amount: item.original_amount.toString(),
             currency: item.currency || 'EUR',
             exchange_rate: item.exchange_rate.toString(),
-            amount_eur: item.amount_eur.toString()
+            amount_eur: item.amount_eur.toString(),
+            provider_name: item.provider_name || ''
         })
         setExistingProof(item.proof_path || null)
         setExistingAttachments(item.additional_files || [])
@@ -248,6 +251,7 @@ export default function GastosPage() {
             sd.append('currency', formData.currency)
             sd.append('exchange_rate', formData.exchange_rate)
             sd.append('amount_eur', formData.amount_eur)
+            sd.append('provider_name', formData.provider_name)
 
             if (proofFile) sd.append('proof_file', proofFile)
             
@@ -526,6 +530,15 @@ export default function GastosPage() {
                                         onChange={e => setFormData(p => ({ ...p, connected_record_id: e.target.value.toUpperCase() }))}
                                         disabled={formData.connected_service === 'Ninguno'}
                                         className="h-10 text-sm border-slate-200 focus:ring-chimicyan bg-white"
+                                    />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Proveedor / Cliente</Label>
+                                    <Input 
+                                        placeholder="Nombre de la empresa o persona..."
+                                        value={formData.provider_name}
+                                        onChange={e => setFormData(p => ({ ...p, provider_name: e.target.value }))}
+                                        className="h-10 text-sm border-slate-200 focus:ring-chimicyan bg-white font-bold"
                                     />
                                 </div>
                             </div>
