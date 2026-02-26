@@ -1,127 +1,468 @@
-import { Plane, Banknote, Package, Users, ArrowUpRight } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+'use client'
+
+import { useState, useEffect, useMemo } from 'react'
+import Image from "next/image"
+import { Loader2 } from 'lucide-react'
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    Legend
+} from 'recharts'
+import { getConsolidatedAccounting, PaymentEntry } from '@/app/actions/manage-accounting'
+
+interface MethodStats {
+    name: string
+    ingresos: number
+    gastos: number
+}
+
+interface CountryStatsSummary {
+    income: number
+    expenses: number
+}
+
+interface AgentMetric {
+    name: string
+    fullName: string
+    value: number
+}
+
+interface AgentSalesData {
+    Total: AgentMetric[]
+    Vuelo: AgentMetric[]
+    Giro: AgentMetric[]
+    Encomienda: AgentMetric[]
+    Traducción: AgentMetric[]
+    Otro: AgentMetric[]
+}
+
+interface OperationsDashboardData {
+    IT: MethodStats[]
+    PE: MethodStats[]
+    totals: {
+        IT: CountryStatsSummary
+        PE: CountryStatsSummary
+    }
+    agentData: AgentSalesData
+}
+
+interface TooltipProps {
+    active?: boolean;
+    payload?: {
+        dataKey: string;
+        value: number;
+        payload: Record<string, unknown>;
+    }[];
+    label?: string;
+}
+
+const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
+    if (active && payload && payload.length) {
+        const ingresos = payload.find((p) => p.dataKey === 'ingresos')?.value || 0;
+        const gastos = payload.find((p) => p.dataKey === 'gastos')?.value || 0;
+        const balance = ingresos - gastos;
+
+        return (
+            <div className="bg-white p-3 rounded-lg shadow-xl border border-slate-100 text-[11px] min-w-[160px]">
+                <p className="font-bold mb-2 text-slate-700 uppercase tracking-wide border-b border-slate-50 pb-1">{label}</p>
+                <div className="space-y-1.5">
+                    <div className="flex justify-between items-center gap-4">
+                        <div className="flex items-center gap-1.5 text-slate-500">
+                             <div className="h-1.5 w-1.5 rounded-full bg-[#00d1ff]" />
+                             <span>Ingr</span>
+                        </div>
+                        <span className="font-bold text-slate-700">€{ingresos.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center gap-4">
+                        <div className="flex items-center gap-1.5 text-slate-500">
+                             <div className="h-1.5 w-1.5 rounded-full bg-[#ff4d94]" />
+                             <span>Gast</span>
+                        </div>
+                        <span className="font-bold text-slate-700">€{gastos.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="pt-1.5 mt-1 border-t border-slate-100 flex justify-between items-center gap-4">
+                        <span className="font-bold text-slate-400 uppercase text-[9px] tracking-widest">Balance</span>
+                        <span className={`font-bold ${balance >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            €{balance.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
 
 export default function DashboardPage() {
-  return (
-    <div className="space-y-6 relative">
-      {/* Decorative Background Fade */}
-      <div className="absolute inset-0 -top-6 -left-6 -right-6 h-32 bg-linear-to-b from-sidebar/20 to-transparent pointer-events-none z-0" />
+    const [isLoading, setIsLoading] = useState(true)
+    const [payments, setPayments] = useState<PaymentEntry[]>([])
 
+    const todayStr = useMemo(() => new Date().toISOString().split('T')[0], [])
 
+    useEffect(() => {
+        async function loadData() {
+            setIsLoading(true)
+            try {
+                const result = await getConsolidatedAccounting()
+                setPayments(result.payments)
+            } catch (error) {
+                console.error("Error loading dashboard data:", error)
+            } finally {
+                setIsLoading(false)
+            }
+        }
+        loadData()
+    }, [])
 
-      {/* KPI Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 relative z-10">
-        <Card className="border-slate-100 bg-white/80 backdrop-blur-sm hover:bg-white hover:border-chimipink/40 hover:shadow-lg hover:shadow-pink-100/50 transition-all duration-300 cursor-pointer group">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-5">
-            <CardTitle className="text-sm font-bold text-slate-600 group-hover:text-chimipink transition-colors">Vuelos Activos</CardTitle>
-            <div className="p-2 rounded-full bg-pink-50 group-hover:bg-chimipink/10 transition-colors">
-              <Plane className="h-5 w-5 text-chimipink group-hover:scale-110 transition-transform" />
+    const countryData = useMemo<OperationsDashboardData>(() => {
+        const initialAgentData: AgentSalesData = {
+            Total: [],
+            Vuelo: [],
+            Giro: [],
+            Encomienda: [],
+            Traducción: [],
+            Otro: []
+        }
+
+        const stats: OperationsDashboardData = {
+            IT: [],
+            PE: [],
+            totals: {
+                IT: { income: 0, expenses: 0 },
+                PE: { income: 0, expenses: 0 }
+            },
+            agentData: initialAgentData
+        }
+
+        const dailyMap = {
+            IT: {} as Record<string, MethodStats>,
+            PE: {} as Record<string, MethodStats>
+        }
+
+        payments.forEach(p => {
+            const paymentDate = p.date.split('T')[0]
+            if (paymentDate === todayStr) {
+                const country = p.country as 'IT' | 'PE'
+                const method = p.method
+
+                if (!dailyMap[country][method]) {
+                    dailyMap[country][method] = { name: method, ingresos: 0, gastos: 0 }
+                }
+
+                if (p.amountEur > 0) {
+                    dailyMap[country][method].ingresos += p.amountEur
+                    stats.totals[country].income += p.amountEur
+                } else {
+                    const absExp = Math.abs(p.amountEur)
+                    dailyMap[country][method].gastos += absExp
+                    stats.totals[country].expenses += absExp
+                }
+            }
+        })
+
+        stats.IT = Object.values(dailyMap.IT).map(m => ({
+            ...m,
+            ingresos: Number(m.ingresos.toFixed(2)),
+            gastos: Number(m.gastos.toFixed(2))
+        }))
+        stats.PE = Object.values(dailyMap.PE).map(m => ({
+            ...m,
+            ingresos: Number(m.ingresos.toFixed(2)),
+            gastos: Number(m.gastos.toFixed(2))
+        }))
+
+        // AGENT SALES DATA PROCESSING
+        const services = ['Vuelo', 'Giro', 'Encomienda', 'Traducción', 'Otro Servicio']
+        const agentsMap = {} as Record<string, Record<string, number>> // AgentName -> { ServiceName -> count }
+
+        payments.forEach(p => {
+            const paymentDate = p.date.split('T')[0]
+            if (paymentDate === todayStr && p.amountEur > 0) { // Only count positive revenue entries as sales
+                const agent = p.agentName || 'Sist / Admin'
+                if (!agentsMap[agent]) {
+                    agentsMap[agent] = { 'Total': 0 }
+                    services.forEach(s => agentsMap[agent][s] = 0)
+                }
+                
+                agentsMap[agent]['Total']++
+                if (services.includes(p.serviceType)) {
+                    agentsMap[agent][p.serviceType]++
+                }
+            }
+        })
+
+        const agentData: AgentSalesData = {
+            Total: [],
+            Vuelo: [],
+            Giro: [],
+            Encomienda: [],
+            Traducción: [],
+            Otro: []
+        }
+
+        Object.entries(agentsMap).forEach(([name, counts]) => {
+            const shortName = name.split(' ')[0] // Only first name to save space
+            agentData.Total.push({ name: shortName, fullName: name, value: counts['Total'] })
+            agentData.Vuelo.push({ name: shortName, fullName: name, value: counts['Vuelo'] })
+            agentData.Giro.push({ name: shortName, fullName: name, value: counts['Giro'] })
+            agentData.Encomienda.push({ name: shortName, fullName: name, value: counts['Encomienda'] })
+            agentData.Traducción.push({ name: shortName, fullName: name, value: counts['Traducción'] })
+            agentData.Otro.push({ name: shortName, fullName: name, value: counts['Otro Servicio'] })
+        })
+
+        // Sort each by value descending
+        Object.keys(agentData).forEach(key => {
+            const k = key as keyof AgentSalesData;
+            agentData[k].sort((a, b) => b.value - a.value)
+        })
+
+        return { ...stats, agentData }
+    }, [payments, todayStr])
+
+    if (isLoading) {
+        return (
+            <div className="flex h-[80vh] items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-200" />
             </div>
-          </CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div className="text-3xl font-extrabold text-slate-900">12</div>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-medium">
-              <ArrowUpRight className="h-3 w-3 text-emerald-500" />
-              <span className="text-emerald-600">+2 esta semana</span>
-            </p>
-          </CardContent>
-        </Card>
+        )
+    }
+
+    const AgentChart = ({ title, data, variant = 'cyan' }: { title: string, data: AgentMetric[], variant?: 'cyan' | 'pink' }) => {
+        const filteredData = data.filter(d => d.value > 0);
+        const hasData = filteredData.length > 0;
+        const dynamicHeight = Math.max(140, (filteredData.length * 45) + 20);
         
-        <Card className="border-slate-100 bg-white/80 backdrop-blur-sm hover:bg-white hover:border-chimicyan/50 hover:shadow-lg hover:shadow-cyan-100/50 transition-all duration-300 cursor-pointer group">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-5">
-            <CardTitle className="text-sm font-bold text-slate-600 group-hover:text-chimicyan transition-colors">Giros Pendientes</CardTitle>
-             <div className="p-2 rounded-full bg-cyan-50 group-hover:bg-chimicyan/10 transition-colors">
-              <Banknote className="h-5 w-5 text-chimicyan group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div className="text-3xl font-extrabold text-slate-900">€ 5,240.00</div>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-medium">
-              <span className="text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wide font-bold">3 urgentes</span>
-            </p>
-          </CardContent>
-        </Card>
+        const gradId = `gradAgent-${variant}`;
+        const mainColor = variant === 'cyan' ? '#00d1ff' : '#ff4d94';
+        const darkColor = variant === 'cyan' ? '#00b8e6' : '#e6006e';
 
-        <Card className="border-slate-100 bg-white/80 backdrop-blur-sm hover:bg-white hover:border-purple-300 hover:shadow-lg hover:shadow-purple-100/50 transition-all duration-300 cursor-pointer group">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-5">
-            <CardTitle className="text-sm font-bold text-slate-600 group-hover:text-purple-600 transition-colors">Encomiendas</CardTitle>
-             <div className="p-2 rounded-full bg-purple-50 group-hover:bg-purple-100 transition-colors">
-              <Package className="h-5 w-5 text-purple-600 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div className="text-3xl font-extrabold text-slate-900">28</div>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-medium">
-              <span className="text-slate-400">8 en tránsito internacional</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-100 bg-white/80 backdrop-blur-sm hover:bg-white hover:border-blue-300 hover:shadow-lg hover:shadow-blue-100/50 transition-all duration-300 cursor-pointer group">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-5">
-            <CardTitle className="text-sm font-bold text-slate-600 group-hover:text-blue-600 transition-colors">Clientes Totales</CardTitle>
-            <div className="p-2 rounded-full bg-blue-50 group-hover:bg-blue-100 transition-colors">
-              <Users className="h-5 w-5 text-blue-600 group-hover:scale-110 transition-transform" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div className="text-3xl font-extrabold text-slate-900">1,240</div>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-medium">
-              <ArrowUpRight className="h-3 w-3 text-emerald-500" />
-              <span className="text-emerald-600">+15 nuevos hoy</span>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content Sections */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7 relative z-10">
-        
-        {/* Large Chart Section */}
-        <Card className="col-span-4 shadow-sm border-slate-100 bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold text-slate-800">Resumen de Ventas</CardTitle>
-            <CardDescription className="text-slate-500">
-               Ingresos mensuales comparados con el año anterior.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pl-6 pr-6 pb-6">
-            <div className="h-[320px] w-full bg-slate-50/50 rounded-xl flex items-center justify-center border border-dashed border-slate-200/60 hover:bg-white transition-colors cursor-crosshair group">
-              <div className="text-center group-hover:scale-105 transition-transform">
-                <p className="text-slate-400 text-sm font-medium mb-2">Área de Gráficos</p>
-                <p className="text-xs text-slate-300">Recharts / Chart.js</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Recent Activity List */}
-        <Card className="col-span-3 shadow-sm border-slate-100 bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold text-slate-800">Actividad Reciente</CardTitle>
-            <CardDescription className="text-slate-500">
-              Últimas transacciones y registros.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center group">
-                  <span className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full border border-slate-100 bg-white items-center justify-center shadow-sm group-hover:border-chimipink/30 transition-colors">
-                     <Users className="h-5 w-5 text-slate-400 group-hover:text-chimipink transition-colors" />
-                  </span>
-                  <div className="ml-4 space-y-1">
-                    <p className="text-sm font-bold leading-none text-slate-800">Nuevo Cliente Registrado</p>
-                    <p className="text-xs text-slate-500">Juan Pérez se ha unido.</p>
-                  </div>
-                  <div className="ml-auto text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-full">Hace {i}h</div>
+        return (
+            <div className="bg-white/50 p-6 rounded-xl border border-slate-100/60 shadow-xs flex flex-col gap-4 h-full">
+                <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">{title}</h3>
+                <div style={{ height: `${dynamicHeight}px` }} className="w-full">
+                    {hasData ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart 
+                                data={filteredData} 
+                                layout="vertical" 
+                                margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                            >
+                                <defs>
+                                    <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="0">
+                                        <stop offset="0%" stopColor={mainColor} />
+                                        <stop offset="100%" stopColor={darkColor} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis type="number" hide />
+                                <YAxis 
+                                    dataKey="name" 
+                                    type="category" 
+                                    axisLine={false} 
+                                    tickLine={false} 
+                                    tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }}
+                                    width={70}
+                                />
+                                <Tooltip 
+                                    cursor={{ fill: '#f8fafc' }}
+                                    content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="bg-white p-3 rounded-lg shadow-xl border border-slate-100 text-[11px] min-w-[140px]">
+                                                    <p className="font-bold mb-2 text-slate-700 uppercase tracking-wide border-b border-slate-50 pb-1">{payload[0].payload.fullName}</p>
+                                                    <div className="flex justify-between items-center gap-4 text-slate-500">
+                                                        <span>Ventas hoy:</span>
+                                                        <span className="font-bold text-base" style={{ color: mainColor }}>{payload[0].value}</span>
+                                                    </div>
+                                                </div>
+                                            )
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Bar 
+                                    dataKey="value" 
+                                    fill={`url(#${gradId})`}
+                                    radius={[0, 4, 4, 0]} 
+                                    barSize={26}
+                                    label={{ position: 'center', fill: '#000000', fontSize: 11, fontWeight: 700 }}
+                                />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-slate-300 italic text-[11px]">No hay registros hoy</div>
+                    )}
                 </div>
-              ))}
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
+        )
+    }
+
+    return (
+        <div className="space-y-12 py-6 animate-in fade-in duration-700">
+            {/* Minimalist Dashboard Header */}
+            <header className="flex flex-col items-center justify-center px-2">
+                <p className="text-slate-500 font-medium">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            </header>
+
+            <section className="space-y-6">
+                <div className="px-2">
+                    <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">Balance Operativo por Método</h2>
+                </div>
+                <div className="flex flex-col gap-8 px-2">
+                    {/* ITALIA GRAPHIC */}
+                    <div className="h-[450px] w-full bg-white/50 p-6 rounded-xl border border-slate-100/60 shadow-xs flex flex-col gap-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <Image src="https://flagcdn.com/w40/it.png" width={24} height={18} alt="IT" className="rounded-sm shadow-xs" />
+                                <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-widest">Italia</h2>
+                            </div>
+                            <div className="flex gap-6 text-[10px] font-medium uppercase tracking-wider">
+                                <div className="flex flex-col items-end">
+                                    <span className="text-slate-400">Ingr</span>
+                                    <span className="text-slate-700 font-bold">€{countryData.totals.IT.income.toLocaleString('es-ES')}</span>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <span className="text-slate-400">Gast</span>
+                                    <span className="text-slate-700 font-bold">€{countryData.totals.IT.expenses.toLocaleString('es-ES')}</span>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <span className="text-slate-400">Bal</span>
+                                    <span className="text-slate-700 font-bold">€{(countryData.totals.IT.income - countryData.totals.IT.expenses).toLocaleString('es-ES')}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1">
+                            {countryData.IT.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={countryData.IT} margin={{ top: 0, right: 30, left: 10, bottom: 20 }}>
+                                        <defs>
+                                            <linearGradient id="gradIngresos" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#00d1ff" stopOpacity={0.9}/>
+                                                <stop offset="95%" stopColor="#00b8e6" stopOpacity={0.9}/>
+                                            </linearGradient>
+                                            <linearGradient id="gradGastos" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#ff4d94" stopOpacity={0.9}/>
+                                                <stop offset="95%" stopColor="#e6006e" stopOpacity={0.9}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                                            interval={0}
+                                            dy={10}
+                                        />
+                                        <YAxis 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                                            tickFormatter={(value) => `€${value}`}
+                                        />
+                                        <Tooltip 
+                                            content={<CustomTooltip />}
+                                            cursor={{ fill: '#f8fafc', opacity: 0.4 }}
+                                        />
+                                        <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '11px', fontWeight: 600, color: '#64748b' }} />
+                                        <Bar name="Ingresos" dataKey="ingresos" stackId="a" fill="url(#gradIngresos)" barSize={24} />
+                                        <Bar name="Gastos" dataKey="gastos" stackId="a" fill="url(#gradGastos)" barSize={24} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-full text-slate-300 italic text-sm">Sin movimientos hoy en Italia</div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* PERU GRAPHIC */}
+                    <div className="h-[450px] w-full bg-white/50 p-6 rounded-xl border border-slate-100/60 shadow-xs flex flex-col gap-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <Image src="https://flagcdn.com/w40/pe.png" width={24} height={18} alt="PE" className="rounded-sm shadow-xs" />
+                                <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-widest">Perú</h2>
+                            </div>
+                            <div className="flex gap-6 text-[10px] font-medium uppercase tracking-wider">
+                                <div className="flex flex-col items-end">
+                                    <span className="text-slate-400">Ingr</span>
+                                    <span className="text-slate-700 font-bold">€{countryData.totals.PE.income.toLocaleString('es-ES')}</span>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <span className="text-slate-400">Gast</span>
+                                    <span className="text-slate-700 font-bold">€{countryData.totals.PE.expenses.toLocaleString('es-ES')}</span>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <span className="text-slate-400">Bal</span>
+                                    <span className="text-slate-700 font-bold">€{(countryData.totals.PE.income - countryData.totals.PE.expenses).toLocaleString('es-ES')}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1">
+                            {countryData.PE.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={countryData.PE} margin={{ top: 0, right: 30, left: 10, bottom: 20 }}>
+                                        <defs>
+                                            <linearGradient id="gradIngresosPE" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#00d1ff" stopOpacity={0.9}/>
+                                                <stop offset="95%" stopColor="#00b8e6" stopOpacity={0.9}/>
+                                            </linearGradient>
+                                            <linearGradient id="gradGastosPE" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#ff4d94" stopOpacity={0.9}/>
+                                                <stop offset="95%" stopColor="#e6006e" stopOpacity={0.9}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                                            interval={0}
+                                            dy={10}
+                                        />
+                                        <YAxis 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 500 }}
+                                            tickFormatter={(value) => `€${value}`}
+                                        />
+                                        <Tooltip 
+                                            content={<CustomTooltip />}
+                                            cursor={{ fill: '#f8fafc', opacity: 0.4 }}
+                                        />
+                                        <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '11px', fontWeight: 600, color: '#64748b' }} />
+                                        <Bar name="Ingresos" dataKey="ingresos" stackId="a" fill="url(#gradIngresosPE)" barSize={24} />
+                                        <Bar name="Gastos" dataKey="gastos" stackId="a" fill="url(#gradGastosPE)" barSize={24} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-full text-slate-300 italic text-sm">Sin movimientos hoy en Perú</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section className="space-y-6 pt-8 border-t border-slate-100">
+                <div className="px-2">
+                    <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">Ventas por Agente</h2>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-2">
+                    <AgentChart title="Consolidado Total de Ventas" data={countryData.agentData.Total} variant="pink" />
+                    <AgentChart title="Ventas: Vuelos" data={countryData.agentData.Vuelo} />
+                    <AgentChart title="Ventas: Giros" data={countryData.agentData.Giro} />
+                    <AgentChart title="Ventas: Encomiendas" data={countryData.agentData.Encomienda} />
+                    <AgentChart title="Ventas: Traducciones" data={countryData.agentData.Traducción} />
+                    <AgentChart title="Ventas: Otros Servicios" data={countryData.agentData.Otro} />
+                </div>
+            </section>
+        </div>
+    )
 }
