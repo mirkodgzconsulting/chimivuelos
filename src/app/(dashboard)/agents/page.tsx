@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
+import Link from "next/link"
 import { ChevronLeft, ChevronRight, FileSpreadsheet, Plus, Search, Trash2, UserCog } from "lucide-react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
@@ -342,7 +343,12 @@ export default function AgentsPage() {
                            />
                         </div>
                         <div>
-                          <div className="font-medium text-slate-900">{agent.first_name} {agent.last_name}</div>
+                          <Link 
+                            href={`/agents/${agent.id}`}
+                            className="font-medium text-slate-900 hover:text-chimipink hover:underline transition-colors decoration-chimipink/30 underline-offset-4"
+                          >
+                            {agent.first_name} {agent.last_name}
+                          </Link>
                           <div className="text-xs text-slate-500">{agent.email}</div>
                         </div>
                       </div>
