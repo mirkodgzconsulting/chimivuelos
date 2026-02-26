@@ -303,3 +303,96 @@ export async function deleteClientFile(userId: string, filePath: string) {
     }
 }
 
+
+// ---- GET FULL CLIENT DETAILS (Including History) ----
+export async function getClientFullDetails(userId: string) {
+    try {
+        // 1. Fetch Profile
+        const profilePromise = supabaseAdmin
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single()
+
+        // 2. Fetch History in Parallel
+        const flightsPromise = supabaseAdmin.from('flights').select('*').eq('client_id', userId).order('created_at', { ascending: false })
+        const transfersPromise = supabaseAdmin.from('money_transfers').select('*').eq('client_id', userId).order('created_at', { ascending: false })
+        const parcelsPromise = supabaseAdmin.from('parcels').select('*').eq('sender_id', userId).order('created_at', { ascending: false })
+        const translationsPromise = supabaseAdmin.from('translations').select('*').eq('client_id', userId).order('created_at', { ascending: false })
+        const otherServicesPromise = supabaseAdmin.from('other_services').select('*').eq('client_id', userId).order('created_at', { ascending: false })
+
+        const [
+            { data: profile, error: profileError },
+            { data: flights },
+            { data: transfers },
+            { data: parcels },
+            { data: translations },
+            { data: otherServices }
+        ] = await Promise.all([
+            profilePromise,
+            flightsPromise,
+            transfersPromise,
+            parcelsPromise,
+            translationsPromise,
+            otherServicesPromise
+        ])
+
+        if (profileError || !profile) {
+            return { error: 'Cliente no encontrado' }
+        }
+
+        // 3. Consolidar historial y normalizar campos clave
+        const history = [
+            ...(flights || []).map(f => ({ 
+                ...f, 
+                type: 'Vuelo', 
+                date: f.created_at,
+                amount: f.amountEur || 0,
+                reference: f.pnr || 'N/A',
+                description: f.itinerary || 'Vuelo registrado'
+            })),
+            ...(transfers || []).map(t => ({ 
+                ...t, 
+                type: 'Giro', 
+                date: t.created_at,
+                amount: t.total_amount || 0,
+                reference: t.operation_number || t.transfer_code || 'N/A',
+                description: `${t.transfer_mode === 'eur_to_pen' ? 'EUR → PEN' : t.transfer_mode === 'pen_to_eur' ? 'PEN → EUR' : 'EUR → EUR'}`
+            })),
+            ...(parcels || []).map(p => ({ 
+                ...p, 
+                type: 'Encomienda', 
+                date: p.created_at,
+                amount: p.shipping_cost || 0,
+                reference: p.tracking_code || 'N/A',
+                description: `${p.recipient_name} - ${p.package_description || 'Paquete'}`
+            })),
+            ...(translations || []).map(tr => ({ 
+                ...tr, 
+                type: 'Traducción', 
+                date: tr.created_at,
+                amount: tr.total_amount || 0,
+                reference: tr.tracking_code || 'N/A',
+                description: `${tr.source_language} → ${tr.target_language} (${tr.quantity} docs)`
+            })),
+            ...(otherServices || []).map(o => ({ 
+                ...o, 
+                type: 'Otros', 
+                date: o.created_at,
+                amount: o.total_amount || 0,
+                reference: 'N/A',
+                description: o.service_type || 'Servicio registrado'
+            }))
+        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+        return {
+            success: true,
+            profile,
+            history
+        }
+
+    } catch (error) {
+        console.error('Error fetching full client details:', error)
+        return { error: 'Error al obtener los detalles del cliente' }
+    }
+}

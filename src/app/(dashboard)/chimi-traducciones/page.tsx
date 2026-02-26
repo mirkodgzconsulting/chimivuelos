@@ -1041,6 +1041,22 @@ export default function TranslationsPage() {
                                                 placeholder="Cualquier aclaración requerida..."
                                             />
                                         </div>
+
+                                        <div className="grid gap-2 pt-2">
+                                            <Label className="text-xs font-bold text-slate-700 uppercase">Estado del Trabajo</Label>
+                                            <select 
+                                                name="status"
+                                                value={formData.status}
+                                                onChange={handleInputChange}
+                                                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chimipink focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-bold text-slate-700"
+                                            >
+                                                <option value="pending">Pendiente</option>
+                                                <option value="in_progress">En Proceso</option>
+                                                <option value="completed">Listo / Completado</option>
+                                                <option value="delivered">Entregado</option>
+                                                <option value="cancelled">Cancelado</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

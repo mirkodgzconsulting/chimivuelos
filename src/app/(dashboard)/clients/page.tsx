@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
+import Link from "next/link"
 import { ChevronLeft, ChevronRight, FileSpreadsheet, Plus, Search, Trash2, UserCog, FileText, X, Download, FolderOpen, Copy, Check } from "lucide-react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
@@ -528,7 +529,12 @@ export default function ClientsPage() {
                   <tr key={client.id} className="bg-white hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                        <div>
-                         <div className="font-medium text-slate-900">{client.first_name} {client.last_name}</div>
+                         <Link 
+                           href={`/clients/${client.id}`}
+                           className="font-medium text-slate-900 hover:text-chimipink hover:underline transition-colors"
+                         >
+                           {client.first_name} {client.last_name}
+                         </Link>
                          <div className="text-xs text-slate-500">{client.email}</div>
                        </div>
                     </td>
