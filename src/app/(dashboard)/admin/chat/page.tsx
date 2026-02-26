@@ -40,6 +40,14 @@ export default function AdminChatPage() {
     }, [loadConversations, isInitialLoadDone])
 
     useEffect(() => {
+        // Handle Auth state changes to keep subscriptions authorized
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                console.log('--- ADMIN DEBUG: Auth session refreshed, reloading list...')
+                loadConversations()
+            }
+        })
+
         const channel = supabase
             .channel('admin-chat-list')
             .on('postgres_changes', { 
@@ -55,6 +63,7 @@ export default function AdminChatPage() {
             })
 
         return () => { 
+            subscription.unsubscribe()
             supabase.removeChannel(channel) 
         }
     }, [supabase, loadConversations])
@@ -95,9 +104,8 @@ export default function AdminChatPage() {
                     table: 'messages', 
                     filter: `conversation_id=eq.${selectedConvId}` 
                 },
-                async (payload) => {
+                (payload) => {
                     const newMsg = payload.new as Message
-                    
                     if (!mounted) return;
 
                     setMessages(prev => {
@@ -115,17 +123,23 @@ export default function AdminChatPage() {
                         return [...prev, newMsg]
                     })
 
-                    // If a message arrives while we ARE in this chat, mark it as read automatically
+                    // If a message arrives while we ARE in this chat, mark it as read (non-blocking)
                     if (!newMsg.is_admin) {
-                        await markAdminMessagesAsRead(selectedConvId)
-                        // Ensure local list also clears
-                        setConversations(prev => prev.map(c => 
-                            c.id === selectedConvId ? { ...c, unread_admin_count: 0 } : c
-                        ))
+                        markAdminMessagesAsRead(selectedConvId).then(() => {
+                            if (mounted) {
+                                setConversations(prev => prev.map(c => 
+                                    c.id === selectedConvId ? { ...c, unread_admin_count: 0 } : c
+                                ))
+                            }
+                        })
                     }
                 }
             )
-            .subscribe()
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('--- ADMIN DEBUG: Message subscription active for', selectedConvId)
+                }
+            })
 
         return () => { 
             mounted = false

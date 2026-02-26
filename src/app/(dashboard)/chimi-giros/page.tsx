@@ -679,7 +679,7 @@ export default function MoneyTransfersPage() {
     }
 
     const handleCopyCode = (id: string, code: string) => {
-        const url = `${window.location.origin}/giros?code=${code}`
+        const url = `https://chimivuelos.pe/giros?code=${code}`
         const message = `El registro de tu envío de dinero fue realizado, tu código de seguimiento es ${code}, puedes rastrear ingresando a ${url}`
         
         navigator.clipboard.writeText(message)

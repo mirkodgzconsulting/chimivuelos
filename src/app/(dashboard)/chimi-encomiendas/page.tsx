@@ -33,6 +33,7 @@ import {
     NotebookPen,
     Wallet,
     Check,
+    Copy,
     ArrowRight
 } from 'lucide-react'
 import { getParcels, createParcel, updateParcel, deleteParcel, updateParcelStatus, deleteParcelDocument, getParcelDocumentUrl } from '@/app/actions/manage-parcels'
@@ -127,6 +128,7 @@ export default function ParcelsPage() {
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false)
     const [viewingRecipient, setViewingRecipient] = useState<Parcel | null>(null)
     const [viewingDescription, setViewingDescription] = useState<string | null>(null)
+    const [copiedId, setCopiedId] = useState<string | null>(null)
     const [paymentMethodsIT, setPaymentMethodsIT] = useState<PaymentMethod[]>([])
     const [paymentMethodsPE, setPaymentMethodsPE] = useState<PaymentMethod[]>([])
     
@@ -632,9 +634,13 @@ export default function ParcelsPage() {
         }
     }
 
-    const openTrackingLink = (code: string) => {
-        const url = `${window.location.origin}/encomienda?code=${code}`
-        window.open(url, '_blank')
+    const handleCopyCode = (id: string, code: string) => {
+        const url = `https://chimivuelos.pe/encomienda?code=${code}`
+        const message = `El registro de tu encomienda fue realizado, tu código de seguimiento es ${code}, puedes rastrear ingresando a ${url}`
+        
+        navigator.clipboard.writeText(message)
+        setCopiedId(id)
+        setTimeout(() => setCopiedId(null), 2000)
     }
 
     // Filter Logic
@@ -1606,7 +1612,7 @@ export default function ParcelsPage() {
                             <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
                                 <tr>
                                     <th className="px-6 py-4 font-medium">Fecha</th>
-                                    <th className="px-6 py-4 font-medium">Tracking</th>
+                                    <th className="px-6 py-4 font-medium">Codigo</th>
                                     <th className="px-6 py-4 font-medium">Remitente</th>
                                     <th className="px-6 py-4 font-medium">Agente</th>
                                     <th className="px-6 py-4 font-medium">Destinatario</th>
@@ -1637,15 +1643,20 @@ export default function ParcelsPage() {
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-mono text-slate-600 font-bold">{parcel.tracking_code || '-'}</span>
                                                     {parcel.tracking_code && (
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="sm" 
-                                                            className="h-6 w-6 p-0 text-slate-400 hover:text-chimipink" 
-                                                            onClick={() => openTrackingLink(parcel.tracking_code)}
-                                                            title="Abrir enlace de seguimiento"
-                                                        >
-                                                            <LinkIcon className="h-3 w-3" />
-                                                        </Button>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="sm" 
+                                                                className="h-6 w-6 p-0 text-slate-400 hover:text-chimipink" 
+                                                                onClick={() => handleCopyCode(parcel.id, parcel.tracking_code)}
+                                                                title="Copiar mensaje de seguimiento"
+                                                            >
+                                                                {copiedId === parcel.id ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                                            </Button>
+                                                            {copiedId === parcel.id && (
+                                                                <span className="text-[10px] text-emerald-600 font-bold animate-in fade-in zoom-in-95">¡Copiado!</span>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                             </td>

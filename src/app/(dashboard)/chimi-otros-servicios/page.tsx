@@ -31,6 +31,7 @@ import {
     FileText,
     X,
     Check,
+    Copy,
     Building2,
     Briefcase,
     User,
@@ -148,6 +149,7 @@ export default function OtherServicesPage() {
     const [clients, setClients] = useState<ClientProfile[]>([])
     const [paymentMethodsIT, setPaymentMethodsIT] = useState<PaymentMethod[]>([])
     const [paymentMethodsPE, setPaymentMethodsPE] = useState<PaymentMethod[]>([])
+    const [copiedId, setCopiedId] = useState<string | null>(null)
     
     // UI State
     const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -527,6 +529,15 @@ export default function OtherServicesPage() {
             loadData()
         }
         setIsLoading(false)
+    }
+
+    const handleCopyCode = (id: string, code: string) => {
+        const url = `https://chimivuelos.pe/otros?code=${code}`
+        const message = `El registro de tu solicitud fue realizado, tu código de seguimiento es ${code}, puedes rastrear ingresando a ${url}`
+        
+        navigator.clipboard.writeText(message)
+        setCopiedId(id)
+        setTimeout(() => setCopiedId(null), 2000)
     }
 
     const filteredServices = services.filter(s => {
@@ -1297,35 +1308,55 @@ export default function OtherServicesPage() {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-slate-50/80 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-100">
-                                <th className="p-4">CÓDIGO</th>
-                                <th className="p-4">SERVICIO</th>
-                                <th className="p-4">CLIENTE</th>
-                                <th className="p-4">AGENTE</th>
-                                <th className="p-4">TOTAL A PAGAR</th>
-                                <th className="p-4">A CUENTA</th>
-                                <th className="p-4">SALDO PENDIENTE</th>
-                                <th className="p-4 text-center">ESTADO</th>
-                                <th className="p-4 text-right sticky right-0 bg-slate-50/90 backdrop-blur-sm z-10 border-l border-slate-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)]">ACCIONES</th>
+                                <th className="p-4 whitespace-nowrap">FECHA</th>
+                                <th className="p-4 whitespace-nowrap">CÓDIGO</th>
+                                <th className="p-4 whitespace-nowrap">SERVICIO</th>
+                                <th className="p-4 whitespace-nowrap">CLIENTE</th>
+                                <th className="p-4 whitespace-nowrap">AGENTE</th>
+                                <th className="p-4 whitespace-nowrap">TOTAL A PAGAR</th>
+                                <th className="p-4 whitespace-nowrap">A CUENTA</th>
+                                <th className="p-4 whitespace-nowrap text-nowrap">SALDO PENDIENTE</th>
+                                <th className="p-4 text-center whitespace-nowrap">ESTADO</th>
+                                <th className="p-4 text-right sticky right-0 bg-slate-50/90 backdrop-blur-sm z-10 border-l border-slate-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] whitespace-nowrap">ACCIONES</th>
                             </tr>
                         </thead>
                         <tbody>
                             {paginatedItems.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="p-20 text-center text-slate-400 italic">No se encontraron servicios</td>
+                                    <td colSpan={10} className="p-20 text-center text-slate-400 italic">No se encontraron servicios</td>
                                 </tr>
                             ) : (
                                 paginatedItems.map(s => (
-                                    <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-sm">
+                                    <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-sm whitespace-nowrap">
                                         <td className="p-4 py-3">
-                                            <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">{s.tracking_code}</span>
+                                            <span className="text-[10px] text-slate-500 font-bold">
+                                                {new Date(s.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 py-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">{s.tracking_code}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="h-6 w-6 p-0 text-slate-400 hover:text-chimipink" 
+                                                        onClick={() => handleCopyCode(s.id, s.tracking_code)}
+                                                        title="Copiar mensaje de seguimiento"
+                                                    >
+                                                        {copiedId === s.id ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                                    </Button>
+                                                    {copiedId === s.id && (
+                                                        <span className="text-[10px] text-emerald-600 font-bold animate-in fade-in zoom-in-95">¡Copiado!</span>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </td>
                                         <td className="p-4 py-3">
                                             <span className="font-bold text-slate-700">{s.service_type === "Otros servicios" ? s.service_type_other : s.service_type}</span>
                                         </td>
                                         <td className="p-4 py-3">
-                                            <div className="flex flex-col">
-                                                <span className="font-bold text-slate-700">{s.profiles?.first_name} {s.profiles?.last_name}</span>
-                                            </div>
+                                            <span className="font-bold text-slate-700">{s.profiles?.first_name} {s.profiles?.last_name}</span>
                                         </td>
                                         <td className="p-4 py-3">
                                             <span className="text-xs font-medium text-slate-500 uppercase">

@@ -44,11 +44,24 @@ export function ChatWidget() {
         loadInitialData()
     }, [isClientPortal])
 
+    // Use a Ref to track isOpen for the real-time listener without re-subscribing
+    const isOpenRef = useRef(isOpen)
+    useEffect(() => {
+        isOpenRef.current = isOpen
+    }, [isOpen])
+
     // 2. Realtime Subscription
     useEffect(() => {
         if (!isClientPortal || !conversationId) return
 
         let mounted = true
+
+        // Ensure auth is healthy for Realtime
+        const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'TOKEN_REFRESHED') {
+                console.log('--- CHAT DEBUG: Auth token refreshed')
+            }
+        })
 
         const channel = supabase
             .channel(`client-chat-${conversationId}`)
@@ -60,35 +73,29 @@ export function ChatWidget() {
                     table: 'messages',
                     filter: `conversation_id=eq.${conversationId}`
                 },
-                async (payload) => {
+                (payload) => {
                     const newMsg = payload.new as Message
                     
                     if (!mounted) return
 
                     setMessages((prev) => {
-                        // 1. If it's already there (by ID), skip
                         if (prev.some(m => m.id === newMsg.id)) return prev
-
-                        // 2. If it's a message from the USER, check if we have an optimistic one to replace
                         if (!newMsg.is_admin) {
                             const optimisticIdx = prev.findIndex(m => 
                                 m.isOptimistic && m.content === newMsg.content
                             )
                             if (optimisticIdx !== -1) {
                                 const newList = [...prev]
-                                newList[optimisticIdx] = newMsg // Replace optimistic with real
+                                newList[optimisticIdx] = newMsg 
                                 return newList
                             }
                         }
-
-                        // 3. Otherwise, just add it
                         return [...prev, newMsg]
                     })
                     
                     if (newMsg.is_admin) {
-                         if (isOpen) {
-                             // If chat is open, mark as read immediately
-                             await markAsRead(conversationId)
+                         if (isOpenRef.current) {
+                             markAsRead(conversationId)
                              setUnreadCount(0)
                          } else {
                              setUnreadCount(prev => prev + 1)
@@ -96,13 +103,21 @@ export function ChatWidget() {
                     }
                 }
             )
-            .subscribe()
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('--- CHAT DEBUG: Connected to', conversationId)
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    console.error('--- CHAT DEBUG: Connection error:', status)
+                }
+            })
 
         return () => {
             mounted = false
+            authSub.unsubscribe()
             supabase.removeChannel(channel)
         }
-    }, [isClientPortal, supabase, conversationId, isOpen])
+    }, [isClientPortal, supabase, conversationId])
 
     // Auto-scroll
     useEffect(() => {

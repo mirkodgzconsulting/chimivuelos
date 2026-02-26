@@ -420,3 +420,68 @@ export async function deleteTranslationDocument(id: string, path: string) {
 export async function getTranslationDocumentUrl(path: string, storage: StorageType = 'r2') {
     return await getFileUrl(path, storage)
 }
+
+/**
+ * Public Track Translation by Code
+ */
+export async function getTranslationByCode(code: string) {
+    const supabase = supabaseAdmin
+    
+    // Clean code
+    const cleanCode = code.trim().toUpperCase()
+
+    const { data, error } = await supabase
+        .from('translations')
+        .select(`
+            created_at,
+            tracking_code,
+            total_amount,
+            on_account,
+            balance,
+            status,
+            profiles:client_id (
+                first_name,
+                last_name
+            )
+        `)
+        .ilike('tracking_code', cleanCode)
+        .single()
+    
+    if (error || !data) {
+        return { error: 'Trámite no encontrado' }
+    }
+
+    return {
+        success: true,
+        data: {
+            created_at: data.created_at,
+            code: data.tracking_code,
+            total_amount: data.total_amount,
+            on_account: data.on_account,
+            balance: data.balance,
+            status: data.status,
+            sender_name: maskName(getSenderName(data.profiles))
+        }
+    }
+}
+
+function maskName(name: string) {
+    if (!name) return '***'
+    const parts = name.split(' ')
+    return parts.map((part, index) => {
+        if (index === 0) return part // Show first name
+        return part.charAt(0) + '***' // Mask others
+    }).join(' ')
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getSenderName(profiles: any) {
+    if (!profiles) return '***'
+    const p = profiles as any
+    if (Array.isArray(p)) {
+        const profile = p[0]
+        return profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : '***'
+    } else {
+        return `${p.first_name || ''} ${p.last_name || ''}`.trim() || '***'
+    }
+}

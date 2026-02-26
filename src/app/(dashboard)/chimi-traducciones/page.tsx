@@ -29,11 +29,12 @@ import {
     MapPin,
     ArrowRight,
     Wallet,
+    Building2,
+    Package,
+    Copy,
     Check,
     X,
     NotebookPen,
-    Building2,
-    Package,
     Lock,
     Unlock,
     User,
@@ -184,6 +185,7 @@ export default function TranslationsPage() {
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false)
     const [showSourceLanguageList, setShowSourceLanguageList] = useState(false)
     const [showTargetLanguageList, setShowTargetLanguageList] = useState(false)
+    const [copiedId, setCopiedId] = useState<string | null>(null)
     const [paymentMethodsIT, setPaymentMethodsIT] = useState<PaymentMethod[]>([])
     const [paymentMethodsPE, setPaymentMethodsPE] = useState<PaymentMethod[]>([])
     
@@ -635,6 +637,15 @@ export default function TranslationsPage() {
     const handleDownload = async (doc: TranslationDocument) => {
         const url = await getTranslationDocumentUrl(doc.path, doc.storage)
         window.open(url, '_blank')
+    }
+
+    const handleCopyCode = (id: string, code: string) => {
+        const url = `https://chimivuelos.pe/tramites?code=${code}`
+        const message = `El registro de tu trámite fue realizado, tu código de seguimiento es ${code}, puedes rastrear ingresando a ${url}`
+        
+        navigator.clipboard.writeText(message)
+        setCopiedId(id)
+        setTimeout(() => setCopiedId(null), 2000)
     }
 
     const selectClient = (client: ClientProfile) => {
@@ -1447,6 +1458,7 @@ export default function TranslationsPage() {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-slate-50/80 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-100">
+                                <th className="p-4">FECHA</th>
                                 <th className="p-4">CÓDIGO</th>
                                 <th className="p-4">CLIENTE</th>
                                 <th className="p-4">AGENTE</th>
@@ -1460,12 +1472,32 @@ export default function TranslationsPage() {
                         <tbody>
                             {paginatedItems.map(t => (
                                 <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-sm">
-                                    <td className="p-4 py-3 font-bold text-slate-400 mt-1">{t.tracking_code}</td>
                                     <td className="p-4 py-3">
-                                        <div className="flex flex-col">
-                                            <span className="font-bold text-slate-700">{t.profiles?.first_name} {t.profiles?.last_name}</span>
-                                            <span className="text-[10px] text-slate-400 font-medium italic">{t.profiles?.email}</span>
+                                        <span className="text-[10px] text-slate-500 font-bold">
+                                            {new Date(t.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                        </span>
+                                    </td>
+                                    <td className="p-4 py-3 font-bold text-slate-400 mt-1">
+                                        <div className="flex items-center gap-2">
+                                            <span>{t.tracking_code}</span>
+                                            <div className="flex items-center gap-1">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="h-6 w-6 p-0 text-slate-400 hover:text-chimipink" 
+                                                    onClick={() => handleCopyCode(t.id, t.tracking_code)}
+                                                    title="Copiar mensaje de seguimiento"
+                                                >
+                                                    {copiedId === t.id ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                                </Button>
+                                                {copiedId === t.id && (
+                                                    <span className="text-[10px] text-emerald-600 font-bold animate-in fade-in zoom-in-95">¡Copiado!</span>
+                                                )}
+                                            </div>
                                         </div>
+                                    </td>
+                                    <td className="p-4 py-3 font-bold text-slate-700">
+                                        {t.profiles?.first_name} {t.profiles?.last_name}
                                     </td>
                                     <td className="p-4 py-3">
                                         <div className="flex flex-col text-[10px] font-bold text-slate-500 uppercase">
