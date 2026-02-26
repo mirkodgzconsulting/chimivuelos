@@ -237,6 +237,7 @@ export default function FlightsPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
+    const [showDeudaOnly, setShowDeudaOnly] = useState(false)
 
     // Filters State
     const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -950,6 +951,9 @@ export default function FlightsPage() {
     // Filtered Flights Logic
     const filteredFlights = useMemo(() => {
         return flights.filter(f => {
+            // Debt Filter
+            if (showDeudaOnly && (f.balance || 0) <= 0) return false
+
             // Text Search
             const lower = searchTerm.toLowerCase()
             const matchesSearch = !searchTerm || 
@@ -960,15 +964,17 @@ export default function FlightsPage() {
             // Status Filter
             const matchesStatus = statusFilter === 'all' || f.status === statusFilter
 
-            // Date Range Filter (Based on created_at / Fecha Registro)
-            // Normalize dates to YYYY-MM-DD for comparison
-            const flightDate = new Date(f.created_at).toISOString().split('T')[0]
+            // Date Range Filter
+            // When in deuda mode, filter by Travel Date. Otherwise by Created At (Registration Date)
+            const dateToCompare = showDeudaOnly ? f.travel_date : f.created_at
+            const flightDate = new Date(dateToCompare).toISOString().split('T')[0]
+            
             const matchesDateFrom = !dateFrom || flightDate >= dateFrom
             const matchesDateTo = !dateTo || flightDate <= dateTo
 
             return matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo
         })
-    }, [flights, searchTerm, statusFilter, dateFrom, dateTo])
+    }, [flights, searchTerm, statusFilter, dateFrom, dateTo, showDeudaOnly])
 
     // Pagination Logic
     const indexOfLastItem = currentPage * itemsPerPage
@@ -1211,7 +1217,24 @@ export default function FlightsPage() {
 
 
 
-            <div className="flex justify-center">
+            <div className="flex justify-center items-center gap-4">
+                <Button 
+                    variant={showDeudaOnly ? "primary" : "outline"}
+                    onClick={() => {
+                        setShowDeudaOnly(!showDeudaOnly)
+                        setCurrentPage(1)
+                    }}
+                    className={cn(
+                        "font-bold shadow-md transition-all h-10",
+                        showDeudaOnly 
+                            ? "bg-red-600 hover:bg-red-700 text-white border-red-700" 
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                >
+                    <Wallet className={cn("mr-2 h-4 w-4", showDeudaOnly ? "text-white" : "text-red-500")} /> 
+                    {showDeudaOnly ? "Ver Todos los Vuelos" : "Vuelos con Deudas"}
+                </Button>
+
                  <Dialog open={isDialogOpen} onOpenChange={(open) => {
                      setIsDialogOpen(open)
                      if (!open) resetForm()
@@ -2670,20 +2693,28 @@ export default function FlightsPage() {
                                     <th className="px-6 py-4 font-medium">PNR</th>
                                     <th className="px-6 py-4 font-medium">Cliente</th>
                                     <th className="px-6 py-4 font-medium">Agente</th>
-                                    <th className="px-6 py-4 font-medium">Itinerario</th>
-                                    <th className="px-6 py-4 font-medium">Tipo Pasaje</th>
-                                    <th className="px-6 py-4 font-medium">IATA / GDS</th>
-                                    <th className="px-6 py-4 font-medium text-center">PAX</th>
-                                    <th className="px-6 py-4 font-medium text-center">Incluye</th>
-                                    <th className="px-6 py-4 font-medium">Neto</th>
+                                    {!showDeudaOnly && (
+                                        <>
+                                            <th className="px-6 py-4 font-medium">Itinerario</th>
+                                            <th className="px-6 py-4 font-medium">Tipo Pasaje</th>
+                                            <th className="px-6 py-4 font-medium">IATA / GDS</th>
+                                            <th className="px-6 py-4 font-medium text-center">PAX</th>
+                                            <th className="px-6 py-4 font-medium text-center">Incluye</th>
+                                            <th className="px-6 py-4 font-medium">Neto</th>
+                                        </>
+                                    )}
                                     <th className="px-6 py-4 font-medium">Vendido</th>
-                                    <th className="px-6 py-4 font-medium">Fee AGV</th>
+                                    {!showDeudaOnly && <th className="px-6 py-4 font-medium">Fee AGV</th>}
                                     <th className="px-6 py-4 font-medium">A Cuenta</th>
                                     <th className="px-6 py-4 font-medium">Saldo</th>
-                                    <th className="px-6 py-4 font-medium">Pago</th>
-                                    <th className="px-6 py-4 font-medium text-center">Docs</th>
-                                    <th className="px-6 py-4 font-medium">Estado</th>
-                                    <th className="px-6 py-4 font-medium text-right sticky right-0 bg-pink-100/90 backdrop-blur-sm z-20 border-l border-pink-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] text-pink-700">Acciones</th>
+                                    {!showDeudaOnly && (
+                                        <>
+                                            <th className="px-6 py-4 font-medium">Pago</th>
+                                            <th className="px-6 py-4 font-medium text-center">Docs</th>
+                                            <th className="px-6 py-4 font-medium">Estado</th>
+                                            <th className="px-6 py-4 font-medium text-right sticky right-0 bg-pink-100/90 backdrop-blur-sm z-20 border-l border-pink-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] text-pink-700">Acciones</th>
+                                        </>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -2692,12 +2723,12 @@ export default function FlightsPage() {
                                         <td colSpan={19} className="px-6 py-8 text-center text-slate-500">No se encontraron vuelos.</td>
                                     </tr>
                                 ) : (
-                                    currentFlights.map((flight) => (
+                                                                        currentFlights.map((flight) => (
                                         <tr key={flight.id} className="bg-white hover:bg-slate-50/50 group">
                                             <td className="px-6 py-4 text-xs text-slate-500">
-                                                {new Date(flight.created_at).toLocaleDateString('es-PE')}
+                                                {new Date(flight.created_at).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
                                             </td>
-                                            <td className="px-6 py-4 font-medium text-slate-700">{new Date(flight.travel_date).toLocaleDateString('es-PE')}</td>
+                                            <td className="px-6 py-4 font-medium text-slate-700">{new Date(flight.travel_date).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
                                             <td className="px-6 py-4 font-mono text-slate-600">{flight.pnr || '-'}</td>
                                             <td className="px-6 py-4">
                                                 <div className="font-medium text-slate-900">{flight.profiles?.first_name} {flight.profiles?.last_name}</div>
@@ -2708,116 +2739,126 @@ export default function FlightsPage() {
                                                     {flight.agent ? `${flight.agent.first_name} ${flight.agent.last_name}` : '-'}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 max-w-[150px] truncate" title={flight.itinerary}>
-                                                {flight.itinerary || '-'}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded font-medium inline-block whitespace-nowrap">
-                                                    {flight.ticket_type || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-[10px] text-chimiteal font-bold uppercase whitespace-nowrap">
-                                                    {flight.iata_gds || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className="text-sm font-bold text-slate-700">{flight.pax_total || 1}</span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                {flight.details && (Object.values(flight.details).some(v => v === true || (typeof v === 'string' && v.length > 0))) ? (
-                                                    <Button size="sm" variant="ghost" className="text-chimipink hover:bg-pink-50" onClick={() => setDetailsViewerFlight(flight)}>
-                                                        <ListChecks className="h-5 w-5" />
-                                                    </Button>
-                                                ) : (
-                                                    <span className="text-slate-300">-</span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">€ {flight.cost.toFixed(2)}</td>
+                                            {!showDeudaOnly && (
+                                                <>
+                                                    <td className="px-6 py-4 max-w-[150px] truncate" title={flight.itinerary}>
+                                                        {flight.itinerary || '-'}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded font-medium inline-block whitespace-nowrap">
+                                                            {flight.ticket_type || '-'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className="text-[10px] text-chimiteal font-bold uppercase whitespace-nowrap">
+                                                            {flight.iata_gds || '-'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className="text-sm font-bold text-slate-700">{flight.pax_total || 1}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        {flight.details && (Object.values(flight.details).some(v => v === true || (typeof v === 'string' && v.length > 0))) ? (
+                                                            <Button size="sm" variant="ghost" className="text-chimipink hover:bg-pink-50" onClick={() => setDetailsViewerFlight(flight)}>
+                                                                <ListChecks className="h-5 w-5" />
+                                                            </Button>
+                                                        ) : (
+                                                            <span className="text-slate-300">-</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">€ {flight.cost.toFixed(2)}</td>
+                                                </>
+                                            )}
                                             <td className="px-6 py-4 whitespace-nowrap">€ {(flight.sold_price || 0).toFixed(2)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-emerald-600 font-semibold">€ {(flight.fee_agv || 0).toFixed(2)}</td>
+                                            {!showDeudaOnly && (
+                                                <td className="px-6 py-4 whitespace-nowrap text-emerald-600 font-semibold">€ {(flight.fee_agv || 0).toFixed(2)}</td>
+                                            )}
                                             <td className="px-6 py-4 whitespace-nowrap">€ {flight.on_account.toFixed(2)}</td>
                                             <td className="px-6 py-4 font-medium whitespace-nowrap">
                                                 {flight.balance > 0 ? (
-                                                    <span className="text-red-600">€ {flight.balance.toFixed(2)}</span>
+                                                    <span className="text-red-600 font-black">€ {flight.balance.toFixed(2)}</span>
                                                 ) : (
                                                     <span className="text-emerald-600">Pagado</span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <Button 
-                                                    size="sm" 
-                                                    variant="ghost" 
-                                                    className="group relative flex flex-col items-center gap-1 hover:bg-emerald-50 transition-all duration-300 rounded-xl py-2 px-3"
-                                                    onClick={() => setPaymentHistoryFlight(flight)}
-                                                >
-                                                    <div className="bg-emerald-100 text-emerald-700 p-1.5 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors shadow-sm">
-                                                        <Wallet className="h-4 w-4" />
-                                                    </div>
-                                                    <span className="text-[9px] font-bold text-slate-400 group-hover:text-emerald-600 uppercase tracking-tighter">
-                                                        {flight.payment_details?.length || 0} pagos
-                                                    </span>
-                                                </Button>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                {flight.documents && flight.documents.length > 0 ? (
-                                                    <Button size="sm" variant="ghost" className="text-chimiteal hover:bg-teal-50" onClick={() => setDocsViewerFlight(flight)}>
-                                                        <FileText className="h-5 w-5" />
-                                                        <span className="ml-1 text-xs">{flight.documents.length}</span>
-                                                    </Button>
-                                                ) : (
-                                                    <span className="text-slate-300">-</span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="relative">
-                                                    <select
-                                                        value={flight.status}
-                                                        onChange={(e) => handleStatusChange(flight.id, e.target.value)}
-                                                        className={`appearance-none px-3 py-1 pr-8 rounded-full text-xs font-semibold border-0 cursor-pointer focus:ring-2 focus:ring-offset-1 transition-colors ${
-                                                        flight.status === 'Finalizado' 
-                                                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 focus:ring-emerald-500' 
-                                                            : flight.status === 'Cancelado' || flight.status === 'Deportado'
-                                                            ? 'bg-red-100 text-red-700 hover:bg-red-200 focus:ring-red-500'
-                                                            : flight.status === 'En tránsito' || flight.status === 'En migración'
-                                                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 focus:ring-blue-500'
-                                                            : flight.status === 'No-show (no se presentó)'
-                                                            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 focus:ring-slate-500'
-                                                            : 'bg-amber-100 text-amber-700 hover:bg-amber-200 focus:ring-amber-500'
-                                                        }`}
-                                                    >
-                                                        {FLIGHT_STATUSES.map(s => (
-                                                            <option key={s} value={s}>{s}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="sm" 
-                                                        onClick={() => handleEditClick(flight)}
-                                                        className={cn(
-                                                            userRole === 'agent' && !unlockedResources.has(flight.id) && "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                                        )}
-                                                        title={userRole === 'agent' && !unlockedResources.has(flight.id) ? "Solicitar permiso para editar" : "Editar"}
-                                                    >
-                                                        {userRole === 'agent' && !unlockedResources.has(flight.id) ? (
-                                                            <Lock className="h-4 w-4" />
-                                                        ) : unlockedResources.has(flight.id) ? (
-                                                            <Unlock className="h-4 w-4 text-emerald-600" />
-                                                        ) : (
-                                                            <Edit className="h-4 w-4 text-slate-400" />
-                                                        )}
-                                                    </Button>
-                                                    {userRole === 'admin' && (
-                                                        <Button variant="ghost" size="sm" onClick={() => handleDeleteFlight(flight.id)}>
-                                                            <Trash2 className="h-4 w-4 text-red-400" />
+                                            {!showDeudaOnly && (
+                                                <>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="group relative flex flex-col items-center gap-1 hover:bg-emerald-50 transition-all duration-300 rounded-xl py-2 px-3"
+                                                            onClick={() => setPaymentHistoryFlight(flight)}
+                                                        >
+                                                            <div className="bg-emerald-100 text-emerald-700 p-1.5 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors shadow-sm">
+                                                                <Wallet className="h-4 w-4" />
+                                                            </div>
+                                                            <span className="text-[9px] font-bold text-slate-400 group-hover:text-emerald-600 uppercase tracking-tighter">
+                                                                {flight.payment_details?.length || 0} pagos
+                                                            </span>
                                                         </Button>
-                                                    )}
-                                                </div>
-                                            </td>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        {flight.documents && flight.documents.length > 0 ? (
+                                                            <Button size="sm" variant="ghost" className="text-chimiteal hover:bg-teal-50" onClick={() => setDocsViewerFlight(flight)}>
+                                                                <FileText className="h-5 w-5" />
+                                                                <span className="ml-1 text-xs">{flight.documents.length}</span>
+                                                            </Button>
+                                                        ) : (
+                                                            <span className="text-slate-300">-</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="relative">
+                                                            <select
+                                                                value={flight.status}
+                                                                onChange={(e) => handleStatusChange(flight.id, e.target.value)}
+                                                                className={`appearance-none px-3 py-1 pr-8 rounded-full text-xs font-semibold border-0 cursor-pointer focus:ring-2 focus:ring-offset-1 transition-colors ${
+                                                                flight.status === 'Finalizado' 
+                                                                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 focus:ring-emerald-500' 
+                                                                    : flight.status === 'Cancelado' || flight.status === 'Deportado'
+                                                                    ? 'bg-red-100 text-red-700 hover:bg-red-200 focus:ring-red-500'
+                                                                    : flight.status === 'En tránsito' || flight.status === 'En migración'
+                                                                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 focus:ring-blue-500'
+                                                                    : flight.status === 'No-show (no se presentó)'
+                                                                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 focus:ring-slate-500'
+                                                                    : 'bg-amber-100 text-amber-700 hover:bg-amber-200 focus:ring-amber-500'
+                                                                }`}
+                                                            >
+                                                                {FLIGHT_STATUSES.map(s => (
+                                                                    <option key={s} value={s}>{s}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="sm" 
+                                                                onClick={() => handleEditClick(flight)}
+                                                                className={cn(
+                                                                    userRole === 'agent' && !unlockedResources.has(flight.id) && "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                                                )}
+                                                                title={userRole === 'agent' && !unlockedResources.has(flight.id) ? "Solicitar permiso para editar" : "Editar"}
+                                                            >
+                                                                {userRole === 'agent' && !unlockedResources.has(flight.id) ? (
+                                                                    <Lock className="h-4 w-4" />
+                                                                ) : unlockedResources.has(flight.id) ? (
+                                                                    <Unlock className="h-4 w-4 text-emerald-600" />
+                                                                ) : (
+                                                                    <Edit className="h-4 w-4 text-slate-400" />
+                                                                )}
+                                                            </Button>
+                                                            {userRole === 'admin' && (
+                                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteFlight(flight.id)}>
+                                                                    <Trash2 className="h-4 w-4 text-red-400" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </>
+                                            )}
                                         </tr>
                                     ))
                                 )}
