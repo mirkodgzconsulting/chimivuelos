@@ -50,6 +50,7 @@ import { EditRequestModal } from '@/components/permissions/EditRequestModal'
 import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { getPaymentMethodsIT, getPaymentMethodsPE, PaymentMethod } from '@/app/actions/manage-payment-methods'
 
 // Interfaces
 interface ServiceDocument {
@@ -129,24 +130,6 @@ const SERVICE_OPTIONS = [
 ]
 
 const SEDE_IT_OPTIONS = ["turro milano", "corsico milano", "roma", "lima"]
-const PAYMENT_METHOD_IT_OPTIONS = [
-    "EFEC TURRO — MILANO",
-    "EFEC CORSICO — MILANO",
-    "EFEC ROMA",
-    "UNICREDIT CHIMI",
-    "BANK WISE",
-    "BONIFICO SUEMA",
-    "WESTERN / RIA A PERSONAL",
-    "OTRO GIRO"
-]
-const PAYMENT_METHOD_PE_OPTIONS = [
-    "EFEC LIMA SOL",
-    "EFEC LIMA EURO",
-    "EFEC LIMA DOLAR",
-    "BCP SOLES CHIMI",
-    "BCP DOLAR",
-    "BANCA EURO PERÚ"
-]
 const CURRENCY_OPTIONS = ["EUR", "PEN", "USD"]
 
 const generateTrackingCode = () => {
@@ -162,6 +145,8 @@ export default function OtherServicesPage() {
     // Main Data State
     const [services, setServices] = useState<OtherService[]>([])
     const [clients, setClients] = useState<ClientProfile[]>([])
+    const [paymentMethodsIT, setPaymentMethodsIT] = useState<PaymentMethod[]>([])
+    const [paymentMethodsPE, setPaymentMethodsPE] = useState<PaymentMethod[]>([])
     
     // UI State
     const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -276,12 +261,16 @@ export default function OtherServicesPage() {
 
     const loadData = useCallback(async () => {
         setIsLoading(true)
-        const [servData, clientsData] = await Promise.all([
+        const [servData, clientsData, methodsIT, methodsPE] = await Promise.all([
             getOtherServices(),
-            getClientsForDropdown()
+            getClientsForDropdown(),
+            getPaymentMethodsIT(),
+            getPaymentMethodsPE()
         ])
         setServices(servData as unknown as OtherService[])
         setClients(clientsData as unknown as ClientProfile[])
+        setPaymentMethodsIT(methodsIT)
+        setPaymentMethodsPE(methodsPE)
         setIsLoading(false)
     }, [])
 
@@ -943,9 +932,19 @@ export default function OtherServicesPage() {
                                                                 <div className="flex items-center gap-3">
                                                                     <div className="text-right">
                                                                         <span className="font-bold text-emerald-600 text-sm leading-none block">€ {parseFloat(payment.cantidad || '0').toFixed(2)}</span>
-                                                                        <span className="text-[9px] text-slate-400 uppercase tracking-tighter">
-                                                                            {payment.moneda && payment.moneda !== 'EUR' ? `${payment.total}` : `€ ${parseFloat(payment.cantidad || '0').toFixed(2)}`}
-                                                                        </span>
+                                                                        <div className="flex items-center gap-1.5 mt-1 justify-end">
+                                                                            <span className={cn(
+                                                                                "text-[8px] font-bold px-1 rounded uppercase",
+                                                                                payment.moneda === 'PEN' ? "bg-rose-50 text-rose-500" : 
+                                                                                payment.moneda === 'USD' ? "bg-blue-50 text-blue-500" : 
+                                                                                "bg-slate-100 text-slate-500"
+                                                                            )}>
+                                                                                {payment.moneda || 'EUR'}
+                                                                            </span>
+                                                                            <span className="text-[9px] text-slate-400 font-medium">
+                                                                                {parseFloat(payment.monto_original || payment.cantidad).toFixed(2)} • TC: {(payment.tipo_cambio || 1).toFixed(4)}
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
                                                                     <button type="button" onClick={() => setTempPayments(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500 transition-colors p-1">
                                                                         <Trash2 size={14} />
@@ -1058,7 +1057,10 @@ export default function OtherServicesPage() {
                                                             </div>
                                                             {showMetodoITList && (
                                                                 <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                                    {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase())).map((opt, idx) => (
+                                                                    {paymentMethodsIT
+                                                                        .map(m => m.name)
+                                                                        .filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase()))
+                                                                        .map((opt, idx) => (
                                                                         <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => { setFormData(p => ({ ...p, payment_method_it: opt })); setShowMetodoITList(false); }}>{opt}</div>
                                                                     ))}
                                                                 </div>
@@ -1086,7 +1088,10 @@ export default function OtherServicesPage() {
                                                             </div>
                                                             {showMetodoPEList && (
                                                                 <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                                    {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase())).map((opt, idx) => (
+                                                                    {paymentMethodsPE
+                                                                        .map(m => m.name)
+                                                                        .filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase()))
+                                                                        .map((opt, idx) => (
                                                                         <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => { setFormData(p => ({ ...p, payment_method_pe: opt })); setShowMetodoPEList(false); }}>{opt}</div>
                                                                     ))}
                                                                 </div>

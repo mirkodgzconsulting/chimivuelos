@@ -52,6 +52,7 @@ import { EditRequestModal } from '@/components/permissions/EditRequestModal'
 import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { getPaymentMethodsIT, getPaymentMethodsPE, PaymentMethod } from '@/app/actions/manage-payment-methods'
 
 // Interfaces
 interface TranslationDocument {
@@ -127,25 +128,6 @@ const LANGUAGE_OPTIONS = ["Español", "Italiano", "Inglés", "Francés", "Portug
 const DOCUMENT_TYPE_OPTIONS = ["Certificados de estudios", "Acta de matrimonio", "Certificados médicos", "Brevete", "Partida de nacimiento", "Otros documentos"]
 const WORK_TYPE_OPTIONS = ["Traducir", "Legalizar", "Apostillar", "Entrega física", "Entrega digital", "Envío digital", "Consigna", "Otros"]
 const SEDE_IT_OPTIONS = ["turro milano", "corsico milano", "roma", "lima"]
-
-const PAYMENT_METHOD_IT_OPTIONS = [
-    "EFEC TURRO — MILANO",
-    "EFEC CORSICO — MILANO",
-    "EFEC ROMA",
-    "UNICREDIT CHIMI",
-    "BANK WISE",
-    "BONIFICO SUEMA",
-    "WESTERN / RIA A PERSONAL",
-    "OTRO GIRO"
-]
-const PAYMENT_METHOD_PE_OPTIONS = [
-    "EFEC LIMA SOL",
-    "EFEC LIMA EURO",
-    "EFEC LIMA DOLAR",
-    "BCP SOLES CHIMI",
-    "BCP DOLAR",
-    "BANCA EURO PERÚ"
-]
 const CURRENCY_OPTIONS = ["EUR", "PEN", "USD"]
 
 const DocumentPreview = ({ 
@@ -201,6 +183,8 @@ export default function TranslationsPage() {
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false)
     const [showSourceLanguageList, setShowSourceLanguageList] = useState(false)
     const [showTargetLanguageList, setShowTargetLanguageList] = useState(false)
+    const [paymentMethodsIT, setPaymentMethodsIT] = useState<PaymentMethod[]>([])
+    const [paymentMethodsPE, setPaymentMethodsPE] = useState<PaymentMethod[]>([])
     
     // Pagination & Filters
     const [currentPage, setCurrentPage] = useState(1)
@@ -327,12 +311,16 @@ export default function TranslationsPage() {
 
     const loadData = useCallback(async () => {
         setIsLoading(true)
-        const [transData, clientsData] = await Promise.all([
+        const [transData, clientsData, methodsIT, methodsPE] = await Promise.all([
             getTranslations(),
-            getClientsForDropdown()
+            getClientsForDropdown(),
+            getPaymentMethodsIT(),
+            getPaymentMethodsPE()
         ])
         setTranslations(transData as unknown as Translation[])
         setClients(clientsData as unknown as ClientProfile[])
+        setPaymentMethodsIT(methodsIT)
+        setPaymentMethodsPE(methodsPE)
         setIsLoading(false)
     }, [])
 
@@ -1142,12 +1130,22 @@ export default function TranslationsPage() {
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-3">
-                                                            <div className="text-right">
-                                                                <span className="font-bold text-emerald-600 text-sm leading-none block">€ {parseFloat(payment.cantidad || '0').toFixed(2)}</span>
-                                                                <span className="text-[9px] text-slate-400 uppercase tracking-tighter">
-                                                                    {payment.moneda && payment.moneda !== 'EUR' ? `${payment.total}` : `€ ${parseFloat(payment.cantidad || '0').toFixed(2)}`}
-                                                                </span>
-                                                            </div>
+                                                                <div className="text-right">
+                                                                    <span className="font-bold text-emerald-600 text-sm leading-none block">€ {parseFloat(payment.cantidad || '0').toFixed(2)}</span>
+                                                                    <div className="flex items-center gap-1.5 mt-1 justify-end">
+                                                                        <span className={cn(
+                                                                            "text-[8px] font-bold px-1 rounded uppercase",
+                                                                            payment.moneda === 'PEN' ? "bg-rose-50 text-rose-500" : 
+                                                                            payment.moneda === 'USD' ? "bg-blue-50 text-blue-500" : 
+                                                                            "bg-slate-100 text-slate-500"
+                                                                        )}>
+                                                                            {payment.moneda || 'EUR'}
+                                                                        </span>
+                                                                        <span className="text-[9px] text-slate-400 font-medium">
+                                                                            {parseFloat(payment.monto_original || payment.cantidad).toFixed(2)} • TC: {(payment.tipo_cambio || 1).toFixed(4)}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
                                                             <button type="button" onClick={() => setTempPayments(prev => prev.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500 transition-colors p-1">
                                                                 <Trash2 size={14} />
                                                             </button>
@@ -1259,9 +1257,12 @@ export default function TranslationsPage() {
                                                     </div>
                                                     {showMetodoITList && (
                                                         <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                            {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase())).map((opt, idx) => (
-                                                                <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => { setFormData(p => ({ ...p, payment_method_it: opt })); setShowMetodoITList(false); }}>{opt}</div>
-                                                            ))}
+                                                            {paymentMethodsIT
+                                                                .map(m => m.name)
+                                                                .filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase()))
+                                                                .map((opt, idx) => (
+                                                                    <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => { setFormData(p => ({ ...p, payment_method_it: opt })); setShowMetodoITList(false); }}>{opt}</div>
+                                                                ))}
                                                         </div>
                                                     )}
                                                 </div>
@@ -1287,9 +1288,12 @@ export default function TranslationsPage() {
                                                     </div>
                                                     {showMetodoPEList && (
                                                         <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                            {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase())).map((opt, idx) => (
-                                                                <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => { setFormData(p => ({ ...p, payment_method_pe: opt })); setShowMetodoPEList(false); }}>{opt}</div>
-                                                            ))}
+                                                            {paymentMethodsPE
+                                                                .map(m => m.name)
+                                                                .filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase()))
+                                                                .map((opt, idx) => (
+                                                                    <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => { setFormData(p => ({ ...p, payment_method_pe: opt })); setShowMetodoPEList(false); }}>{opt}</div>
+                                                                ))}
                                                         </div>
                                                     )}
                                                 </div>

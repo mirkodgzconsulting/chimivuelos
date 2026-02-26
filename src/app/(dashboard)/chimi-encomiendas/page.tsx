@@ -40,6 +40,7 @@ import { getClientsForDropdown } from '@/app/actions/manage-transfers'
 import * as XLSX from 'xlsx'
 import { EditRequestModal } from '@/components/permissions/EditRequestModal'
 import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
+import { getPaymentMethodsIT, getPaymentMethodsPE, PaymentMethod } from '@/app/actions/manage-payment-methods'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { Lock, Unlock } from 'lucide-react'
@@ -111,24 +112,6 @@ interface ClientProfile {
 }
 
 const SEDE_IT_OPTIONS = ["turro milano", "corsico milano", "roma", "lima"]
-const PAYMENT_METHOD_IT_OPTIONS = [
-    "EFEC TURRO — MILANO",
-    "EFEC CORSICO — MILANO",
-    "EFEC ROMA",
-    "UNICREDIT CHIMI",
-    "BANK WISE",
-    "BONIFICO SUEMA",
-    "WESTERN / RIA A PERSONAL",
-    "OTRO GIRO"
-]
-const PAYMENT_METHOD_PE_OPTIONS = [
-    "EFEC LIMA SOL",
-    "EFEC LIMA EURO",
-    "EFEC LIMA DOLAR",
-    "BCP SOLES CHIMI",
-    "BCP DOLAR",
-    "BANCA EURO PERÚ"
-]
 const CURRENCY_OPTIONS = ["EUR", "PEN", "USD"]
 
 export default function ParcelsPage() {
@@ -143,6 +126,8 @@ export default function ParcelsPage() {
     const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false)
     const [viewingRecipient, setViewingRecipient] = useState<Parcel | null>(null)
     const [viewingDescription, setViewingDescription] = useState<string | null>(null)
+    const [paymentMethodsIT, setPaymentMethodsIT] = useState<PaymentMethod[]>([])
+    const [paymentMethodsPE, setPaymentMethodsPE] = useState<PaymentMethod[]>([])
     
     // Pagination & Filters
     const [currentPage, setCurrentPage] = useState(1)
@@ -255,12 +240,16 @@ export default function ParcelsPage() {
     // Load Data Effect
     const loadData = useCallback(async () => {
         setIsLoading(true)
-        const [parcelsData, clientsData] = await Promise.all([
+        const [parcelsData, clientsData, methodsIT, methodsPE] = await Promise.all([
             getParcels(),
-            getClientsForDropdown()
+            getClientsForDropdown(),
+            getPaymentMethodsIT(),
+            getPaymentMethodsPE()
         ])
         setParcels(parcelsData as unknown as Parcel[])
         setClients(clientsData as unknown as ClientProfile[])
+        setPaymentMethodsIT(methodsIT)
+        setPaymentMethodsPE(methodsPE)
         setIsLoading(false)
     }, [])
 
@@ -1026,12 +1015,19 @@ export default function ParcelsPage() {
                                                         <div className="flex items-center gap-3">
                                                             <div className="text-right">
                                                                 <span className="font-bold text-emerald-600 text-sm leading-none block">€ {parseFloat(payment.cantidad || '0').toFixed(2)}</span>
-                                                                <span className="text-[9px] text-slate-400 uppercase tracking-tighter">
-                                                                    {payment.moneda && payment.moneda !== 'EUR' 
-                                                                        ? `${payment.total}`
-                                                                        : `€ ${parseFloat(payment.cantidad || '0').toFixed(2)}`
-                                                                    }
-                                                                </span>
+                                                                <div className="flex items-center gap-1.5 mt-1 justify-end">
+                                                                    <span className={cn(
+                                                                        "text-[8px] font-bold px-1 rounded uppercase",
+                                                                        payment.moneda === 'PEN' ? "bg-rose-50 text-rose-500" : 
+                                                                        payment.moneda === 'USD' ? "bg-blue-50 text-blue-500" : 
+                                                                        "bg-slate-100 text-slate-500"
+                                                                    )}>
+                                                                        {payment.moneda || 'EUR'}
+                                                                    </span>
+                                                                    <span className="text-[9px] text-slate-400 font-medium">
+                                                                        {parseFloat(payment.monto_original || payment.cantidad).toFixed(2)} • TC: {(payment.tipo_cambio || 1).toFixed(4)}
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                             <button 
                                                                 type="button"
@@ -1182,7 +1178,10 @@ export default function ParcelsPage() {
                                                     </div>
                                                     {showMetodoITList && (
                                                         <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                            {PAYMENT_METHOD_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase())).map((opt, idx) => (
+                                                            {paymentMethodsIT
+                                                                .map(m => m.name)
+                                                                .filter(opt => opt.toLowerCase().includes(formData.payment_method_it.toLowerCase()))
+                                                                .map((opt, idx) => (
                                                                 <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
                                                                     setFormData(p => ({ ...p, payment_method_it: opt }))
                                                                     setShowMetodoITList(false)
@@ -1225,7 +1224,10 @@ export default function ParcelsPage() {
                                                     </div>
                                                     {showMetodoPEList && (
                                                         <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                            {PAYMENT_METHOD_PE_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase())).map((opt, idx) => (
+                                                            {paymentMethodsPE
+                                                                .map(m => m.name)
+                                                                .filter(opt => opt.toLowerCase().includes(formData.payment_method_pe.toLowerCase()))
+                                                                .map((opt, idx) => (
                                                                 <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
                                                                     setFormData(p => ({ ...p, payment_method_pe: opt }))
                                                                     setShowMetodoPEList(false)

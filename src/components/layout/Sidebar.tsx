@@ -13,7 +13,8 @@ import {
   ShieldCheck,
   Languages,
   Briefcase,
-  Calculator
+  Calculator,
+  Wallet
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -107,6 +108,7 @@ export function Sidebar({ role }: SidebarProps) {
                 <SidebarItem icon={Package} label="Encomiendas" href="/chimi-encomiendas" isActive={pathname.startsWith('/chimi-encomiendas')} />
                 <SidebarItem icon={Languages} label="Traducciones" href="/chimi-traducciones" isActive={pathname.startsWith('/chimi-traducciones')} />
                 <SidebarItem icon={Briefcase} label="Otros Servicios" href="/chimi-otros-servicios" isActive={pathname.startsWith('/chimi-otros-servicios')} />
+                <SidebarItem icon={Wallet} label="Gastos" href="/chimi-gastos" isActive={pathname.startsWith('/chimi-gastos')} />
                 <SidebarItem icon={Calculator} label="Contabilidad" href="/chimi-contabilidad" isActive={pathname.startsWith('/chimi-contabilidad')} />
         
                 <div className="my-4 border-t border-sidebar-border mx-2" />

@@ -77,15 +77,15 @@ export async function uploadClientFile(file: File, userId: string): Promise<Uplo
  * - R2: Generates a signed URL (valid for 1 hour)
  * - Images: Returns the public delivery URL
  */
-export async function getFileUrl(path: string, storage: StorageType): Promise<string> {
-    // Auto-detect storage if path looks like R2 (starts with clients/)
-    const effectiveStorage = path.startsWith('clients/') ? 'r2' : storage;
+export async function getFileUrl(path: string, storage?: StorageType): Promise<string> {
+    // Determine storage: Use parameter if provided, otherwise auto-detect
+    const effectiveStorage = storage || ((path.includes('/') || path.startsWith('clients/')) ? 'r2' : 'images');
 
     if (effectiveStorage === 'images') {
         // Construct Image Delivery URL
         // Format: https://imagedelivery.net/<account_hash>/<image_id>/<variant_name>
-        // We assume 'public' variant for generic access
-        return `https://imagedelivery.net/${CLOUDFLARE_IMAGES_HASH}/${path}/public`;
+        // We assume 'large' variant for original quality with edge resizing
+        return `https://imagedelivery.net/${CLOUDFLARE_IMAGES_HASH}/${path}/large`;
     } else {
         // R2 Presigned URL
         try {
