@@ -89,6 +89,7 @@ interface Parcel {
     documents?: ParcelDocument[]
     payment_details?: PaymentDetail[]
     origin_address?: string
+    origin_address_client?: string
     destination_address?: string
     destination_address_client?: string
     profiles?: {
@@ -206,6 +207,7 @@ export default function ParcelsPage() {
 
         // Origins and Destinations
         origin_address: "",
+        origin_address_client: "",
         destination_address: "",
         destination_address_client: "",
 
@@ -364,6 +366,7 @@ export default function ParcelsPage() {
             payment_currency: "EUR",
             payment_total: "",
             origin_address: "",
+            origin_address_client: "",
             destination_address: "",
             destination_address_client: ""
         })
@@ -408,6 +411,7 @@ export default function ParcelsPage() {
             payment_currency: "EUR",
             payment_total: "",
             origin_address: parcel.origin_address || "",
+            origin_address_client: parcel.origin_address_client || "",
             destination_address: parcel.destination_address || "",
             destination_address_client: parcel.destination_address_client || ""
         })
@@ -921,15 +925,30 @@ export default function ParcelsPage() {
                                             </div>
                                             {showOriginList && (
                                                 <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
-                                                    {SEDE_IT_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.origin_address.toLowerCase())).map((opt, idx) => (
+                                                    {[...SEDE_IT_OPTIONS, "Dirección de cliente"].filter(opt => opt.toLowerCase().includes(formData.origin_address.toLowerCase())).map((opt, idx) => (
                                                         <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
                                                             setFormData(p => ({ ...p, origin_address: opt }))
                                                             setShowOriginList(false)
-                                                        }}>{opt}</div>
+                                                        }}>
+                                                            {opt === "Dirección de cliente" ? "✓ Dirección de cliente" : opt}
+                                                        </div>
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
+
+                                        {formData.origin_address === 'Dirección de cliente' && (
+                                            <div className="grid gap-2 animate-in fade-in slide-in-from-top-2 col-span-1 sm:col-span-2">
+                                                <Label className="text-xs font-bold text-chimipink uppercase tracking-tight italic">Ingrese la dirección exacta de recogida</Label>
+                                                <textarea 
+                                                    name="origin_address_client"
+                                                    value={formData.origin_address_client}
+                                                    onChange={handleInputChange}
+                                                    className="min-h-[60px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:ring-chimipink focus:border-chimipink outline-none shadow-sm"
+                                                    placeholder="Calle, número, piso, referencia..."
+                                                />
+                                            </div>
+                                        )}
                                         <div className="grid gap-2 relative">
                                             <Label className="text-xs font-bold text-slate-700">Dirección de Llegada</Label>
                                             <div className="relative">

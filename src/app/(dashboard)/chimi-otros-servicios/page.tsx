@@ -88,6 +88,7 @@ interface OtherService {
     recipient_name?: string
     recipient_phone?: string
     origin_address?: string
+    origin_address_client?: string
     destination_address?: string
     destination_address_client?: string
     documents?: ServiceDocument[]
@@ -190,6 +191,7 @@ export default function OtherServicesPage() {
         recipient_name: "",
         recipient_phone: "",
         origin_address: "",
+        origin_address_client: "",
         destination_address: "",
         destination_address_client: "",
         total_amount: "0.00",
@@ -344,6 +346,7 @@ export default function OtherServicesPage() {
             recipient_name: "",
             recipient_phone: "",
             origin_address: "",
+            origin_address_client: "",
             destination_address: "",
             destination_address_client: "",
             total_amount: "0.00",
@@ -384,6 +387,7 @@ export default function OtherServicesPage() {
             recipient_name: serv.recipient_name || "",
             recipient_phone: serv.recipient_phone || "",
             origin_address: serv.origin_address || "",
+            origin_address_client: serv.origin_address_client || "",
             destination_address: serv.destination_address || "",
             destination_address_client: serv.destination_address_client || "",
             total_amount: serv.total_amount.toString(),
@@ -791,7 +795,7 @@ export default function OtherServicesPage() {
 
                                         <div className="space-y-4 flex-1">
                                             <div className="grid gap-2 relative">
-                                                <Label className="text-xs font-bold text-slate-500 uppercase">Dirección de Partida</Label>
+                                                <Label className="text-xs font-bold text-slate-700">Dirección de Partida</Label>
                                                 <div className="relative">
                                                     <Input 
                                                         name="origin_address"
@@ -816,62 +820,80 @@ export default function OtherServicesPage() {
                                                     )}
                                                 </div>
                                                 {showOriginList && (
-                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto font-medium">
-                                                        {SEDE_IT_OPTIONS.filter(o => o.toLowerCase().includes(formData.origin_address.toLowerCase())).map(o => (
-                                                            <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => setFormData(p => ({ ...p, origin_address: o }))}>{o}</div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="grid gap-2 relative">
-                                                <Label className="text-xs font-bold text-slate-500 uppercase">Llegada / Recojo</Label>
-                                                <div className="relative">
-                                                    <Input 
-                                                        name="destination_address"
-                                                        value={formData.destination_address}
-                                                        onChange={(e) => { handleInputChange(e); setShowDestinationList(true); }}
-                                                        onFocus={() => setShowDestinationList(true)}
-                                                        onBlur={() => setTimeout(() => setShowDestinationList(false), 200)}
-                                                        placeholder="Sede o Dirección..."
-                                                        autoComplete="off"
-                                                        className="bg-slate-50 border-slate-200 h-10 pr-8"
-                                                    />
-                                                    {formData.destination_address ? (
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => setFormData(prev => ({ ...prev, destination_address: '' }))}
-                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
-                                                        >
-                                                            <X size={14} strokeWidth={3} />
-                                                        </button>
-                                                    ) : (
-                                                        <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
-                                                    )}
-                                                </div>
-                                                {showDestinationList && (
-                                                    <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto font-medium">
-                                                        {[...SEDE_IT_OPTIONS, "Dirección de cliente"].filter(o => o.toLowerCase().includes(formData.destination_address.toLowerCase())).map(o => (
-                                                            <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm font-bold border-b last:border-0" onClick={() => setFormData(p => ({ ...p, destination_address: o }))}>
-                                                                {o === "Dirección de cliente" ? "✓ Dirección de cliente" : o}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {formData.destination_address === 'Dirección de cliente' && (
-                                                <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
-                                                    <Label className="text-xs font-bold text-chimipink uppercase tracking-tight italic">Ingrese la dirección exacta del cliente</Label>
-                                                    <textarea 
-                                                        name="destination_address_client"
-                                                        value={formData.destination_address_client}
-                                                        onChange={handleInputChange}
-                                                        className="min-h-[100px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:ring-chimipink focus:border-chimipink outline-none shadow-sm"
-                                                        placeholder="Calle, número, piso, referencia..."
-                                                    />
+                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                    {[...SEDE_IT_OPTIONS, "Dirección de cliente"].filter(opt => opt.toLowerCase().includes(formData.origin_address.toLowerCase())).map((opt, idx) => (
+                                                        <div key={idx} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => {
+                                                            setFormData(p => ({ ...p, origin_address: opt }))
+                                                            setShowOriginList(false)
+                                                        }}>
+                                                            {opt === "Dirección de cliente" ? "✓ Dirección de cliente" : opt}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             )}
+                                        </div>
+
+                                        {formData.origin_address === 'Dirección de cliente' && (
+                                            <div className="grid gap-2 animate-in fade-in slide-in-from-top-2 col-span-1 sm:col-span-2">
+                                                <Label className="text-xs font-bold text-chimipink uppercase tracking-tight italic">Ingrese la dirección exacta de recogida</Label>
+                                                <textarea 
+                                                    name="origin_address_client"
+                                                    value={formData.origin_address_client}
+                                                    onChange={handleInputChange}
+                                                    className="min-h-[60px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:ring-chimipink focus:border-chimipink outline-none shadow-sm"
+                                                    placeholder="Calle, número, piso, referencia..."
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div className="grid gap-2 relative">
+                                            <Label className="text-xs font-bold text-slate-700">Llegada / Recojo</Label>
+                                            <div className="relative">
+                                                <Input 
+                                                    name="destination_address"
+                                                    value={formData.destination_address}
+                                                    onChange={(e) => { handleInputChange(e); setShowDestinationList(true); }}
+                                                    onFocus={() => setShowDestinationList(true)}
+                                                    onBlur={() => setTimeout(() => setShowDestinationList(false), 200)}
+                                                    placeholder="Sede o Dirección..."
+                                                    autoComplete="off"
+                                                    className="bg-slate-50 border-slate-200 h-10 pr-8"
+                                                />
+                                                {formData.destination_address ? (
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setFormData(prev => ({ ...prev, destination_address: '' }))}
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-full p-0.5 transition-colors"
+                                                    >
+                                                        <X size={14} strokeWidth={3} />
+                                                    </button>
+                                                ) : (
+                                                    <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                                                )}
+                                            </div>
+                                             {showDestinationList && (
+                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                    {[...SEDE_IT_OPTIONS, "Dirección de cliente"].filter(o => o.toLowerCase().includes(formData.destination_address.toLowerCase())).map(o => (
+                                                        <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => setFormData(p => ({ ...p, destination_address: o }))}>
+                                                            {o === "Dirección de cliente" ? "✓ Dirección de cliente" : o}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {formData.destination_address === 'Dirección de cliente' && (
+                                            <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
+                                                <Label className="text-xs font-bold text-chimipink uppercase tracking-tight italic">Ingrese la dirección exacta del cliente</Label>
+                                                <textarea 
+                                                    name="destination_address_client"
+                                                    value={formData.destination_address_client}
+                                                    onChange={handleInputChange}
+                                                    className="min-h-[100px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:ring-chimipink focus:border-chimipink outline-none shadow-sm"
+                                                    placeholder="Calle, número, piso, referencia..."
+                                                />
+                                            </div>
+                                        )}
 
                                             <div className="space-y-3 pt-4 border-t border-slate-100">
                                                 <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><NotebookPen className="h-4 w-4 text-chimiteal" /> Notas Adicionales</Label>

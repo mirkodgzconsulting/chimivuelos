@@ -93,6 +93,7 @@ interface Translation {
     source_language?: string
     target_language?: string
     origin_address: string
+    origin_address_client?: string
     destination_address: string
     destination_address_client?: string
     net_amount: number
@@ -237,6 +238,7 @@ export default function TranslationsPage() {
         source_language: "",
         target_language: "",
         origin_address: "",
+        origin_address_client: "",
         destination_address: "",
         destination_address_client: "",
         net_amount: "",
@@ -409,6 +411,7 @@ export default function TranslationsPage() {
             source_language: "",
             target_language: "",
             origin_address: "",
+            origin_address_client: "",
             destination_address: "",
             destination_address_client: "",
             net_amount: "",
@@ -455,6 +458,7 @@ export default function TranslationsPage() {
             source_language: trans.source_language || "",
             target_language: trans.target_language || "",
             origin_address: trans.origin_address || "",
+            origin_address_client: trans.origin_address_client || "",
             destination_address: trans.destination_address || "",
             destination_address_client: trans.destination_address_client || "",
             net_amount: trans.net_amount.toString(),
@@ -877,7 +881,7 @@ export default function TranslationsPage() {
 
                                     <div className="space-y-4 flex-1">
                                         <div className="grid gap-2 relative">
-                                            <Label className="text-xs font-bold text-slate-500 uppercase">Dirección de Partida</Label>
+                                            <Label className="text-xs font-bold text-slate-700">Dirección de Partida</Label>
                                             <div className="relative">
                                                 <Input 
                                                     name="origin_address"
@@ -902,16 +906,31 @@ export default function TranslationsPage() {
                                                 )}
                                             </div>
                                             {showOriginList && (
-                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto font-medium">
-                                                    {SEDE_IT_OPTIONS.filter(o => o.toLowerCase().includes(formData.origin_address.toLowerCase())).map(o => (
-                                                        <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => setFormData(p => ({ ...p, origin_address: o }))}>{o}</div>
+                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
+                                                    {[...SEDE_IT_OPTIONS, "Dirección de cliente"].filter(o => o.toLowerCase().includes(formData.origin_address.toLowerCase())).map(o => (
+                                                        <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => setFormData(p => ({ ...p, origin_address: o }))}>
+                                                            {o === "Dirección de cliente" ? "✓ Dirección de cliente" : o}
+                                                        </div>
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
 
+                                        {formData.origin_address === 'Dirección de cliente' && (
+                                            <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
+                                                <Label className="text-xs font-bold text-chimipink uppercase tracking-tight italic">Ingrese la dirección exacta de recogida</Label>
+                                                <textarea 
+                                                    name="origin_address_client"
+                                                    value={formData.origin_address_client}
+                                                    onChange={handleInputChange}
+                                                    className="min-h-[100px] w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:ring-chimipink focus:border-chimipink outline-none shadow-sm"
+                                                    placeholder="Calle, número, piso, referencia..."
+                                                />
+                                            </div>
+                                        )}
+
                                         <div className="grid gap-2 relative">
-                                            <Label className="text-xs font-bold text-slate-500 uppercase">Llegada / Recojo</Label>
+                                            <Label className="text-xs font-bold text-slate-700">Llegada / Recojo</Label>
                                             <div className="relative">
                                                 <Input 
                                                     name="destination_address"
@@ -936,9 +955,9 @@ export default function TranslationsPage() {
                                                 )}
                                             </div>
                                             {showDestinationList && (
-                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto font-medium">
+                                                <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-xl rounded-md mt-1 max-h-40 overflow-y-auto">
                                                     {[...SEDE_IT_OPTIONS, "Dirección de cliente"].filter(o => o.toLowerCase().includes(formData.destination_address.toLowerCase())).map(o => (
-                                                        <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm font-bold border-b last:border-0" onClick={() => setFormData(p => ({ ...p, destination_address: o }))}>
+                                                        <div key={o} className="p-2.5 hover:bg-slate-50 cursor-pointer text-sm border-b last:border-0" onClick={() => setFormData(p => ({ ...p, destination_address: o }))}>
                                                             {o === "Dirección de cliente" ? "✓ Dirección de cliente" : o}
                                                         </div>
                                                     ))}

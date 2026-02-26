@@ -13,6 +13,10 @@ export async function getTranslations() {
         .from('translations')
         .select(`
             *,
+            origin_address,
+            origin_address_client,
+            destination_address,
+            destination_address_client,
             profiles:client_id (
                 first_name,
                 last_name,
@@ -68,6 +72,7 @@ export async function createTranslation(formData: FormData) {
     
     // 3. Addresses
     const origin_address = formData.get('origin_address') as string
+    const origin_address_client = formData.get('origin_address_client') as string
     const destination_address = formData.get('destination_address') as string
     const destination_address_client = formData.get('destination_address_client') as string
     
@@ -132,6 +137,7 @@ export async function createTranslation(formData: FormData) {
         recipient_name,
         recipient_phone,
         origin_address,
+        origin_address_client,
         destination_address,
         destination_address_client,
         net_amount,
@@ -219,6 +225,7 @@ export async function updateTranslation(formData: FormData) {
         const quantity = parseInt(formData.get('quantity') as string) || 1
         
         const origin_address = formData.get('origin_address') as string
+        const origin_address_client = formData.get('origin_address_client') as string
         const destination_address = formData.get('destination_address') as string
         const destination_address_client = formData.get('destination_address_client') as string
         
@@ -277,6 +284,7 @@ export async function updateTranslation(formData: FormData) {
             quantity,
             documents: newDocuments,
             origin_address,
+            origin_address_client,
             destination_address,
             destination_address_client,
             net_amount,

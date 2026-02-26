@@ -14,6 +14,7 @@ export async function getParcels() {
         .select(`
             *,
             origin_address,
+            origin_address_client,
             destination_address,
             destination_address_client,
             payment_details,
@@ -58,6 +59,7 @@ export async function createParcel(formData: FormData) {
     const recipient_phone = formData.get('recipient_phone') as string
     const recipient_address = formData.get('recipient_address') as string
     const origin_address = formData.get('origin_address') as string
+    const origin_address_client = formData.get('origin_address_client') as string
     const destination_address = formData.get('destination_address') as string
     const destination_address_client = formData.get('destination_address_client') as string
     
@@ -126,6 +128,7 @@ export async function createParcel(formData: FormData) {
         recipient_phone,
         recipient_address,
         origin_address,
+        origin_address_client,
         destination_address,
         destination_address_client,
         package_type,
@@ -216,6 +219,7 @@ export async function updateParcel(formData: FormData) {
     const recipient_phone = formData.get('recipient_phone') as string
     const recipient_address = formData.get('recipient_address') as string
     const origin_address = formData.get('origin_address') as string
+    const origin_address_client = formData.get('origin_address_client') as string
     const destination_address = formData.get('destination_address') as string
     const destination_address_client = formData.get('destination_address_client') as string
     
@@ -270,6 +274,7 @@ export async function updateParcel(formData: FormData) {
         recipient_phone,
         recipient_address,
         origin_address,
+        origin_address_client,
         destination_address,
         destination_address_client,
         package_type,

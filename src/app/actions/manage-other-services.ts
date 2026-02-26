@@ -18,7 +18,9 @@ export async function getOtherServices() {
                 last_name,
                 email,
                 phone
-            )
+            ),
+            origin_address_client,
+            destination_address_client
         `)
         .order('created_at', { ascending: false })
 
@@ -62,6 +64,7 @@ export async function createOtherService(formData: FormData) {
     const recipient_name = formData.get('recipient_name') as string
     const recipient_phone = formData.get('recipient_phone') as string
     const origin_address = formData.get('origin_address') as string
+    const origin_address_client = formData.get('origin_address_client') as string
     const destination_address = formData.get('destination_address') as string
     const destination_address_client = formData.get('destination_address_client') as string
     
@@ -119,6 +122,7 @@ export async function createOtherService(formData: FormData) {
         recipient_name,
         recipient_phone,
         origin_address,
+        origin_address_client,
         destination_address,
         destination_address_client,
         documents,
@@ -201,6 +205,7 @@ export async function updateOtherService(formData: FormData) {
         const recipient_name = formData.get('recipient_name') as string
         const recipient_phone = formData.get('recipient_phone') as string
         const origin_address = formData.get('origin_address') as string
+        const origin_address_client = formData.get('origin_address_client') as string
         const destination_address = formData.get('destination_address') as string
         const destination_address_client = formData.get('destination_address_client') as string
         
@@ -252,6 +257,7 @@ export async function updateOtherService(formData: FormData) {
             recipient_name,
             recipient_phone,
             origin_address,
+            origin_address_client,
             destination_address,
             destination_address_client,
             documents: newDocuments,
