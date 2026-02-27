@@ -13,7 +13,8 @@ import {
     CalendarDays,
     X,
     ArrowDownUp,
-    FileSpreadsheet
+    FileSpreadsheet,
+    ShieldCheck
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Card, CardContent } from "@/components/ui/card"
@@ -29,12 +30,14 @@ import {
 import { cn } from '@/lib/utils'
 import { getConsolidatedAccounting, PaymentEntry } from '@/app/actions/manage-accounting'
 import { PaymentMethod } from '@/app/actions/manage-payment-methods'
+import { createClient } from '@/lib/supabase/client'
 
 export default function ContabilidadPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [payments, setPayments] = useState<PaymentEntry[]>([])
     const [methodsIT, setMethodsIT] = useState<PaymentMethod[]>([])
     const [methodsPE, setMethodsPE] = useState<PaymentMethod[]>([])
+    const [userRole, setUserRole] = useState<string | null>(null)
     
     // View state: 'grid' or 'detail'
     const [viewMode, setViewMode] = useState<'grid' | 'detail'>('grid')
@@ -71,9 +74,19 @@ export default function ContabilidadPage() {
         }
     }, [])
 
+    const fetchUserRole = useCallback(async () => {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+            const role = user.user_metadata?.role || 'client'
+            setUserRole(role === 'usuario' ? 'agent' : role)
+        }
+    }, [])
+
     useEffect(() => {
         loadData()
-    }, [loadData])
+        fetchUserRole()
+    }, [loadData, fetchUserRole])
 
     // Helpers for calculations
     const getStatsForMethod = (methodName: string, country: 'IT' | 'PE') => {
@@ -94,14 +107,26 @@ export default function ContabilidadPage() {
         }
     }
 
-    const countryStats = useMemo(() => {
+    const { countryStats, totalCountryStats } = useMemo(() => {
         const stats = {
             IT: { income: 0, expenses: 0, balance: 0 },
             PE: { income: 0, expenses: 0, balance: 0 }
         }
+        const totals = {
+            IT: { balance: 0 },
+            PE: { balance: 0 }
+        }
 
         payments.forEach(p => {
             const paymentDate = p.date.split('T')[0]
+            // Historical totals (No date filter)
+            if (p.country === 'IT') {
+                totals.IT.balance += p.amountEur
+            } else if (p.country === 'PE') {
+                totals.PE.balance += p.amountEur
+            }
+
+            // Filtered stats (With date filter)
             if (paymentDate >= startDate && paymentDate <= endDate) {
                 if (p.country === 'IT') {
                     if (p.amountEur > 0) stats.IT.income += p.amountEur
@@ -115,8 +140,18 @@ export default function ContabilidadPage() {
             }
         })
 
-        return stats
+        return { countryStats: stats, totalCountryStats: totals }
     }, [payments, startDate, endDate])
+
+    // Total balances for cards (no date filter)
+    const totalBalancesByMethod = useMemo(() => {
+        const balances: Record<string, number> = {}
+        payments.forEach(p => {
+            const key = `${p.country}-${p.method}`
+            balances[key] = (balances[key] || 0) + p.amountEur
+        })
+        return balances
+    }, [payments])
 
     const branches = useMemo(() => {
         if (!selectedMethod || !selectedCountry) return []
@@ -175,6 +210,21 @@ export default function ContabilidadPage() {
                     <Loader2 className="h-10 w-10 animate-spin text-chimicyan" />
                     <p className="text-slate-500 font-medium animate-pulse">Cargando contabilidad...</p>
                 </div>
+            </div>
+        )
+    }
+
+    if (userRole === 'agent') {
+        return (
+            <div className="flex flex-col items-center justify-center p-20 text-center space-y-4">
+                <div className="bg-red-50 p-6 rounded-full">
+                    <ShieldCheck className="h-12 w-12 text-red-500" />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-800">Acceso Denegado</h2>
+                <p className="text-slate-500 max-w-md">Lo sentimos, no tienes los permisos necesarios para acceder al módulo de Contabilidad.</p>
+                <Button onClick={() => window.location.href = '/dashboard'} variant="outline">
+                    Regresar al Dashboard
+                </Button>
             </div>
         )
     }
@@ -428,11 +478,19 @@ export default function ContabilidadPage() {
                             <span className="text-sm font-black text-rose-500">- € {countryStats.IT.expenses.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="flex flex-col pl-6 border-l border-slate-200">
-                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Balance General</span>
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Balance</span>
                             <span className={cn("text-lg font-black tracking-tight leading-none", countryStats.IT.balance >= 0 ? "text-slate-800" : "text-rose-600")}>
                                 {countryStats.IT.balance < 0 ? '- ' : ''}€ {Math.abs(countryStats.IT.balance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                             </span>
                         </div>
+                    </div>
+
+                    {/* Historical Balance (No Filter) */}
+                    <div className="hidden xl:flex flex-col items-center justify-center bg-slate-50/50 p-2 px-5 rounded-2xl border border-slate-100 shadow-xs ml-auto">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Balance Histórico</span>
+                        <span className={cn("text-xl font-black tracking-tighter leading-none", totalCountryStats.IT.balance >= 0 ? "text-slate-800" : "text-rose-600")}>
+                            {totalCountryStats.IT.balance < 0 ? '- ' : ''}€ {Math.abs(totalCountryStats.IT.balance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                        </span>
                     </div>
 
                     {/* Compact Date Filter aligned with Header */}
@@ -481,6 +539,7 @@ export default function ContabilidadPage() {
                                 name={method.name}
                                 country="IT"
                                 stats={stats}
+                                totalBalance={totalBalancesByMethod[`IT-${method.name}`] || 0}
                                 onVerDetalle={() => {
                                     setSelectedMethod(method.name)
                                     setSelectedCountry('IT')
@@ -511,15 +570,20 @@ export default function ContabilidadPage() {
                             <span className="text-sm font-black text-rose-500">- € {countryStats.PE.expenses.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="flex flex-col pl-6 border-l border-slate-200">
-                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Balance General</span>
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Balance</span>
                             <span className={cn("text-lg font-black tracking-tight leading-none", countryStats.PE.balance >= 0 ? "text-slate-800" : "text-rose-600")}>
                                 {countryStats.PE.balance < 0 ? '- ' : ''}€ {Math.abs(countryStats.PE.balance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                             </span>
                         </div>
                     </div>
 
-                    {/* Placeholder for symmetry if needed, or just spacers */}
-                    <div className="hidden md:block w-[300px]" />
+                    {/* Historical Balance (No Filter) */}
+                    <div className="hidden xl:flex flex-col items-center justify-center bg-slate-50/50 p-2 px-5 rounded-2xl border border-slate-100 shadow-xs ml-auto">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Balance Histórico</span>
+                        <span className={cn("text-xl font-black tracking-tighter leading-none", totalCountryStats.PE.balance >= 0 ? "text-slate-800" : "text-rose-600")}>
+                            {totalCountryStats.PE.balance < 0 ? '- ' : ''}€ {Math.abs(totalCountryStats.PE.balance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                        </span>
+                    </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -531,6 +595,7 @@ export default function ContabilidadPage() {
                                 name={method.name}
                                 country="PE"
                                 stats={stats}
+                                totalBalance={totalBalancesByMethod[`PE-${method.name}`] || 0}
                                 onVerDetalle={() => {
                                     setSelectedMethod(method.name)
                                     setSelectedCountry('PE')
@@ -545,10 +610,11 @@ export default function ContabilidadPage() {
     )
 }
 
-function MethodCard({ name, stats, onVerDetalle, country }: { 
+function MethodCard({ name, stats, totalBalance, onVerDetalle, country }: { 
     name: string, 
     country: 'IT' | 'PE',
     stats: { totalIncome: number, totalExpenses: number, balance: number }, 
+    totalBalance: number,
     onVerDetalle: () => void 
 }) {
     return (
@@ -559,7 +625,7 @@ function MethodCard({ name, stats, onVerDetalle, country }: {
             <CardContent className="p-5 space-y-4">
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5 max-w-[85%]">
-                        <h3 className="font-bold text-slate-700 text-sm leading-tight group-hover:text-chimicyan transition-colors line-clamp-1">
+                        <h3 className="font-bold text-slate-700 text-sm leading-tight transition-colors line-clamp-1">
                             {name}
                         </h3>
                     </div>
@@ -585,16 +651,22 @@ function MethodCard({ name, stats, onVerDetalle, country }: {
                                 - € {stats.totalExpenses.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                             </span>
                         </div>
+                        <div className="border-t border-slate-100/50 pt-2 flex justify-between items-center group/total">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Balance</span>
+                            <span className={cn("text-xs font-bold", stats.balance >= 0 ? "text-slate-600" : "text-rose-500")}>
+                                {stats.balance < 0 ? '- ' : ''}€ {Math.abs(stats.balance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            </span>
+                        </div>
                     </div>
 
                     <div className="px-1 pt-1 border-t border-slate-100">
-                        <div className="flex justify-between items-end">
-                            <div className="flex items-center gap-1.5">
-                                {stats.balance >= 0 ? <TrendingUp size={12} className="text-emerald-500" /> : <TrendingDown size={12} className="text-rose-500" />}
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Balance</span>
+                        <div className="flex justify-between items-center gap-2">
+                            <div className="flex items-center gap-1.5 min-w-fit">
+                                {totalBalance >= 0 ? <TrendingUp size={12} className="text-emerald-500" /> : <TrendingDown size={12} className="text-rose-500" />}
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Balance Histórico</span>
                             </div>
-                            <span className={cn("text-lg font-black tracking-tight", stats.balance >= 0 ? "text-slate-800" : "text-rose-600")}>
-                                {stats.balance < 0 ? '- ' : ''}€ {Math.abs(stats.balance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                            <span className={cn("text-base font-black tracking-tighter whitespace-nowrap", totalBalance >= 0 ? "text-slate-800" : "text-rose-600")}>
+                                {totalBalance < 0 ? '- ' : ''}€ {Math.abs(totalBalance).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                             </span>
                         </div>
                     </div>

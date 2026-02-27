@@ -252,7 +252,8 @@ export default function AgentsPage() {
                         required
                       >
                         <option value="" disabled>Seleccione un rol</option>
-                        <option value="agent">Usuario</option>
+                        <option value="agent">Agente</option>
+                        <option value="supervisor">Supervisor</option>
                         <option value="admin">Administrador</option>
                       </select>
                   </div>
@@ -307,7 +308,8 @@ export default function AgentsPage() {
             <select className="h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chimiteal cursor-pointer">
               <option>Todos los roles</option>
               <option>Administrador</option>
-              <option>Usuario</option>
+              <option>Supervisor</option>
+              <option>Agente</option>
             </select>
             <Button variant="outline" onClick={handleExportExcel} className="gap-2 text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900">
               <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
@@ -358,9 +360,11 @@ export default function AgentsPage() {
                         "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
                         agent.role === 'admin' 
                           ? "bg-slate-900 text-white"
-                          : "bg-cyan-100 text-cyan-800"
+                          : agent.role === 'supervisor'
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-cyan-100 text-cyan-800"
                       )}>
-                        {agent.role === 'admin' ? 'Administrador' : 'Agente'}
+                        {agent.role === 'admin' ? 'Administrador' : agent.role === 'supervisor' ? 'Supervisor' : 'Agente'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-slate-500">

@@ -45,7 +45,7 @@ const SidebarItem = ({ icon: Icon, label, href, isActive }: SidebarItemProps) =>
 );
 
 interface SidebarProps {
-  role?: 'admin' | 'client' | 'agent' | 'usuario';
+  role?: 'admin' | 'client' | 'agent' | 'usuario' | 'supervisor';
 }
 
 export function Sidebar({ role }: SidebarProps) {
@@ -91,7 +91,7 @@ export function Sidebar({ role }: SidebarProps) {
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Principal</div>
                 
                 <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} />
-                {(role === 'admin' || role === 'agent') && (
+                {(role === 'admin' || role === 'agent' || role === 'supervisor') && (
                     <>
                         <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} />
                         <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} />
@@ -110,8 +110,12 @@ export function Sidebar({ role }: SidebarProps) {
                 <SidebarItem icon={Package} label="Encomiendas" href="/chimi-encomiendas" isActive={pathname.startsWith('/chimi-encomiendas')} />
                 <SidebarItem icon={Languages} label="Traducciones" href="/chimi-traducciones" isActive={pathname.startsWith('/chimi-traducciones')} />
                 <SidebarItem icon={Briefcase} label="Otros Servicios" href="/chimi-otros-servicios" isActive={pathname.startsWith('/chimi-otros-servicios')} />
-                <SidebarItem icon={Wallet} label="Gastos" href="/chimi-gastos" isActive={pathname.startsWith('/chimi-gastos')} />
-                <SidebarItem icon={Calculator} label="Contabilidad" href="/chimi-contabilidad" isActive={pathname.startsWith('/chimi-contabilidad')} />
+                {(role === 'admin' || role === 'supervisor') && (
+                    <>
+                        <SidebarItem icon={Wallet} label="Gastos" href="/chimi-gastos" isActive={pathname.startsWith('/chimi-gastos')} />
+                        <SidebarItem icon={Calculator} label="Contabilidad" href="/chimi-contabilidad" isActive={pathname.startsWith('/chimi-contabilidad')} />
+                    </>
+                )}
         
                 <div className="my-4 border-t border-sidebar-border mx-2" />
             </>

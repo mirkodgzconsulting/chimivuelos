@@ -46,7 +46,8 @@ import {
     updateTranslation, 
     deleteTranslation, 
     deleteTranslationDocument, 
-    getTranslationDocumentUrl 
+    getTranslationDocumentUrl,
+    updateTranslationStatus
 } from '@/app/actions/manage-translations'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
 import { EditRequestModal } from '@/components/permissions/EditRequestModal'
@@ -303,8 +304,9 @@ export default function TranslationsPage() {
             const supabase = createClient()
             const { data: { user } } = await supabase.auth.getUser()
             if (user) {
-                const role = user.user_metadata?.role || 'client'
-                setUserRole(role === 'usuario' ? 'agent' : role)
+                const rawRole = user.user_metadata?.role || 'client'
+                const role = rawRole === 'usuario' ? 'agent' : rawRole
+                setUserRole(role)
                 if (role === 'agent' || role === 'usuario') {
                     await getActivePermissions()
                 }
@@ -489,7 +491,7 @@ export default function TranslationsPage() {
     }
 
     const handleActionClick = async (trans: Translation, action: 'edit' | 'delete') => {
-        if (userRole === 'admin') {
+        if (userRole === 'admin' || userRole === 'supervisor') {
             if (action === 'edit') handleEdit(trans)
             else if (confirm('¿Borrar traducción?')) {
                 await deleteTranslation(trans.id)
@@ -507,6 +509,27 @@ export default function TranslationsPage() {
                 setPendingResourceName(trans.tracking_code || trans.id)
                 setIsPermissionModalOpen(true)
             }
+        }
+    }
+
+    const handleStatusChange = async (id: string, newStatus: string) => {
+        const trans = translations.find(t => t.id === id)
+        if (!trans) return
+
+        if (userRole === 'agent' && !unlockedResources.has(id)) {
+            setPendingResourceId(id)
+            setPendingResourceName(trans.tracking_code || id)
+            setIsPermissionModalOpen(true)
+            return
+        }
+
+        // Optimistic UI
+        setTranslations(prev => prev.map(t => t.id === id ? { ...t, status: newStatus as Translation['status'] } : t))
+        
+        const result = await updateTranslationStatus(id, newStatus)
+        if (result.error) {
+            alert("Error al actualizar estado: " + result.error)
+            loadData() // Revert
         }
     }
 
@@ -1466,7 +1489,7 @@ export default function TranslationsPage() {
                                 <th className="p-4">A CUENTA</th>
                                 <th className="p-4">SALDO PENDIENTE</th>
                                 <th className="p-4 text-center">ESTADO</th>
-                                <th className="p-4 text-right sticky right-0 bg-slate-50/90 backdrop-blur-sm z-10 border-l border-slate-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)]">ACCIONES</th>
+                                <th className="px-2 sm:px-4 py-4 text-right sticky right-0 bg-slate-50/90 backdrop-blur-sm z-10 border-l border-slate-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)]">ACCIONES</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1510,21 +1533,26 @@ export default function TranslationsPage() {
                                         € {t.balance.toFixed(2)}
                                     </td>
                                     <td className="p-4 py-3 text-center">
-                                         <span className={cn(
-                                            "inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase",
-                                            t.status === 'pending' ? "bg-amber-100 text-amber-700" :
-                                            t.status === 'completed' ? "bg-emerald-100 text-emerald-700" :
-                                            t.status === 'cancelled' ? "bg-red-100 text-red-700" :
-                                            "bg-blue-100 text-blue-700"
-                                        )}>
-                                            {t.status === 'pending' ? 'Pendiente' : 
-                                             t.status === 'in_progress' ? 'En Proceso' : 
-                                             t.status === 'completed' ? 'Listo' : 
-                                             t.status === 'delivered' ? 'Entregado' : 'Cancelado'}
-                                        </span>
+                                         <select
+                                            value={t.status}
+                                            onChange={(e) => handleStatusChange(t.id, e.target.value)}
+                                            className={cn(
+                                                "appearance-none px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border-none focus:ring-0 cursor-pointer text-center",
+                                                t.status === 'pending' ? "bg-amber-100 text-amber-700" :
+                                                t.status === 'completed' ? "bg-emerald-100 text-emerald-700" :
+                                                t.status === 'cancelled' ? "bg-red-100 text-red-700" :
+                                                "bg-blue-100 text-blue-700"
+                                            )}
+                                        >
+                                            <option value="pending">Pendiente</option>
+                                            <option value="in_progress">En Proceso</option>
+                                            <option value="completed">Listo</option>
+                                            <option value="delivered">Entregado</option>
+                                            <option value="cancelled">Cancelado</option>
+                                        </select>
                                     </td>
-                                    <td className="p-4 py-3 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
-                                        <div className="flex items-center justify-end gap-2">
+                                    <td className="px-2 sm:px-4 py-3 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
+                                        <div className="flex items-center justify-end gap-1 sm:gap-2">
                                             {t.documents && t.documents.length > 0 && (
                                                 <Button size="sm" variant="ghost" className="text-chimiteal hover:bg-teal-50" onClick={() => setDocsViewerTranslation(t)}>
                                                     <FileText className="h-5 w-5" />
@@ -1549,7 +1577,7 @@ export default function TranslationsPage() {
                                                 )}
                                             </Button>
 
-                                            {userRole === 'admin' && (
+                                            {(userRole === 'admin' || userRole === 'supervisor') && (
                                                 <Button variant="ghost" size="sm" onClick={() => handleActionClick(t, 'delete')}>
                                                     <Trash2 className="h-4 w-4 text-red-400" />
                                                 </Button>

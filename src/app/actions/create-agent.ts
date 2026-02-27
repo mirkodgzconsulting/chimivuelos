@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { uploadImageToCloudflare } from '@/lib/storage'
+import { createClient } from '@/lib/supabase/server'
 
 export async function createAgent(formData: FormData) {
   const email = formData.get('email') as string
@@ -10,14 +11,16 @@ export async function createAgent(formData: FormData) {
   const firstName = formData.get('first_name') as string
   const lastName = formData.get('last_name') as string
   const role = formData.get('role') as string
-  const phone = formData.get('phone') as string
   const photoFile = formData.get('photo') as File
-
-  if (!email || !password || !firstName || !lastName || !role) {
-    return { error: 'Faltan campos obligatorios' }
-  }
+  const phone = formData.get('phone') as string
 
   try {
+    const supabase = await createClient()
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    if (!currentUser) return { error: 'No autorizado' }
+
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', currentUser.id).single()
+    if (profile?.role !== 'admin') return { error: 'Se requieren permisos de administrador' }
     // 1. Create user in Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,

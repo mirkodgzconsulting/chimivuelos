@@ -137,7 +137,7 @@ export async function getActivePermissionDetails(resourceType: string, resourceI
         if (!user) return { hasPermission: false }
 
         const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
-        const isAdmin = profile?.role === 'admin'
+        const isAdmin = profile?.role === 'admin' || profile?.role === 'supervisor'
 
         // Check for ANY approved and non-expired request (even for admins, to track their explicit requests)
         const { data: req } = await supabaseAdmin

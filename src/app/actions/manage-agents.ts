@@ -3,9 +3,17 @@
 import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { uploadImageToCloudflare } from '@/lib/storage'
+import { createClient } from '@/lib/supabase/server'
 
 export async function deleteAgent(userId: string) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autorizado' }
+
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role !== 'admin') return { error: 'Se requieren permisos de administrador' }
+
     // Delete from Auth (cascades to public.profiles usually if set up, 
     // but we can delete manually to be safe or just rely on cascade)
     // Supabase Auth delete cascades to objects owned by user if configured, 
@@ -40,6 +48,13 @@ export async function updateAgent(formData: FormData) {
   }
 
   try {
+    const supabase = await createClient()
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    if (!currentUser) return { error: 'No autorizado' }
+
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', currentUser.id).single()
+    if (profile?.role !== 'admin') return { error: 'Se requieren permisos de administrador' }
+
     const updateData: {
         email: string;
         user_metadata: { first_name: string; last_name: string; role: string };

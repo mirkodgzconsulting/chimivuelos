@@ -280,7 +280,7 @@ export async function updateTransfer(formData: FormData) {
             activeReason = permission.reason as string
             // Consumir permiso inmediatamente en la acción principal de guardado
             await consumeEditPermission('money_transfers', id)
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('money_transfers', id)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
@@ -473,7 +473,7 @@ export async function updateTransferStatus(id: string, status: string) {
             } else {
                 throw new Error('No tienes permiso para editar este giro.')
             }
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('money_transfers', id)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
@@ -520,8 +520,8 @@ export async function deleteTransfer(id: string) {
         if (!user) throw new Error('Unauthorized')
 
         const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
-        if (profile?.role !== 'admin') {
-            throw new Error('Solo los administradores pueden eliminar giros.')
+        if (profile?.role !== 'admin' && profile?.role !== 'supervisor') {
+            throw new Error('Solo los administradores o supervisores pueden eliminar giros.')
         }
 
         const { data: transfer } = await adminSupabase.from('money_transfers').select('*').eq('id', id).single()

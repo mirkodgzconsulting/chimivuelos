@@ -163,6 +163,13 @@ export async function deleteExpense(id: string) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Unauthorized')
 
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role !== 'admin' && profile?.role !== 'supervisor') {
+        throw new Error('Solo los administradores o supervisores pueden eliminar gastos.')
+    }
+
+    const { data: expense } = await supabaseAdmin.from('corporate_expenses').select('*').eq('id', id).single()
+
     const { error } = await supabaseAdmin
         .from('corporate_expenses')
         .delete()
@@ -178,6 +185,7 @@ export async function deleteExpense(id: string) {
         action: 'delete',
         resourceType: 'corporate_expenses',
         resourceId: id,
+        oldValues: expense,
         metadata: { method: 'deleteExpense' }
     })
 
@@ -190,8 +198,16 @@ export async function updateExpense(formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Unauthorized')
 
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role !== 'admin' && profile?.role !== 'supervisor') {
+        throw new Error('Solo los administradores o supervisores pueden actualizar gastos.')
+    }
+
     const id = formData.get('id') as string
     if (!id) throw new Error('Missing ID')
+
+    // ... rest of the logic ...
+    const { data: existingExpense } = await supabaseAdmin.from('corporate_expenses').select('*').eq('id', id).single()
 
     const category = formData.get('category') as string
     const original_amount = parseFloat(formData.get('original_amount') as string) || 0
@@ -261,6 +277,7 @@ export async function updateExpense(formData: FormData) {
         action: 'update',
         resourceType: 'corporate_expenses',
         resourceId: id,
+        oldValues: existingExpense,
         newValues: updateData,
         metadata: { method: 'updateExpense' }
     })

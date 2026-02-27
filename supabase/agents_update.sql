@@ -13,11 +13,19 @@ DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE public.profiles 
 ADD CONSTRAINT profiles_role_check CHECK (role IN ('admin', 'agent', 'client'));
 
+-- Helper function to avoid recursion (Security Definer bypasses RLS)
+CREATE OR REPLACE FUNCTION public.get_my_role()
+RETURNS text AS $$
+BEGIN
+  RETURN (SELECT role FROM public.profiles WHERE id = auth.uid());
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Policies for Agents
 CREATE POLICY "Agents can update own profile." ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
--- Admins can manage agents (insert/update/delete handled via service role mostly, but let's allow read)
-CREATE POLICY "Admins can view all profiles." ON public.profiles FOR SELECT USING (
+-- Admins and Supervisors can manage agents
+CREATE POLICY "Admins and supervisors can view all profiles." ON public.profiles FOR SELECT USING (
   auth.jwt() ->> 'role' = 'service_role' 
-  OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  OR public.get_my_role() IN ('admin', 'supervisor')
 );

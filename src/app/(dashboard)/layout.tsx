@@ -23,14 +23,14 @@ export default async function DashboardLayout({
     <div className="min-h-screen bg-page font-sans text-slate-900">
       
       {/* Sidebar - Fixed Left */}
-      <Sidebar role={role as 'admin' | 'client' | 'agent' | 'usuario'} />
+      <Sidebar role={role as 'admin' | 'client' | 'agent' | 'usuario' | 'supervisor'} />
 
       {/* Main Content Area */}
       <div className="md:pl-48 flex flex-col min-h-screen transition-all duration-300">
         
         {/* Header - Sticky Top */}
         <div className="z-30 w-full">
-             <Header user={user} role={role as 'admin' | 'client' | 'agent' | 'usuario'} />
+             <Header user={user} role={role as 'admin' | 'client' | 'agent' | 'usuario' | 'supervisor'} />
         </div>
 
         {/* Dynamic Page Content */}

@@ -198,7 +198,7 @@ export async function updateTranslation(formData: FormData) {
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
             await consumeEditPermission('translations', id)
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('translations', id)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
@@ -332,7 +332,7 @@ export async function deleteTranslation(id: string) {
         if (!user) throw new Error('Unauthorized')
 
         const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
-        if (profile?.role !== 'admin') throw new Error('Se requieren permisos de administrador')
+        if (profile?.role !== 'admin' && profile?.role !== 'supervisor') throw new Error('Se requieren permisos de administrador o supervisor')
 
         const { data: existing } = await adminSupabase.from('translations').select('*').eq('id', id).single()
         if (!existing) throw new Error('Traducción no encontrada')
@@ -364,6 +364,26 @@ export async function updateTranslationStatus(id: string, status: string) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Unauthorized')
 
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Actualización de Estado Rápida';
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const permission = await getActivePermissionDetails('translations', id)
+            if (permission.hasPermission) {
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+            } else {
+                throw new Error('No tienes permiso para editar esta traducción. Debes solicitar autorización.')
+            }
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
+            const permission = await getActivePermissionDetails('translations', id)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        }
+
         const { data: existing } = await adminSupabase.from('translations').select('*').eq('id', id).single()
         if (!existing) throw new Error('Traducción no encontrada')
 
@@ -382,9 +402,12 @@ export async function updateTranslationStatus(id: string, status: string) {
             oldValues: existing,
             newValues: { ...existing, status },
             metadata: { 
+                method: 'updateTranslationStatus',
                 action: 'status_update', 
                 newStatus: status,
-                displayId: existing.tracking_code || 'Traducción'
+                displayId: existing.tracking_code || 'Traducción',
+                requestId: activeRequestId,
+                reason: activeReason
             }
         })
 

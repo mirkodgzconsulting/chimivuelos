@@ -183,7 +183,7 @@ export async function updateOtherService(formData: FormData) {
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
             await consumeEditPermission('other_services', id)
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('other_services', id)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
@@ -305,7 +305,7 @@ export async function deleteOtherService(id: string) {
         if (!user) throw new Error('Unauthorized')
 
         const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
-        if (profile?.role !== 'admin') throw new Error('Se requieren permisos de administrador')
+        if (profile?.role !== 'admin' && profile?.role !== 'supervisor') throw new Error('Se requieren permisos de administrador o supervisor')
 
         const { data: existing } = await adminSupabase.from('other_services').select('*').eq('id', id).single()
         if (!existing) throw new Error('Servicio no encontrado')
@@ -337,6 +337,26 @@ export async function updateOtherServiceStatus(id: string, status: string) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Unauthorized')
 
+        const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
+        const userRole = profile?.role || 'client'
+
+        let activeRequestId = 'admin_direct';
+        let activeReason = 'Actualización de Estado Rápida';
+
+        if (userRole === 'agent' || userRole === 'usuario') {
+            const permission = await getActivePermissionDetails('other_services', id)
+            if (permission.hasPermission) {
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+            } else {
+                throw new Error('No tienes permiso para editar este servicio. Debes solicitar autorización.')
+            }
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
+            const permission = await getActivePermissionDetails('other_services', id)
+            activeRequestId = permission.requestId as string
+            activeReason = permission.reason as string
+        }
+
         const { data: existing } = await adminSupabase.from('other_services').select('*').eq('id', id).single()
         if (!existing) throw new Error('Servicio no encontrado')
 
@@ -355,9 +375,12 @@ export async function updateOtherServiceStatus(id: string, status: string) {
             oldValues: existing,
             newValues: { ...existing, status },
             metadata: { 
+                method: 'updateOtherServiceStatus',
                 action: 'status_update', 
                 newStatus: status,
-                displayId: existing.tracking_code || 'Servicio'
+                displayId: existing.tracking_code || 'Servicio',
+                requestId: activeRequestId,
+                reason: activeReason
             }
         })
 

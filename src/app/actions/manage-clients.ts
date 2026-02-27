@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { uploadClientFile, deleteClientFileUniversal, getFileUrl, StorageType } from '@/lib/storage'
+import { createClient as createSupabaseClient } from '@/lib/supabase/server'
 
 export interface ClientFileData {
   path: string
@@ -19,7 +20,7 @@ export async function getSignedDownloadUrl(path: string, storage: StorageType = 
 }
 
 // ---- CREATE CLIENT ----
-export async function createClient(formData: FormData) {
+export async function registerClient(formData: FormData) {
   const firstName = formData.get('first_name') as string
   const lastName = formData.get('last_name') as string
   const email = formData.get('email') as string
@@ -128,6 +129,18 @@ export async function updateClient(formData: FormData) {
   }
 
   try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autorizado' }
+
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+    const userRole = profile?.role === 'usuario' ? 'agent' : profile?.role
+
+    // All staff (admin, supervisor, agent) can update clients
+    if (userRole !== 'admin' && userRole !== 'supervisor' && userRole !== 'agent') {
+      return { error: 'Permisos insuficientes' }
+    }
+
     const updateData: {
       email: string;
       user_metadata: { first_name: string; last_name: string };
@@ -218,9 +231,6 @@ export async function updateClient(formData: FormData) {
     revalidatePath('/clients')
 
     if (uploadErrors.length > 0) {
-        // We return success: false conceptually for the UI to show an alert, or we can handle it.
-        // But the profile update was successful. Let's return a specific warning if possible or just plain success with console log?
-        // Let's return error so user knows something happened.
         return { error: `Datos actualizados, pero hubo error subiendo archivos: ${uploadErrors.join(', ')}` }
     }
     return { success: true }
@@ -234,6 +244,15 @@ export async function updateClient(formData: FormData) {
 // ---- DELETE CLIENT ----
 export async function deleteClient(userId: string) {
   try {
+    const supabase = await createSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autorizado' }
+
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role !== 'admin' && profile?.role !== 'supervisor') {
+      return { error: 'Se requieren permisos de administrador o supervisor' }
+    }
+
     // 1. Delete files
     const { data: currentProfile } = await supabaseAdmin
         .from('profiles')
@@ -244,9 +263,6 @@ export async function deleteClient(userId: string) {
     if (currentProfile?.client_files) {
          const files = currentProfile.client_files as ClientFileData[]
          await Promise.all(files.map(async (f) => {
-             // Default to 'r2' if storage not set (legacy files)
-             // However, legacy files might be Supabase paths? 
-             // If path doesn't look like R2/Image, deleteUniversal might fail gracefully.
              if (f.path) await deleteClientFileUniversal(f.path, f.storage || 'r2')
          }))
     }

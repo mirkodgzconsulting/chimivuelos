@@ -50,7 +50,7 @@ const SidebarItem = ({ icon: Icon, label, href, isActive, onClick }: SidebarItem
 );
 
 interface MobileSidebarProps {
-  role?: 'admin' | 'client' | 'agent' | 'usuario';
+  role?: 'admin' | 'client' | 'agent' | 'usuario' | 'supervisor';
 }
 
 export function MobileSidebar({ role }: MobileSidebarProps) {
@@ -124,7 +124,7 @@ export function MobileSidebar({ role }: MobileSidebarProps) {
                     <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Principal</div>
                     
                     <SidebarItem icon={LayoutDashboard} label="Dashboard" href="/dashboard" isActive={pathname === '/dashboard'} onClick={() => setIsOpen(false)} />
-                    {(role === 'admin' || role === 'agent') && (
+                    {(role === 'admin' || role === 'agent' || role === 'supervisor') && (
                         <>
                             <SidebarItem icon={UserCog} label="Agentes" href="/agents" isActive={pathname.startsWith('/agents')} onClick={() => setIsOpen(false)} />
                             <SidebarItem icon={Users} label="Clientes" href="/clients" isActive={pathname.startsWith('/clients')} onClick={() => setIsOpen(false)} />

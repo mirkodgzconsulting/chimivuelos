@@ -236,7 +236,7 @@ export async function updateFlight(formData: FormData) {
             activeReason = permission.reason as string
             // Consumir permiso inmediatamente en la acción principal de guardado
             await consumeEditPermission('flights', id)
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('flights', id)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
@@ -444,7 +444,7 @@ export async function updateFlightStatus(id: string, status: string) {
             } else {
                 throw new Error('No tienes permiso para editar este vuelo.')
             }
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('flights', id)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
@@ -491,8 +491,8 @@ export async function deleteFlight(id: string) {
         if (!user) throw new Error('Unauthorized')
 
         const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
-        if (profile?.role !== 'admin') {
-            throw new Error('Solo los administradores pueden eliminar vuelos.')
+        if (profile?.role !== 'admin' && profile?.role !== 'supervisor') {
+            throw new Error('Solo los administradores o supervisores pueden eliminar vuelos.')
         }
 
         // Get flight for audit log and document deletion
@@ -653,7 +653,7 @@ export async function deleteFlightPayment(flightId: string, paymentIndex: number
             } else {
                 throw new Error('No tienes permiso para editar este vuelo.')
             }
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('flights', flightId)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
@@ -740,7 +740,7 @@ export async function updateFlightPayment(formData: FormData) {
             } else {
                 throw new Error('No tienes permiso para editar este vuelo.')
             }
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('flights', flightId)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
@@ -819,3 +819,22 @@ export async function updateFlightPayment(formData: FormData) {
         return { success: false, error: (error as Error).message }
     }
 }
+
+/**
+ * Gets active itineraries from the database
+ */
+export async function getItineraries() {
+    const supabase = supabaseAdmin
+    const { data, error } = await supabase
+        .from('itineraries')
+        .select('name')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+
+    if (error) {
+        console.error('Error fetching itineraries:', error)
+        return []
+    }
+    return data.map(item => item.name)
+}
+

@@ -11,7 +11,7 @@ import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface HeaderProps {
   user?: SupabaseUser | null;
-  role?: 'admin' | 'agent' | 'client' | 'usuario';
+  role?: 'admin' | 'agent' | 'client' | 'usuario' | 'supervisor';
 }
 
 export function Header({ user, role }: HeaderProps) {
@@ -32,6 +32,7 @@ export function Header({ user, role }: HeaderProps) {
     switch(role) {
       case 'admin': return 'Administrador';
       case 'agent': return 'Agente';
+      case 'supervisor': return 'Supervisor';
       case 'usuario': return 'Agente';
       case 'client': return 'Cliente';
       default: return 'Cliente';

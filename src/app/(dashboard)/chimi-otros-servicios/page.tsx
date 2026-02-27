@@ -44,7 +44,8 @@ import {
     updateOtherService, 
     deleteOtherService, 
     deleteOtherServiceDocument, 
-    getOtherServiceDocumentUrl 
+    getOtherServiceDocumentUrl,
+    updateOtherServiceStatus
 } from '@/app/actions/manage-other-services'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
 import { EditRequestModal } from '@/components/permissions/EditRequestModal'
@@ -173,11 +174,13 @@ export default function OtherServicesPage() {
     const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
     const [pendingResourceId, setPendingResourceId] = useState<string | null>(null)
     const [pendingResourceName, setPendingResourceName] = useState<string>('')
+    const [unlockedResources, setUnlockedResources] = useState<Set<string>>(new Set())
 
     // Sync Permissions
     useEffect(() => {
         const fetchPermissions = async () => {
-            await getActivePermissions()
+            const permissions = await getActivePermissions()
+            setUnlockedResources(new Set(permissions))
         }
         fetchPermissions()
     }, [isDialogOpen, isPermissionModalOpen])
@@ -414,7 +417,7 @@ export default function OtherServicesPage() {
     }
 
     const handleActionClick = async (serv: OtherService, action: 'edit' | 'delete') => {
-        if (userRole === 'admin') {
+        if (userRole === 'admin' || userRole === 'supervisor') {
             if (action === 'edit') handleEdit(serv)
             else if (confirm('¿Borrar servicio?')) {
                 await deleteOtherService(serv.id)
@@ -431,6 +434,27 @@ export default function OtherServicesPage() {
                 setPendingResourceName(serv.tracking_code || serv.id)
                 setIsPermissionModalOpen(true)
             }
+        }
+    }
+
+    const handleStatusChange = async (id: string, newStatus: string) => {
+        const serv = services.find(s => s.id === id)
+        if (!serv) return
+
+        if (userRole === 'agent' && !unlockedResources.has(id)) {
+            setPendingResourceId(id)
+            setPendingResourceName(serv.tracking_code || id)
+            setIsPermissionModalOpen(true)
+            return
+        }
+
+        // Optimistic UI
+        setServices(prev => prev.map(s => s.id === id ? { ...s, status: newStatus as OtherService['status'] } : s))
+        
+        const result = await updateOtherServiceStatus(id, newStatus)
+        if (result.error) {
+            alert("Error al actualizar estado: " + result.error)
+            loadData() // Revert
         }
     }
 
@@ -1317,7 +1341,7 @@ export default function OtherServicesPage() {
                                 <th className="p-4 whitespace-nowrap">A CUENTA</th>
                                 <th className="p-4 whitespace-nowrap text-nowrap">SALDO PENDIENTE</th>
                                 <th className="p-4 text-center whitespace-nowrap">ESTADO</th>
-                                <th className="p-4 text-right sticky right-0 bg-slate-50/90 backdrop-blur-sm z-10 border-l border-slate-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] whitespace-nowrap">ACCIONES</th>
+                                <th className="px-2 sm:px-4 py-4 text-right sticky right-0 bg-slate-50/90 backdrop-blur-sm z-10 border-l border-slate-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] whitespace-nowrap">ACCIONES</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1369,21 +1393,26 @@ export default function OtherServicesPage() {
                                             € {s.balance.toFixed(2)}
                                         </td>
                                         <td className="p-4 py-3 text-center">
-                                            <span className={cn(
-                                                "inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase",
-                                                s.status === 'pending' ? "bg-amber-100 text-amber-700" :
-                                                s.status === 'completed' ? "bg-emerald-100 text-emerald-700" :
-                                                s.status === 'cancelled' ? "bg-red-100 text-red-700" :
-                                                "bg-blue-100 text-blue-700"
-                                            )}>
-                                                {s.status === 'pending' ? 'Pendiente' : 
-                                                 s.status === 'in_progress' ? 'En Proceso' : 
-                                                 s.status === 'completed' ? 'Listo' : 
-                                                 s.status === 'delivered' ? 'Entregado' : 'Cancelado'}
-                                            </span>
+                                            <select
+                                                value={s.status}
+                                                onChange={(e) => handleStatusChange(s.id, e.target.value)}
+                                                className={cn(
+                                                    "appearance-none px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border-none focus:ring-0 cursor-pointer text-center",
+                                                    s.status === 'pending' ? "bg-amber-100 text-amber-700" :
+                                                    s.status === 'completed' ? "bg-emerald-100 text-emerald-700" :
+                                                    s.status === 'cancelled' ? "bg-red-100 text-red-700" :
+                                                    "bg-blue-100 text-blue-700"
+                                                )}
+                                            >
+                                                <option value="pending">Pendiente</option>
+                                                <option value="in_progress">En Proceso</option>
+                                                <option value="completed">Listo</option>
+                                                <option value="delivered">Entregado</option>
+                                                <option value="cancelled">Cancelado</option>
+                                            </select>
                                         </td>
-                                        <td className="p-4 py-3 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
-                                            <div className="flex items-center justify-end gap-2">
+                                        <td className="px-2 sm:px-4 py-3 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
+                                            <div className="flex items-center justify-end gap-1 sm:gap-2">
                                                 <Button 
                                                     variant="ghost" 
                                                     size="sm" 
@@ -1393,7 +1422,7 @@ export default function OtherServicesPage() {
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
 
-                                                {userRole === 'admin' && (
+                                                {(userRole === 'admin' || userRole === 'supervisor') && (
                                                     <Button variant="ghost" size="sm" onClick={() => handleActionClick(s, 'delete')}>
                                                         <Trash2 className="h-4 w-4 text-red-400" />
                                                     </Button>

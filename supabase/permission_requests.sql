@@ -28,11 +28,11 @@ WITH CHECK (auth.uid() = agent_id);
 
 CREATE POLICY "Admins can view all edit requests." 
 ON public.edit_requests FOR SELECT 
-USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+USING (public.get_my_role() IN ('admin', 'supervisor'));
 
 CREATE POLICY "Admins can update edit requests." 
 ON public.edit_requests FOR UPDATE 
-USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+USING (public.get_my_role() IN ('admin', 'supervisor'));
 
 -- Audit logs table for full traceability
 CREATE TABLE public.audit_logs (
@@ -53,4 +53,4 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 -- Admins can view all audit logs
 CREATE POLICY "Admins can view all audit logs." 
 ON public.audit_logs FOR SELECT 
-USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+USING (public.get_my_role() IN ('admin', 'supervisor'));

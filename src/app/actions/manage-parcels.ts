@@ -193,7 +193,7 @@ export async function updateParcel(formData: FormData) {
             activeReason = permission.reason as string
             // Consumir permiso inmediatamente en la acción principal de guardado
             await consumeEditPermission('parcels', id)
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('parcels', id)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string
@@ -330,8 +330,8 @@ export async function deleteParcel(id: string) {
         if (!user) throw new Error('Unauthorized')
 
         const { data: profile } = await adminSupabase.from('profiles').select('role').eq('id', user.id).single()
-        if (profile?.role !== 'admin') {
-            throw new Error('Solo los administradores pueden eliminar encomiendas.')
+        if (profile?.role !== 'admin' && profile?.role !== 'supervisor') {
+            throw new Error('Solo los administradores o supervisores pueden eliminar encomiendas.')
         }
 
         const { data: parcel } = await adminSupabase.from('parcels').select('*').eq('id', id).single()
@@ -412,7 +412,7 @@ export async function updateParcelStatus(id: string, status: string) {
             } else {
                 throw new Error('No tienes permiso para editar esta encomienda.')
             }
-        } else if (userRole === 'admin') {
+        } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('parcels', id)
             activeRequestId = permission.requestId as string
             activeReason = permission.reason as string

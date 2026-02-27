@@ -27,7 +27,6 @@ import {
     ChevronLeft, 
     ChevronRight,
     MapPin,
-    Link as LinkIcon,
     X,
     Building2,
     NotebookPen,
@@ -170,7 +169,7 @@ export default function ParcelsPage() {
                 const role = rawRole === 'usuario' ? 'agent' : rawRole
                 setUserRole(role)
 
-                if (role === 'agent') {
+                if (role === 'agent' || role === 'supervisor') {
                     const permissions = await getActivePermissions()
                     setUnlockedResources(new Set(permissions))
                 }
@@ -450,7 +449,7 @@ export default function ParcelsPage() {
     }
 
     const handleEditClick = async (parcel: Parcel) => {
-        if (userRole === 'admin') {
+        if (userRole === 'admin' || userRole === 'supervisor') {
             handleEdit(parcel)
             return
         }
@@ -609,13 +608,23 @@ export default function ParcelsPage() {
     }
 
     const handleStatusChange = async (id: string, newStatus: string) => {
+        const parcel = parcels.find(p => p.id === id)
+        if (!parcel) return
+
+        if (userRole === 'agent' && !unlockedResources.has(id)) {
+            setPendingResourceId(id)
+            setPendingResourceName(parcel.tracking_code || id)
+            setIsPermissionModalOpen(true)
+            return
+        }
+
         // Optimistic UI
         setParcels(prev => prev.map(p => p.id === id ? { ...p, status: newStatus as Parcel['status'] } : p))
         
         const result = await updateParcelStatus(id, newStatus)
         if (result.error) {
-            alert("Error updating status")
-            loadData()
+            alert("Error al actualizar estado: " + result.error)
+            loadData() // Revert
         }
     }
 
@@ -1623,7 +1632,7 @@ export default function ParcelsPage() {
                                     <th className="px-6 py-4 font-medium">Saldo (€)</th>
                                     <th className="px-6 py-4 font-medium text-center">Fotos</th>
                                     <th className="px-6 py-4 font-medium">Estado</th>
-                                    <th className="px-6 py-4 font-medium text-right sticky right-0 bg-pink-100/90 backdrop-blur-sm z-20 border-l border-pink-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] text-pink-700">Acciones</th>
+                                    <th className="px-2 sm:px-6 py-4 font-medium text-right sticky right-0 bg-pink-100/90 backdrop-blur-sm z-20 border-l border-pink-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] text-pink-700">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -1747,8 +1756,8 @@ export default function ParcelsPage() {
                                                     <option value="cancelled">Cancelado</option>
                                                 </select>
                                             </td>
-                                            <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
-                                                <div className="flex items-center justify-end gap-2">
+                                                                                        <td className="px-2 sm:px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
+                                                <div className="flex items-center justify-end gap-1 sm:gap-2">
                                                     <Button 
                                                         variant="ghost" 
                                                         size="sm" 
@@ -1766,7 +1775,7 @@ export default function ParcelsPage() {
                                                             <Pencil className="h-4 w-4 text-slate-400" />
                                                         )}
                                                     </Button>
-                                                    {userRole === 'admin' && (
+                                                    {(userRole === 'admin' || userRole === 'supervisor') && (
                                                         <Button variant="ghost" size="sm" onClick={() => handleDelete(parcel.id)}>
                                                             <Trash2 className="h-4 w-4 text-red-400" />
                                                         </Button>

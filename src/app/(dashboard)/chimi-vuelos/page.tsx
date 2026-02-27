@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { getFlights, getClientsForDropdown, createFlight, updateFlight, deleteFlight, deleteFlightDocument, updateFlightStatus, getFlightDocumentUrl, deleteFlightPayment, updateFlightPayment } from '@/app/actions/manage-flights'
+import { getFlights, getClientsForDropdown, createFlight, updateFlight, deleteFlight, deleteFlightDocument, updateFlightStatus, getFlightDocumentUrl, deleteFlightPayment, updateFlightPayment, getItineraries } from '@/app/actions/manage-flights'
 
 interface FlightDocument {
     title: string
@@ -237,6 +237,7 @@ const INITIAL_FLIGHT_DETAILS: FlightDetails = {
 export default function FlightsPage() {
     const [flights, setFlights] = useState<Flight[]>([])
     const [clients, setClients] = useState<ClientOption[]>([])
+    const [itineraries, setItineraries] = useState<string[]>([])
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
@@ -294,6 +295,10 @@ export default function FlightsPage() {
                     setUnlockedResources(new Set(permissions))
                 }
             }
+
+            // Load itineraries from DB
+            const dbItineraries = await getItineraries()
+            setItineraries(dbItineraries)
         }
         fetchInitialData()
     }, [])
@@ -645,7 +650,7 @@ export default function FlightsPage() {
     }
 
     const handleEditClick = async (flight: Flight) => {
-        if (userRole === 'admin') {
+        if (userRole === 'admin' || userRole === 'supervisor') {
             handleEdit(flight)
             return
         }
@@ -675,10 +680,23 @@ export default function FlightsPage() {
     }
 
     const handleStatusChange = async (id: string, newStatus: string) => {
+        const flight = flights.find(f => f.id === id)
+        if (!flight) return
+
+        if (userRole === 'agent' && !unlockedResources.has(id)) {
+            setPendingResourceId(id)
+            setPendingResourceName(flight.pnr || id)
+            setIsPermissionModalOpen(true)
+            return
+        }
+
         // Optimistic update locally first for speed
         setFlights(prev => prev.map(f => f.id === id ? { ...f, status: newStatus as Flight['status'] } : f))
-        await updateFlightStatus(id, newStatus)
-        // No need to reload all data if successful, but loadData ensures sync
+        const result = await updateFlightStatus(id, newStatus)
+        if (result?.error) {
+            alert("Error al actualizar estado: " + result.error)
+            loadData() // Revert
+        }
     }
 
     const handleDownload = async (path: string, storage: 'r2' | 'images') => {
@@ -1560,7 +1578,7 @@ export default function FlightsPage() {
                                     </div>
                                     {showItineraryList && (
                                         <div className="absolute top-full z-50 w-full bg-white border border-slate-200 shadow-lg rounded-md mt-1 max-h-40 overflow-y-auto [&::-webkit-scrollbar]:hidden">
-                                            {ITINERARY_OPTIONS.filter(opt => opt.toLowerCase().includes(formData.itinerary.toLowerCase())).map((opt, idx) => (
+                                            {(itineraries.length > 0 ? itineraries : ITINERARY_OPTIONS).filter(opt => opt.toLowerCase().includes(formData.itinerary.toLowerCase())).map((opt, idx) => (
                                                 <div 
                                                     key={idx}
                                                     className="p-2 hover:bg-slate-50 cursor-pointer text-sm"
@@ -2727,7 +2745,7 @@ export default function FlightsPage() {
                                             <th className="px-6 py-4 font-medium">Pago</th>
                                             <th className="px-6 py-4 font-medium text-center">Docs</th>
                                             <th className="px-6 py-4 font-medium">Estado</th>
-                                            <th className="px-6 py-4 font-medium text-right sticky right-0 bg-pink-100/90 backdrop-blur-sm z-20 border-l border-pink-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] text-pink-700">Acciones</th>
+                                            <th className="px-2 sm:px-6 py-4 font-medium text-right sticky right-0 bg-pink-100/90 backdrop-blur-sm z-20 border-l border-pink-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] text-pink-700">Acciones</th>
                                         </>
                                     )}
                                 </tr>
@@ -2867,8 +2885,8 @@ export default function FlightsPage() {
                                                             </select>
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
-                                                        <div className="flex items-center justify-end gap-2">
+                                                    <td className="px-2 sm:px-6 py-4 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
+                                                        <div className="flex items-center justify-end gap-1 sm:gap-2">
                                                             <Button 
                                                                 variant="ghost" 
                                                                 size="sm" 
@@ -2886,7 +2904,7 @@ export default function FlightsPage() {
                                                                     <Edit className="h-4 w-4 text-slate-400" />
                                                                 )}
                                                             </Button>
-                                                            {userRole === 'admin' && (
+                                                            {(userRole === 'admin' || userRole === 'supervisor') && (
                                                                 <Button variant="ghost" size="sm" onClick={() => handleDeleteFlight(flight.id)}>
                                                                     <Trash2 className="h-4 w-4 text-red-400" />
                                                                 </Button>

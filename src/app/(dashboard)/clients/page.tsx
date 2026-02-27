@@ -34,7 +34,7 @@ import {
 // import { cn } from "@/lib/utils" // Unused
 import { createClient } from "@/lib/supabase/client";
 import {
-  createClient as createClientAction,
+  registerClient as createClientAction,
   updateClient,
   deleteClient,
   deleteClientFile,
@@ -122,7 +122,9 @@ export default function ClientsPage() {
     // Get user role
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (mounted && user) {
-        setUserRole(user.user_metadata?.role || "agent");
+        const rawRole = user.user_metadata?.role || "agent";
+        const role = rawRole === "usuario" ? "agent" : rawRole;
+        setUserRole(role);
       }
     });
 
@@ -410,7 +412,7 @@ export default function ClientsPage() {
       </Dialog>
 
       <div className="flex items-center justify-center">
-        {userRole === "admin" && (
+        {(userRole === "admin" || userRole === "supervisor") && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button
@@ -777,7 +779,7 @@ export default function ClientsPage() {
                         )}
                       </Button>
                     </td>
-                    {userRole === "admin" && (
+                    {(userRole === "admin" || userRole === "supervisor") && (
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
