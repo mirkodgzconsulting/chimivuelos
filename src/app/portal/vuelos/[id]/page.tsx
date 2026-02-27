@@ -297,7 +297,7 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
                                         <div className="bg-white/40 border border-white/40 rounded-xl p-4 space-y-3">
                                             <div className="flex justify-between items-center text-sm">
                                                 <span className="text-slate-600">Costo Total</span>
-                                                <span className="font-bold text-slate-800">{formatCurrency(flight.cost)}</span>
+                                                <span className="font-bold text-slate-800">{formatCurrency(flight.sold_price)}</span>
                                             </div>
                                             <div className="flex justify-between items-center text-sm">
                                                 <span className="text-slate-600">A cuenta</span>
