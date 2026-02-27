@@ -17,7 +17,8 @@ export async function getOtherServices() {
                 first_name,
                 last_name,
                 email,
-                phone
+                phone,
+                document_number
             ),
             origin_address_client,
             destination_address_client

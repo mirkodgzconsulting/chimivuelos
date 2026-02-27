@@ -599,7 +599,8 @@ export async function getFlights() {
                 first_name,
                 last_name,
                 email,
-                phone
+                phone,
+                document_number
             ),
             agent:agent_id (
                 first_name,

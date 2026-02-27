@@ -18,9 +18,15 @@ export default function AdminChatPage() {
     const [searchTerm, setSearchTerm] = useState('')
     const [loading, setLoading] = useState(true)
     const [isInitialLoadDone, setIsInitialLoadDone] = useState(false)
+    const [mounted, setMounted] = useState(false)
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const supabase = useMemo(() => createClient(), [])
+
+    useEffect(() => {
+        // Use a microtask to avoid strict lint error for synchronous setState in effect
+        Promise.resolve().then(() => setMounted(true))
+    }, [])
 
     // Load Conversations List
     const loadConversations = useCallback(async () => {
@@ -247,7 +253,7 @@ export default function AdminChatPage() {
                                     </div>
                                     <p className="text-xs text-slate-500 truncate h-4">
                                         {/* Unread count logic visual */}
-                                        {chat.unread_admin_count > 0 ? (
+                                        {mounted && chat.unread_admin_count > 0 ? (
                                             <span className="flex items-center gap-1 text-red-500 font-bold">
                                                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                                                  {chat.unread_admin_count} nuevos

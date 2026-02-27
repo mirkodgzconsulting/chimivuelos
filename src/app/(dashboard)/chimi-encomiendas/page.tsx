@@ -97,6 +97,7 @@ interface Parcel {
         last_name: string | null
         email: string | null
         phone: string | null
+        document_number: string | null
     }
     agent?: {
         first_name: string | null
@@ -659,8 +660,9 @@ export default function ParcelsPage() {
             const matchesSearch = !searchTerm || 
                 p.tracking_code?.toLowerCase().includes(lower) ||
                 p.recipient_name?.toLowerCase().includes(lower) ||
-                p.profiles?.first_name?.toLowerCase().includes(lower) ||
-                p.profiles?.last_name?.toLowerCase().includes(lower)
+                `${p.profiles?.first_name} ${p.profiles?.last_name}`.toLowerCase().includes(lower) ||
+                p.profiles?.email?.toLowerCase().includes(lower) ||
+                p.profiles?.document_number?.toLowerCase().includes(lower)
 
             const matchesStatus = statusFilter === 'all' || p.status === statusFilter
 

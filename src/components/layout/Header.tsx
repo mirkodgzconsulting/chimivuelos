@@ -1,7 +1,7 @@
 
 "use client";
 import * as React from 'react';
-import { LogOut, ChevronDown, User } from 'lucide-react';
+import { LogOut, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -42,7 +42,7 @@ export function Header({ user, role }: HeaderProps) {
   const displayRole = getDisplayRole(role);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between bg-header px-6 shadow-sm">
+    <header className="fixed top-0 left-0 right-0 md:left-48 z-40 flex h-16 items-center justify-between bg-header px-6 shadow-sm">
       {/* Mobile Sidebar Trigger (Hamburger) */}
       <div className="md:hidden mr-4">
         <MobileSidebar role={role} />
@@ -88,15 +88,6 @@ export function Header({ user, role }: HeaderProps) {
                             <p className="text-sm font-semibold text-slate-900 px-2">{displayName}</p>
                             <p className="text-[10px] text-slate-500 uppercase tracking-wider px-2">{displayRole}</p>
                         </div>
-                        
-                        <div className="p-1">
-                            <button className="flex items-center w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-md transition-colors">
-                                <User className="w-4 h-4 mr-2 text-slate-500" />
-                                Mi Perfil
-                            </button>
-                        </div>
-                        
-                        <div className="h-px bg-slate-100 my-1"/>
                         
                         <div className="p-1">
                             <button 

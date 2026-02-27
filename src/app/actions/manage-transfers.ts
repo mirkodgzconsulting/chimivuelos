@@ -83,6 +83,7 @@ export interface MoneyTransfer {
         last_name: string
         email: string
         phone: string
+        document_number: string
     }
     agent?: {
         first_name: string
@@ -619,7 +620,8 @@ export async function getTransfers() {
                 first_name,
                 last_name,
                 email,
-                phone
+                phone,
+                document_number
             )
         `)
         .order('created_at', { ascending: false })

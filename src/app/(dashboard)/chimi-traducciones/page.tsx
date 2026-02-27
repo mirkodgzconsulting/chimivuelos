@@ -112,6 +112,7 @@ interface Translation {
         last_name: string | null
         email: string | null
         phone: string | null
+        document_number: string | null
     }
     agent?: {
         first_name: string | null
@@ -636,9 +637,13 @@ export default function TranslationsPage() {
 
     // Filters & Search
     const filteredTranslations = translations.filter(t => {
+        const lower = searchTerm.toLowerCase()
         const matchesSearch = !searchTerm || 
-            t.tracking_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            `${t.profiles?.first_name} ${t.profiles?.last_name}`.toLowerCase().includes(searchTerm.toLowerCase())
+            t.tracking_code?.toLowerCase().includes(lower) ||
+            `${t.profiles?.first_name} ${t.profiles?.last_name}`.toLowerCase().includes(lower) ||
+            t.profiles?.email?.toLowerCase().includes(lower) ||
+            t.profiles?.document_number?.toLowerCase().includes(lower) ||
+            t.recipient_name?.toLowerCase().includes(lower)
         
         const matchesStatus = statusFilter === 'all' || t.status === statusFilter
         
@@ -1455,11 +1460,11 @@ export default function TranslationsPage() {
                 <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-4 justify-between bg-white">
                     <div className="flex-1 flex gap-2">
                         <div className="relative flex-1">
-                            <Input placeholder="Buscar traducción o cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-9 pr-8 h-10 border-slate-200 focus:ring-chimicyan" />
+                            <Input placeholder="Buscar traducción o cliente..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9 pr-8 h-10 border-slate-200 focus:ring-chimicyan" />
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             {searchTerm && (
                                 <button 
-                                    onClick={() => setSearchTerm('')}
+                                    onClick={() => { setSearchTerm(''); setCurrentPage(1); }}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
                                 >
                                     <X size={16} />

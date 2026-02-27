@@ -349,11 +349,25 @@ export default function ClientsPage() {
     XLSX.writeFile(workbook, "Clientes_Chimivuelos.xlsx");
   };
 
+  // Search state
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredClients = useMemo(() => {
+    return clients.filter((client) => {
+      const fullName = `${client.first_name || ""} ${client.last_name || ""}`.toLowerCase();
+      const email = (client.email || "").toLowerCase();
+      const phone = (client.phone || "").toLowerCase();
+      const doc = (client.document_number || "").toLowerCase();
+      const s = searchTerm.toLowerCase();
+      return fullName.includes(s) || email.includes(s) || doc.includes(s) || phone.includes(s);
+    });
+  }, [clients, searchTerm]);
+
   // Pagination Logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentClients = clients.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(clients.length / itemsPerPage);
+  const currentClients = filteredClients.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
@@ -654,8 +668,13 @@ export default function ClientsPage() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
-              placeholder="Buscar por nombre, email o DNI..."
+              placeholder="Buscar por nombre, email, celular o documento..."
               className="pl-10 border-slate-200 bg-slate-50 focus:bg-white focus:ring-chimiteal focus:border-chimiteal"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
           <div className="flex items-center gap-2">

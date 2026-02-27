@@ -192,11 +192,30 @@ export default function AgentsPage() {
     XLSX.writeFile(workbook, "Agentes_Chimivuelos.xlsx")
   }
 
+  // Search and Filter State
+  const [searchTerm, setSearchTerm] = useState("")
+  const [roleFilter, setRoleFilter] = useState("all")
+
+  // FilteRed Agents
+  const filteredAgents = useMemo(() => {
+    return agents.filter(agent => {
+      const fullName = `${agent.first_name || ""} ${agent.last_name || ""}`.toLowerCase()
+      const email = (agent.email || "").toLowerCase()
+      const phone = (agent.phone || "").toLowerCase()
+      const s = searchTerm.toLowerCase()
+      const matchesSearch = fullName.includes(s) || email.includes(s) || phone.includes(s)
+      
+      const matchesRole = roleFilter === "all" || agent.role === roleFilter
+      
+      return matchesSearch && matchesRole
+    })
+  }, [agents, searchTerm, roleFilter])
+
   // Pagination Logic
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
-  const currentAgents = agents.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(agents.length / itemsPerPage)
+  const currentAgents = filteredAgents.slice(indexOfFirstItem, indexOfLastItem)
+  const totalPages = Math.ceil(filteredAgents.length / itemsPerPage)
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
 
@@ -289,8 +308,10 @@ export default function AgentsPage() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input 
-              placeholder="Buscar por nombre o email..." 
+              placeholder="Buscar por nombre, email o celular..." 
               className="pl-10 border-slate-200 bg-slate-50 focus:bg-white focus:ring-chimiteal focus:border-chimiteal"
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -305,11 +326,15 @@ export default function AgentsPage() {
               <option value={20}>20</option>
               <option value={50}>50</option>
             </select>
-            <select className="h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chimiteal cursor-pointer">
-              <option>Todos los roles</option>
-              <option>Administrador</option>
-              <option>Supervisor</option>
-              <option>Agente</option>
+            <select 
+              className="h-10 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chimiteal cursor-pointer"
+              value={roleFilter}
+              onChange={(e) => { setRoleFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="all">Todos los roles</option>
+              <option value="admin">Administrador</option>
+              <option value="supervisor">Supervisor</option>
+              <option value="agent">Agente</option>
             </select>
             <Button variant="outline" onClick={handleExportExcel} className="gap-2 text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900">
               <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
@@ -396,7 +421,7 @@ export default function AgentsPage() {
           {/* Pagination Controls */}
           <div className="flex items-center justify-between px-4 py-4 border-t border-slate-100 bg-slate-50/50 flex-wrap gap-4">
             <div className="text-xs text-slate-500">
-              Mostrando <span className="font-medium">{Math.min(indexOfFirstItem + 1, agents.length)}</span> - <span className="font-medium">{Math.min(indexOfLastItem, agents.length)}</span> de <span className="font-medium">{agents.length}</span> resultados
+              Mostrando <span className="font-medium">{Math.min(indexOfFirstItem + 1, filteredAgents.length)}</span> - <span className="font-medium">{Math.min(indexOfLastItem, filteredAgents.length)}</span> de <span className="font-medium">{filteredAgents.length}</span> resultados
             </div>
             <div className="flex gap-2">
               <Button 

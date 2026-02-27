@@ -7,6 +7,15 @@ import { createClient } from "@/lib/supabase/server"
 import { getActivePermissionDetails, consumeEditPermission } from "./manage-permissions"
 import { recordAuditLog } from "@/lib/audit"
 
+export interface TranslationDocument {
+    title: string
+    path: string
+    name: string
+    type: string
+    size: number
+    storage: StorageType
+}
+
 export async function getTranslations() {
     const supabase = supabaseAdmin
     const { data, error } = await supabase
@@ -21,7 +30,8 @@ export async function getTranslations() {
                 first_name,
                 last_name,
                 email,
-                phone
+                phone,
+                document_number
             )
         `)
         .order('created_at', { ascending: false })
@@ -425,7 +435,7 @@ export async function deleteTranslationDocument(id: string, path: string) {
         const { data: existing } = await adminSupabase.from('translations').select('documents').eq('id', id).single()
         if (!existing) throw new Error('Traducción no encontrada')
 
-        const newDocs = existing.documents.filter((d: any) => d.path !== path)
+        const newDocs = (existing.documents as unknown as TranslationDocument[]).filter((d: TranslationDocument) => d.path !== path)
 
         const { error } = await adminSupabase
             .from('translations')
@@ -497,10 +507,9 @@ function maskName(name: string) {
     }).join(' ')
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getSenderName(profiles: any) {
+function getSenderName(profiles: unknown) {
     if (!profiles) return '***'
-    const p = profiles as any
+    const p = profiles as { first_name?: string; last_name?: string } | { first_name?: string; last_name?: string }[]
     if (Array.isArray(p)) {
         const profile = p[0]
         return profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : '***'

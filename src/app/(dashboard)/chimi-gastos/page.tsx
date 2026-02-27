@@ -74,7 +74,7 @@ export default function GastosPage() {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
     const [categoryFilter, setCategoryFilter] = useState('all')
-    const [currentPage] = useState(1)
+    const [currentPage, setCurrentPage] = useState(1)
     const itemsPerPage = 10
 
     // Edit State
@@ -350,7 +350,7 @@ export default function GastosPage() {
                             <Input 
                                 placeholder="Buscar por descripción, PNR o proveedor..." 
                                 value={searchTerm} 
-                                onChange={e => setSearchTerm(e.target.value)} 
+                                onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} 
                                 className="pl-9 h-10 border-slate-200 focus:ring-chimicyan text-xs rounded-lg" 
                             />
                             <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

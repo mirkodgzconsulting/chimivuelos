@@ -65,6 +65,7 @@ interface Flight {
         last_name: string
         email: string
         phone: string
+        document_number: string
     } | null
     agent: {
         first_name: string
@@ -87,6 +88,7 @@ interface ClientOption {
     last_name: string
     email: string
     phone: string
+    document_number: string
 }
 
 interface FlightDetails {
@@ -986,8 +988,9 @@ export default function FlightsPage() {
             const lower = searchTerm.toLowerCase()
             const matchesSearch = !searchTerm || 
                 (f.pnr || '').toLowerCase().includes(lower) ||
-                (f.profiles?.first_name || '').toLowerCase().includes(lower) ||
-                (f.profiles?.last_name || '').toLowerCase().includes(lower)
+                `${f.profiles?.first_name} ${f.profiles?.last_name}`.toLowerCase().includes(lower) ||
+                (f.profiles?.email || '').toLowerCase().includes(lower) ||
+                (f.profiles?.document_number || '').toLowerCase().includes(lower)
 
             // Status Filter
             const matchesStatus = statusFilter === 'all' || f.status === statusFilter
@@ -2630,7 +2633,7 @@ export default function FlightsPage() {
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-1">
                         <div className="relative min-w-[200px] flex-1 group">
                              <Input 
-                                placeholder="Buscar por PNR o nombre..." 
+                                placeholder="Buscar por PNR, nombre, email o doc..." 
                                 className="pl-10 pr-10 border-slate-200 bg-white focus:ring-chimiteal"
                                 value={searchTerm}
                                 onChange={(e) => {

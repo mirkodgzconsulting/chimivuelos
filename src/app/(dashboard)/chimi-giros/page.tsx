@@ -48,6 +48,7 @@ interface ClientProfile {
     last_name: string | null
     email: string | null
     phone: string | null
+    document_number: string | null
 }
 
 interface PaymentDetail {
@@ -706,8 +707,9 @@ export default function MoneyTransfersPage() {
             const matchesSearch = !searchTerm || 
                 t.transfer_code?.toLowerCase().includes(lower) ||
                 t.beneficiary_name?.toLowerCase().includes(lower) ||
-                t.profiles?.first_name?.toLowerCase().includes(lower) ||
-                t.profiles?.last_name?.toLowerCase().includes(lower)
+                `${t.profiles?.first_name} ${t.profiles?.last_name}`.toLowerCase().includes(lower) ||
+                t.profiles?.email?.toLowerCase().includes(lower) ||
+                t.profiles?.document_number?.toLowerCase().includes(lower)
 
             // Status
             const matchesStatus = statusFilter === 'all' || t.status === statusFilter
@@ -1849,7 +1851,7 @@ export default function MoneyTransfersPage() {
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-1">
                          <div className="relative min-w-[200px] flex-1 group">
                              <Input 
-                                placeholder="Buscar por código, beneficiario..." 
+                                placeholder="Buscar por código, beneficiario o cliente..." 
                                 className="pl-10 pr-10 border-slate-200 bg-white focus:ring-chimiteal"
                                 value={searchTerm}
                                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1) }}

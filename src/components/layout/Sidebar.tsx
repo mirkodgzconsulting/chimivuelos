@@ -21,26 +21,38 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useEffect, useState, useMemo } from 'react';
 
 interface SidebarItemProps {
   icon: LucideIcon;
   label: string;
   href: string;
   isActive?: boolean;
+  badge?: number;
 }
 
-const SidebarItem = ({ icon: Icon, label, href, isActive }: SidebarItemProps) => (
+const SidebarItem = ({ icon: Icon, label, href, isActive, badge }: SidebarItemProps) => (
   <Link 
     href={href}
     className={cn(
-      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group",
+      "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group",
       isActive 
         ? "bg-chimipink text-white shadow-md shadow-pink-500/20 font-bold" 
         : "text-slate-600 font-medium hover:bg-white/40 hover:text-slate-900"
     )}
   >
-    <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-white" : "text-slate-500 group-hover:text-slate-800")} />
-    <span>{label}</span>
+    <div className="flex items-center gap-3">
+      <Icon className={cn("w-5 h-5 transition-colors", isActive ? "text-white" : "text-slate-500 group-hover:text-slate-800")} />
+      <span>{label}</span>
+    </div>
+    {badge !== undefined && badge > 0 ? (
+      <span className={cn(
+        "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ring-2 ring-sidebar animate-in zoom-in duration-300",
+        isActive ? "bg-white text-chimipink ring-chimipink" : "bg-red-500 text-white shadow-sm shadow-red-500/30"
+      )}>
+        {badge > 9 ? '9+' : badge}
+      </span>
+    ) : null}
   </Link>
 );
 
@@ -55,6 +67,65 @@ export function Sidebar({ role }: SidebarProps) {
   // Determine if we should show client view
   // Priority: 1. explicit role prop, 2. pathname check
   const isClientView = role === 'client' || (role !== 'admin' && pathname.startsWith('/portal'));
+
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
+  const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    let isSubscribed = true;
+
+    async function getInitialCount() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !isSubscribed) return;
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('id, unread_admin_count, unread_client_count');
+
+      if (error || !data) return;
+
+      const total = data.reduce((acc, conv) => {
+        return acc + (isClientView ? (conv.unread_client_count || 0) : (conv.unread_admin_count || 0));
+      }, 0);
+
+      if (isSubscribed) setUnreadCount(total);
+    }
+
+    const timer = setTimeout(() => {
+      getInitialCount();
+    }, 0);
+
+    // Realtime subscription for conversation updates (counters changing)
+    const convChannel = supabase
+      .channel('sidebar-unread-conv')
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'conversations' 
+      }, () => {
+        getInitialCount();
+      })
+      .subscribe();
+
+    // Also listen to new messages just in case, to trigger a refresh
+    const msgChannel = supabase
+      .channel('sidebar-unread-msg')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages' 
+      }, () => {
+        getInitialCount();
+      })
+      .subscribe();
+
+    return () => {
+      isSubscribed = false;
+      clearTimeout(timer);
+      supabase.removeChannel(convChannel);
+      supabase.removeChannel(msgChannel);
+    };
+  }, [supabase, isClientView]);
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-48 border-r border-sidebar-border bg-sidebar hidden md:flex flex-col shadow-sm">
@@ -84,6 +155,14 @@ export function Sidebar({ role }: SidebarProps) {
                 <SidebarItem icon={Banknote} label="Mis Giros" href="/portal/giros" isActive={pathname.startsWith('/portal/giros')} />
                 <SidebarItem icon={Languages} label="Mis Traducciones" href="/portal/traducciones" isActive={pathname.startsWith('/portal/traducciones')} />
                 <SidebarItem icon={Briefcase} label="Otros Servicios" href="/portal/otros" isActive={pathname.startsWith('/portal/otros')} />
+                <div className="my-4 border-t border-sidebar-border mx-2" />
+                <SidebarItem 
+                    icon={MessageCircle} 
+                    label="Soporte" 
+                    href="/portal/chat" 
+                    isActive={pathname.startsWith('/portal/chat')} 
+                    badge={unreadCount ?? 0}
+                />
             </>
         ) : (
             /* ADMIN MENU */
@@ -100,7 +179,13 @@ export function Sidebar({ role }: SidebarProps) {
                         )}
                     </>
                 )}
-                <SidebarItem icon={MessageCircle} label="Mensajes" href="/admin/chat" isActive={pathname.startsWith('/admin/chat')} />
+                <SidebarItem 
+                    icon={MessageCircle} 
+                    label="Mensajes" 
+                    href="/admin/chat" 
+                    isActive={pathname.startsWith('/admin/chat')} 
+                    badge={unreadCount ?? 0}
+                />
                 
                 <div className="my-4 border-t border-sidebar-border mx-2" />
                 

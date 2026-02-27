@@ -28,13 +28,11 @@ export default async function DashboardLayout({
       {/* Main Content Area */}
       <div className="md:pl-48 flex flex-col min-h-screen transition-all duration-300">
         
-        {/* Header - Sticky Top */}
-        <div className="z-30 w-full">
-             <Header user={user} role={role as 'admin' | 'client' | 'agent' | 'usuario' | 'supervisor'} />
-        </div>
+        {/* Header - Fixed Top */}
+        <Header user={user} role={role as 'admin' | 'client' | 'agent' | 'usuario' | 'supervisor'} />
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 p-4 md:p-5 space-y-4">
+        <main className="flex-1 p-4 md:p-5 space-y-4 pt-20 md:pt-4">
           {children}
         </main>
 

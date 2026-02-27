@@ -22,7 +22,8 @@ export async function getParcels() {
                 first_name,
                 last_name,
                 email,
-                phone
+                phone,
+                document_number
             )
         `)
         .order('created_at', { ascending: false })
