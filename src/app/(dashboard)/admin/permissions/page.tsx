@@ -7,6 +7,10 @@ import {
     ShieldCheck, 
     History, 
     Clock, 
+    Search,
+    User,
+    Calendar,
+    FilterX
 } from "lucide-react"
 import { 
     getAllEditRequests, 
@@ -19,6 +23,7 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
+import { createClient } from "@/lib/supabase/client"
 
 import { 
     Dialog, 
@@ -406,20 +411,59 @@ export default function AdminPermissionsPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
-    
+
     type AuditLogGroup = AuditLog & { _siblings: AuditLog[] };
     const [selectedLog, setSelectedLog] = useState<AuditLogGroup | null>(null)
+    const [agents, setAgents] = useState<{id: string, full_name: string}[]>([])
+    
+    // Filter State
+    const [filters, setFilters] = useState({
+        agentId: '',
+        resourceType: '',
+        startDate: '',
+        endDate: '',
+        search: '',
+        status: ''
+    })
+
     const ITEMS_PER_PAGE = 20
+
+    // Fetch Agents for Filter
+    useEffect(() => {
+        const loadAgents = async () => {
+            const supabase = createClient();
+            const { data } = await supabase.from('profiles').select('id, first_name, last_name').neq('role', 'client').order('first_name');
+            if (data) {
+                setAgents(data.map((a: { id: string, first_name: string | null, last_name: string | null }) => ({ 
+                    id: a.id, 
+                    full_name: `${a.first_name || ''} ${a.last_name || ''}`.trim() 
+                })));
+            }
+        };
+        loadAgents();
+    }, []);
+
+    const resetFilters = () => {
+        setFilters({
+            agentId: '',
+            resourceType: '',
+            startDate: '',
+            endDate: '',
+            search: '',
+            status: ''
+        });
+        setCurrentPage(1);
+    };
 
     const fetchData = useCallback(async () => {
         setIsLoading(true)
         try {
             if (activeTab === 'requests') {
-                const { data, count } = await getAllEditRequests(currentPage, ITEMS_PER_PAGE)
+                const { data, count } = await getAllEditRequests(currentPage, ITEMS_PER_PAGE, filters)
                 setRequests(data)
                 setTotalPages(Math.ceil((count || 0) / ITEMS_PER_PAGE))
             } else {
-                const { data, count } = await getAuditLogs(currentPage, ITEMS_PER_PAGE)
+                const { data, count } = await getAuditLogs(currentPage, ITEMS_PER_PAGE, filters)
                 setAuditLogs(data as AuditLog[])
                 setTotalPages(Math.ceil((count || 0) / ITEMS_PER_PAGE))
             }
@@ -429,7 +473,7 @@ export default function AdminPermissionsPage() {
         } finally {
             setIsLoading(false)
         }
-    }, [activeTab, currentPage])
+    }, [activeTab, currentPage, filters])
 
     useEffect(() => {
         fetchData()
@@ -518,6 +562,102 @@ export default function AdminPermissionsPage() {
             </div>
 
             <Card className="border-slate-200 shadow-sm overflow-hidden rounded-xl bg-white">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-3 p-4 border-b border-slate-100 bg-slate-50/30">
+                    <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <select 
+                            value={filters.agentId}
+                            onChange={(e) => { setFilters(prev => ({ ...prev, agentId: e.target.value })); setCurrentPage(1); }}
+                            className="w-full pl-10 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-chimiteal/20 outline-none appearance-none cursor-pointer"
+                        >
+                            <option value="">Todos los Agentes</option>
+                            {agents.map(a => (
+                                <option key={a.id} value={a.id}>{a.full_name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="relative">
+                        <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <select 
+                            value={filters.resourceType}
+                            onChange={(e) => { setFilters(prev => ({ ...prev, resourceType: e.target.value })); setCurrentPage(1); }}
+                            className="w-full pl-10 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-chimiteal/20 outline-none appearance-none cursor-pointer"
+                        >
+                            <option value="">Todos los Servicios</option>
+                            <option value="flights">Vuelos</option>
+                            <option value="money_transfers">Giros</option>
+                            <option value="parcels">Encomiendas</option>
+                            <option value="translations">Traducciones</option>
+                            <option value="other_services">Otros Servicios</option>
+                        </select>
+                    </div>
+
+                    <div className="relative">
+                        <History className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <select 
+                            value={filters.status}
+                            onChange={(e) => { setFilters(prev => ({ ...prev, status: e.target.value })); setCurrentPage(1); }}
+                            className="w-full pl-10 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-chimiteal/20 outline-none appearance-none cursor-pointer"
+                        >
+                            <option value="">Todas las Situaciones</option>
+                            {activeTab === 'requests' ? (
+                                <>
+                                    <option value="pending">Pendiente</option>
+                                    <option value="approved">Aprobado</option>
+                                    <option value="rejected">Rechazado</option>
+                                </>
+                            ) : (
+                                <>
+                                    <option value="update">Modificaciones</option>
+                                    <option value="delete">Eliminaciones</option>
+                                </>
+                            )}
+                        </select>
+                    </div>
+
+                    <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input 
+                            type="date"
+                            value={filters.startDate}
+                            onChange={(e) => { setFilters(prev => ({ ...prev, startDate: e.target.value })); setCurrentPage(1); }}
+                            className="w-full pl-10 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-chimiteal/20 outline-none cursor-pointer"
+                        />
+                    </div>
+
+                    <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input 
+                            type="date"
+                            value={filters.endDate}
+                            onChange={(e) => { setFilters(prev => ({ ...prev, endDate: e.target.value })); setCurrentPage(1); }}
+                            className="w-full pl-10 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-chimiteal/20 outline-none cursor-pointer"
+                        />
+                    </div>
+
+                    <div className="relative flex items-center gap-2">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input 
+                                type="text"
+                                value={filters.search}
+                                onChange={(e) => { setFilters(prev => ({ ...prev, search: e.target.value })); setCurrentPage(1); }}
+                                className="w-full pl-10 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-chimiteal/20 outline-none font-bold placeholder:font-normal"
+                                placeholder="Buscar PNR / ID..."
+                            />
+                        </div>
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={resetFilters}
+                            className="h-9 w-9 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                            title="Limpiar filtros"
+                        >
+                            <FilterX className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
@@ -527,10 +667,10 @@ export default function AdminPermissionsPage() {
                                         <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-bold text-slate-500">
                                             <th className="px-6 py-4">Fecha Solicitud</th>
                                             <th className="px-6 py-4">Agente</th>
-                                            <th className="px-6 py-4">Gestión</th>
+                                            <th className="px-6 py-4">Servicio</th>
                                             <th className="px-6 py-4">PNR</th>
                                             <th className="px-6 py-4">Motivo</th>
-                                            <th className="px-6 py-4">Situación</th>
+                                            <th className="px-6 py-4 text-center">Situación</th>
                                             <th className="px-6 py-4 text-right">Acción</th>
                                         </tr>
                                     </thead>
@@ -564,7 +704,7 @@ export default function AdminPermissionsPage() {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-600 text-xs">{req.reason}</td>
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-4 text-center">
                                                     <span className={cn(
                                                         "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
                                                         req.status === 'approved' ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
@@ -595,8 +735,9 @@ export default function AdminPermissionsPage() {
                                             <th className="px-6 py-4">Sincronización</th>
                                             <th className="px-6 py-4">Agente</th>
                                             <th className="px-6 py-4">Motivo</th>
-                                            <th className="px-6 py-4">Gestión</th>
-                                            <th className="px-6 py-4">PNR</th>
+                                            <th className="px-6 py-4">Acción</th>
+                                            <th className="px-6 py-4">Servicio</th>
+                                            <th className="px-6 py-4">ID / PNR</th>
                                             <th className="px-6 py-4 text-right">Evidencias</th>
                                         </tr>
                                     </thead>
@@ -619,24 +760,25 @@ export default function AdminPermissionsPage() {
                                                     {(log.metadata?.reason as string) || 'Edición Directa'}
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className={cn(
-                                                            "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
-                                                            log.action === 'update' ? "bg-amber-50 text-amber-600 border-amber-100" :
-                                                            log.action === 'delete' ? "bg-red-50 text-red-600 border-red-100" :
-                                                            "bg-blue-50 text-blue-600 border-blue-100"
-                                                        )}>
-                                                            {log.action === 'update' ? 'MODIFICACIÓN' : 
-                                                             log.action === 'delete' ? 'ELIMINACIÓN' : 
-                                                             log.action === 'create' ? 'CREACIÓN' : log.action}
-                                                        </span>
-                                                        <span className="text-[10px] text-slate-500 font-bold">
-                                                            {log.resource_type === 'flights' ? 'Vuelos' : 
-                                                             log.resource_type === 'money_transfers' ? 'Giros' : 
-                                                             log.resource_type === 'parcels' ? 'Encomiendas' : 
-                                                             log.resource_type === 'other_services' ? 'Otros Servicios' : log.resource_type}
-                                                        </span>
-                                                    </div>
+                                                    <span className={cn(
+                                                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
+                                                        log.action === 'update' ? "bg-amber-50 text-amber-600 border-amber-100" :
+                                                        log.action === 'delete' ? "bg-red-50 text-red-600 border-red-100" :
+                                                        "bg-blue-50 text-blue-600 border-blue-100"
+                                                    )}>
+                                                        {log.action === 'update' ? 'MODIFICACIÓN' : 
+                                                         log.action === 'delete' ? 'ELIMINACIÓN' : 
+                                                         log.action === 'create' ? 'CREACIÓN' : log.action}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="text-[10px] text-slate-500 font-bold uppercase">
+                                                        {log.resource_type === 'flights' ? 'Vuelos' : 
+                                                         log.resource_type === 'money_transfers' ? 'Giros' : 
+                                                         log.resource_type === 'parcels' ? 'Encomiendas' : 
+                                                         log.resource_type === 'translations' ? 'Traducciones' :
+                                                         log.resource_type === 'other_services' ? 'Otros Servicios' : log.resource_type}
+                                                    </span>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className="text-chimiteal font-bold text-xs">

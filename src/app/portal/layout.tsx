@@ -26,11 +26,11 @@ export default async function ClientLayout({
       {/* Main Content Area */}
       <div className="md:pl-48 flex flex-col min-h-screen transition-all duration-300">
         
-        {/* Header - Fixed Top */}
+        {/* Header - Sticky Top */}
         <Header user={user} role="client" />
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 p-4 md:p-8 space-y-6 w-full pt-20 md:pt-8">
+        <main className="flex-1 p-4 md:p-8 space-y-6 w-full">
           {children}
         </main>
 

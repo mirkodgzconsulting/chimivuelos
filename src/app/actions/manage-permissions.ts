@@ -188,14 +188,35 @@ export async function getPendingEditRequests() {
 /**
  * Gets all requests for admin with pagination
  */
-export async function getAllEditRequests(page: number = 1, limit: number = 20) {
+export async function getAllEditRequests(page: number = 1, limit: number = 20, filters?: { agentId?: string, resourceType?: string, startDate?: string, endDate?: string, search?: string, status?: string }) {
     try {
         const from = (page - 1) * limit
         const to = from + limit - 1
 
-        const { data, error, count } = await supabaseAdmin
+        let query = supabaseAdmin
             .from('edit_requests')
             .select('*, agent:agent_id(first_name, last_name, email)', { count: 'exact' })
+
+        if (filters?.agentId) {
+            query = query.eq('agent_id', filters.agentId);
+        }
+        if (filters?.resourceType) {
+            query = query.eq('resource_type', filters.resourceType);
+        }
+        if (filters?.status) {
+            query = query.eq('status', filters.status);
+        }
+        if (filters?.startDate) {
+            query = query.gte('created_at', filters.startDate);
+        }
+        if (filters?.endDate) {
+            query = query.lte('created_at', filters.endDate);
+        }
+        if (filters?.search) {
+            query = query.ilike('metadata->>displayId', `%${filters.search}%`);
+        }
+
+        const { data, error, count } = await query
             .order('created_at', { ascending: false })
             .range(from, to)
         
@@ -213,14 +234,34 @@ export async function getAllEditRequests(page: number = 1, limit: number = 20) {
 /**
  * Gets audit logs for admin
  */
-export async function getAuditLogs(page: number = 1, limit: number = 50) {
+export async function getAuditLogs(page: number = 1, limit: number = 50, filters?: { agentId?: string, resourceType?: string, startDate?: string, endDate?: string, search?: string }) {
     try {
         const from = (page - 1) * limit
         const to = from + limit - 1
 
-        const { data, error, count } = await supabaseAdmin
+        let query = supabaseAdmin
             .from('audit_logs')
             .select('*, actor:actor_id(first_name, last_name, email)', { count: 'exact' })
+            .neq('action', 'create')
+
+        if (filters?.agentId) {
+            query = query.eq('actor_id', filters.agentId);
+        }
+        if (filters?.resourceType) {
+            query = query.eq('resource_type', filters.resourceType);
+        }
+        if (filters?.startDate) {
+            query = query.gte('created_at', filters.startDate);
+        }
+        if (filters?.endDate) {
+            query = query.lte('created_at', filters.endDate);
+        }
+        if (filters?.search) {
+            // Search in metadata->displayId using ilike if possible, or just exact match
+            query = query.ilike('metadata->>displayId', `%${filters.search}%`);
+        }
+
+        const { data, error, count } = await query
             .order('created_at', { ascending: false })
             .range(from, to)
         

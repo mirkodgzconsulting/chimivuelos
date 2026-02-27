@@ -42,7 +42,7 @@ export function Header({ user, role }: HeaderProps) {
   const displayRole = getDisplayRole(role);
 
   return (
-    <header className="fixed top-0 left-0 right-0 md:left-48 z-40 flex h-16 items-center justify-between bg-header px-6 shadow-sm">
+    <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between bg-header px-6 shadow-sm">
       {/* Mobile Sidebar Trigger (Hamburger) */}
       <div className="md:hidden mr-4">
         <MobileSidebar role={role} />
