@@ -24,25 +24,29 @@ export async function getMyDashboardSummary() {
 
     try {
         // Run counts in parallel
-        const [flights, parcels, transfers] = await Promise.all([
+        const [flights, parcels, transfers, translations, others] = await Promise.all([
             supabase.from('flights').select('*', { count: 'exact', head: true }).eq('client_id', user.id).neq('status', 'finished'),
             supabase.from('parcels').select('*', { count: 'exact', head: true }).eq('sender_id', user.id).neq('status', 'delivered'),
-            supabase.from('money_transfers').select('*', { count: 'exact', head: true }).eq('sender_id', user.id).neq('status', 'completed')
+            supabase.from('money_transfers').select('*', { count: 'exact', head: true }).eq('sender_id', user.id).neq('status', 'completed'),
+            supabase.from('translations').select('*', { count: 'exact', head: true }).eq('client_id', user.id).not('status', 'in', '("delivered","cancelled")'),
+            supabase.from('other_services').select('*', { count: 'exact', head: true }).eq('client_id', user.id).not('status', 'in', '("delivered","cancelled")')
         ])
 
         return {
             flights: flights.count || 0,
             parcels: parcels.count || 0,
-            transfers: transfers.count || 0
+            transfers: transfers.count || 0,
+            translations: translations.count || 0,
+            others: others.count || 0
         }
     } catch (error) {
         console.error('Error fetching dashboard summary:', error)
-        return { flights: 0, parcels: 0, transfers: 0 }
+        return { flights: 0, parcels: 0, transfers: 0, translations: 0, others: 0 }
     }
 }
 
 // --- TERMS & CONDITIONS LOGIC ---
-export async function getActiveTerms(serviceType: 'flight' | 'parcel' | 'transfer') {
+export async function getActiveTerms(serviceType: 'flight' | 'parcel' | 'transfer' | 'translation' | 'other') {
     const supabase = await createClient()
     
     // Fetch the latest active version
@@ -62,7 +66,7 @@ export async function getActiveTerms(serviceType: 'flight' | 'parcel' | 'transfe
     return data
 }
 
-export async function acceptServiceTerms(serviceId: string, serviceType: 'flight' | 'parcel' | 'transfer', version: string) {
+export async function acceptServiceTerms(serviceId: string, serviceType: 'flight' | 'parcel' | 'transfer' | 'translation' | 'other', version: string) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     
@@ -97,6 +101,12 @@ export async function acceptServiceTerms(serviceId: string, serviceType: 'flight
     } else if (serviceType === 'transfer') {
         tableName = 'money_transfers'
         ownerField = 'client_id' // Verified: transfers use client_id
+    } else if (serviceType === 'translation') {
+        tableName = 'translations'
+        ownerField = 'client_id'
+    } else if (serviceType === 'other') {
+        tableName = 'other_services'
+        ownerField = 'client_id'
     }
 
     // Update with Admin Client to bypass RLS
@@ -170,6 +180,34 @@ export async function getMyTransfers() {
     return data || []
 }
 
+export async function getMyTranslations() {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const { data } = await supabase
+        .from('translations')
+        .select('*')
+        .eq('client_id', user.id)
+        .order('created_at', { ascending: false })
+    
+    return data || []
+}
+
+export async function getMyOtherServices() {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const { data } = await supabase
+        .from('other_services')
+        .select('*')
+        .eq('client_id', user.id)
+        .order('created_at', { ascending: false })
+    
+    return data || []
+}
+
 export async function getFlightById(id: string) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -218,7 +256,39 @@ export async function getParcelById(id: string) {
     return data
 }
 
-export async function getServiceHistory(resourceId: string, resourceType: 'parcels' | 'money_transfers' | 'flights') {
+export async function getTranslationById(id: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data, error } = await supabase
+        .from('translations')
+        .select('*')
+        .eq('id', id)
+        .eq('client_id', user.id)
+        .single()
+    
+    if (error) return null
+    return data
+}
+
+export async function getOtherServiceById(id: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data, error } = await supabase
+        .from('other_services')
+        .select('*')
+        .eq('id', id)
+        .eq('client_id', user.id)
+        .single()
+    
+    if (error) return null
+    return data
+}
+
+export async function getServiceHistory(resourceId: string, resourceType: 'parcels' | 'money_transfers' | 'flights' | 'translations' | 'other_services') {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return []

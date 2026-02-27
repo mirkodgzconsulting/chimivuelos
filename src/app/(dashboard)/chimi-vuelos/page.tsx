@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2, Lock, Unlock, User } from 'lucide-react'
+import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2, Lock, Unlock, User, Copy } from 'lucide-react'
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
@@ -110,6 +110,7 @@ interface FlightDetails {
     insurance_tourism_active: boolean
     insurance_migratory: boolean
     svc_stewardess_um: boolean
+    svc_stewardess_um_unpaid: boolean
     svc_pet_travel: boolean
     hotel_custom_active: boolean
     hotel_custom_days: string
@@ -136,7 +137,8 @@ const DETAILS_LABELS: Record<string, string> = {
     baggage_backpack: "1 Mochila",
     insurance_tourism_active: "Seguro (Turista / Schengen)",
     insurance_migratory: "Seguro migratorio",
-    svc_stewardess_um: "solicitud de servizio de azafata menor de edad (UMNR)- (pago por servicio 225 euro)",
+    svc_stewardess_um: "Solicitud de azafata para menor de edad (UMNR) +225 EURO PAGO SÍ INCLUIDO EN EL PRECIO",
+    svc_stewardess_um_unpaid: "Solicitud de azafata para menor de edad (UMNR) +225 EURO PAGO NO INCLUIDO EN EL PRECIO",
     svc_pet_travel: "Viaja con mascota",
 }
 
@@ -224,6 +226,7 @@ const INITIAL_FLIGHT_DETAILS: FlightDetails = {
     insurance_tourism_active: false,
     insurance_migratory: false,
     svc_stewardess_um: false,
+    svc_stewardess_um_unpaid: false,
     svc_pet_travel: false,
     hotel_custom_active: false,
     hotel_custom_days: '',
@@ -257,6 +260,13 @@ export default function FlightsPage() {
     // Docs Viewer State
     const [docsViewerFlight, setDocsViewerFlight] = useState<Flight | null>(null)
     const [paymentHistoryFlight, setPaymentHistoryFlight] = useState<Flight | null>(null)
+    const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null)
+
+    const handleCopyPhone = (id: string, phone: string) => {
+        navigator.clipboard.writeText(phone)
+        setCopiedPhoneId(id)
+        setTimeout(() => setCopiedPhoneId(null), 2000)
+    }
     const [detailsViewerFlight, setDetailsViewerFlight] = useState<Flight | null>(null)
 
     // Pagination State
@@ -1729,9 +1739,13 @@ export default function FlightsPage() {
                                                 <input type="checkbox" checked={flightDetails.svc_return_activation} onChange={(e) => handleDetailChange('svc_return_activation', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
                                                 Activación pasaje retorno
                                             </label>
-                                            <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
-                                                <input type="checkbox" checked={flightDetails.svc_stewardess_um} onChange={(e) => handleDetailChange('svc_stewardess_um', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
-                                                solicitud de servizio de azafata menor de edad (UMNR)- (pago por servicio 225 euro)
+                                            <label className="flex items-center gap-2 text-[11px] cursor-pointer bg-emerald-50 border border-emerald-100 text-emerald-800 p-1.5 rounded-lg hover:bg-emerald-100 transition-colors">
+                                                <input type="checkbox" checked={flightDetails.svc_stewardess_um} onChange={(e) => handleDetailChange('svc_stewardess_um', e.target.checked)} className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500" />
+                                                Solicitud de azafata para menor de edad (UMNR) +225 EURO PAGO SÍ INCLUIDO EN EL PRECIO
+                                            </label>
+                                            <label className="flex items-center gap-2 text-[11px] cursor-pointer bg-rose-50 border border-rose-100 text-rose-800 p-1.5 rounded-lg hover:bg-rose-100 transition-colors">
+                                                <input type="checkbox" checked={flightDetails.svc_stewardess_um_unpaid} onChange={(e) => handleDetailChange('svc_stewardess_um_unpaid', e.target.checked)} className="rounded border-rose-300 text-rose-600 focus:ring-rose-500" />
+                                                Solicitud de azafata para menor de edad (UMNR) +225 EURO PAGO NO INCLUIDO EN EL PRECIO
                                             </label>
                                             <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-100 p-1 rounded">
                                                 <input type="checkbox" checked={flightDetails.svc_pet_travel} onChange={(e) => handleDetailChange('svc_pet_travel', e.target.checked)} className="rounded border-slate-300 text-chimipink focus:ring-chimipink" />
@@ -2692,6 +2706,7 @@ export default function FlightsPage() {
                                     <th className="px-6 py-4 font-medium">Fecha Viaje</th>
                                     <th className="px-6 py-4 font-medium">PNR</th>
                                     <th className="px-6 py-4 font-medium">Cliente</th>
+                                    {showDeudaOnly && <th className="px-6 py-4 font-medium">Teléfono</th>}
                                     <th className="px-6 py-4 font-medium">Agente</th>
                                     {!showDeudaOnly && (
                                         <>
@@ -2734,6 +2749,27 @@ export default function FlightsPage() {
                                                 <div className="font-medium text-slate-900">{flight.profiles?.first_name} {flight.profiles?.last_name}</div>
                                                 <div className="text-xs text-slate-500">{flight.profiles?.email}</div>
                                             </td>
+                                            {showDeudaOnly && (
+                                                <td className="px-6 py-4">
+                                                    {flight.profiles?.phone ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-slate-600 font-medium">{flight.profiles.phone}</span>
+                                                            <button 
+                                                                onClick={() => handleCopyPhone(flight.id, flight.profiles!.phone)}
+                                                                className="text-slate-400 hover:text-chimipink transition-colors"
+                                                                title="Copiar teléfono"
+                                                            >
+                                                                {copiedPhoneId === flight.id ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                                            </button>
+                                                            {copiedPhoneId === flight.id && (
+                                                                <span className="text-[10px] text-emerald-600 font-bold animate-in fade-in zoom-in-95">¡Copiado!</span>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-slate-300">-</span>
+                                                    )}
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4">
                                                 <div className="text-xs text-slate-600 font-medium">
                                                     {flight.agent ? `${flight.agent.first_name} ${flight.agent.last_name}` : '-'}

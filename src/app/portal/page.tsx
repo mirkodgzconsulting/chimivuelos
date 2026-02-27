@@ -1,5 +1,5 @@
 import { getClientUser } from '@/app/actions/client-portal'
-import { Plane, Package, Banknote, ShieldCheck, Info, CheckCircle2, type LucideIcon } from 'lucide-react'
+import { Plane, Package, Banknote, ShieldCheck, Info, CheckCircle2, Languages, PlusCircle, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -37,7 +37,7 @@ export default async function PortalPage() {
                         <Step 
                             number="1" 
                             title="Selecciona el Servicio" 
-                            desc="Navega desde el menú a Mis Vuelos, Encomiendas o Giros según lo que necesites consultar." 
+                            desc="Navega desde el menú a Mis Vuelos, Encomiendas, Giros, Traducciones u Otros según lo que necesites consultar." 
                         />
                         <Step 
                             number="2" 
@@ -106,6 +106,25 @@ export default async function PortalPage() {
                     desc="Rastreo de envíos"
                     color="text-chimipink"
                     hoverBorder="hover:border-chimipink/50"
+                />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 mt-3 md:mt-4">
+                <QuickLink 
+                    href="/portal/traducciones" 
+                    icon={Languages} 
+                    title="Mis Traducciones" 
+                    desc="Estado de trámites"
+                    color="text-violet-600"
+                    hoverBorder="hover:border-violet-300"
+                />
+                <QuickLink 
+                    href="/portal/otros" 
+                    icon={PlusCircle} 
+                    title="Otros Servicios" 
+                    desc="Ver detalles adicionales"
+                    color="text-amber-600"
+                    hoverBorder="hover:border-amber-300"
                 />
             </div>
           </div>

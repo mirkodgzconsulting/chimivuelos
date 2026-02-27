@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { Plane, Calendar, FileText, Banknote, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import Image from 'next/image'
 import { FlightDocumentRow } from '../ClientDownloadButton'
 import { FlightRecommendations } from '../components/FlightRecommendations'
 import { FlightFAQ } from '../components/FlightFAQ'
@@ -67,16 +68,22 @@ const DETAILS_LABELS: Record<string, string> = {
     insurance_1m: "Seguro x 1 mes",
     insurance_2m: "Seguro x 2 meses",
     insurance_3m: "Seguro x 3 meses",
-    doc_invitation_letter: "Redacción carta invitación",
+    doc_invitation_letter: "Redacción carta de invitación con documentos del anfitrión (El cliente envía copia del documento de identidad o Permesso di soggiorno y Tessera sanitaria del familiar en Italia.)",
     doc_agency_managed: "Carta inv. gestionada por agencia",
     svc_airport_assistance: "Asistencia aeroportuaria",
     svc_return_activation: "Activación pasaje retorno",
-    hotel_3d_2n: "Hotel 3 días / 2 noches",
+    hotel_3d_2n: "Hotel 3 días / 2 noches (Utilizable 1 día)",
+    hotel_custom_active: "Hotel personalizado",
     hotel_2d_1n: "Hotel 2 días / 1 noche",
     baggage_1pc_23kg: "1 pc 23kg",
     baggage_2pc_23kg: "2 pc 23kg",
     baggage_1pc_10kg: "1 pc 10kg",
     baggage_backpack: "1 Mochila",
+    insurance_tourism_active: "Seguro (Turista / Schengen)",
+    insurance_migratory: "Seguro migratorio",
+    svc_stewardess_um: "Solicitud de azafata para menor de edad (UMNR) +225 EURO PAGO SÍ INCLUIDO EN EL PRECIO",
+    svc_stewardess_um_unpaid: "Solicitud de azafata para menor de edad (UMNR) +225 EURO PAGO NO INCLUIDO EN EL PRECIO",
+    svc_pet_travel: "Viaja con mascota",
 }
 
 export default async function FlightDetailPage({ params }: { params: { id: string } }) {
@@ -110,14 +117,38 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
         console.error("Error parsing flight details", e)
     }
 
-    // Filter relevant details to show
-    const activeDetails = Object.entries(DETAILS_LABELS).filter(([key]) => {
-        return flightDetails[key] === true
+    // Process all active details
+    const activeDetails: {key: string, label: string}[] = []
+    
+    Object.entries(flightDetails).forEach(([key, value]) => {
+        // Skip keys that shouldn't be shown directly
+        if (!value || key === 'hotel_custom_days' || key === 'hotel_custom_nights' || key === 'special_note' || key.startsWith('insurance_tourism_date')) {
+            return
+        }
+
+        let label = DETAILS_LABELS[key] || key
+
+        // Custom formatting for specific fields
+        if (key === 'insurance_tourism_active') {
+             const from = flightDetails.insurance_tourism_date_from;
+             const to = flightDetails.insurance_tourism_date_to;
+             if (typeof from === 'string' && typeof to === 'string' && from && to) {
+                 const fromFormatted = new Date(from).toLocaleDateString('es-PE');
+                 const toFormatted = new Date(to).toLocaleDateString('es-PE');
+                 label = `Seguro desde ${fromFormatted} hasta ${toFormatted} (turista / Schengen)`;
+             }
+        } else if (key === 'hotel_custom_active') {
+            const days = flightDetails.hotel_custom_days || '__';
+            const nights = flightDetails.hotel_custom_nights || '__';
+            label = `Reserva de hotel por ${days} días / ${nights} noches`;
+        }
+
+        activeDetails.push({ key, label })
     })
     
     // Also check for special note
     if (flightDetails.special_note) {
-        activeDetails.push(['special_note', `Nota: ${flightDetails.special_note}`])
+        activeDetails.push({ key: 'special_note', label: `Nota Especial: ${flightDetails.special_note}` })
     }
 
     return (
@@ -203,7 +234,7 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
                                             </h3>
                                             <div className="bg-white/40 p-4 rounded-lg border border-white/40">
                                                 <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    {activeDetails.map(([key, label]) => (
+                                                    {activeDetails.map(({ key, label }) => (
                                                         <li key={key} className="flex items-center gap-2 text-sm text-slate-700">
                                                             <div className="h-1.5 w-1.5 rounded-full bg-chimiteal shrink-0" />
                                                             {label}
@@ -292,9 +323,11 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
                         {/* Right Content (Image) */}
                         <div className="w-full lg:w-1/3 flex items-center justify-center lg:justify-end">
                              <div className="relative w-full max-w-[200px] md:max-w-[350px] aspect-4/5 lg:mr-8 transition-transform hover:scale-105 duration-500">
-                                <img 
+                                <Image 
                                     src="/img-detallevuelo.webp" 
                                     alt="Detalle de Vuelo" 
+                                    width={350}
+                                    height={438}
                                     className="object-contain w-full h-full drop-shadow-2xl"
                                 />
                              </div>

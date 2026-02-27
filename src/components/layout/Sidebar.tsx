@@ -82,6 +82,8 @@ export function Sidebar({ role }: SidebarProps) {
                 <SidebarItem icon={Plane} label="Mis Vuelos" href="/portal/vuelos" isActive={pathname.startsWith('/portal/vuelos')} />
                 <SidebarItem icon={Package} label="Mis Encomiendas" href="/portal/encomiendas" isActive={pathname.startsWith('/portal/encomiendas')} />
                 <SidebarItem icon={Banknote} label="Mis Giros" href="/portal/giros" isActive={pathname.startsWith('/portal/giros')} />
+                <SidebarItem icon={Languages} label="Mis Traducciones" href="/portal/traducciones" isActive={pathname.startsWith('/portal/traducciones')} />
+                <SidebarItem icon={Briefcase} label="Otros Servicios" href="/portal/otros" isActive={pathname.startsWith('/portal/otros')} />
             </>
         ) : (
             /* ADMIN MENU */

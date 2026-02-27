@@ -14,7 +14,8 @@ import {
     Package, 
     Languages, 
     Briefcase,
-    Clock
+    Clock,
+    FileSpreadsheet
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -24,6 +25,18 @@ import { Label } from "@/components/ui/label"
 import { getAgentFullDetails } from "@/app/actions/manage-agents"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
+import * as XLSX from "xlsx"
+
+const TICKET_TYPE_OPTIONS = [
+    "Exprés migratorio — Italia",
+    "Exprés turismo — Italia",
+    "Exprés migratorio — Europa",
+    "Exprés turismo — Mundo",
+    "Étnico — solo ida",
+    "Étnico — ida y vuelta",
+    "Exprés con documento",
+    "Pasaje low cost (económico, servicios básicos)"
+]
 
 interface AgentProfile {
   id: string
@@ -46,6 +59,8 @@ interface ServiceHistoryItem {
     clientName: string
     description: string
     status?: string
+    ticket_type?: string
+    pax_total?: number
 }
 
 export default function AgentProfilePage({ params }: { params: Promise<{ id: string }> }) {
@@ -68,6 +83,8 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
     
     const [startDate, setStartDate] = useState(formatDate(firstDay))
     const [endDate, setEndDate] = useState(formatDate(lastDay))
+    const [filterType, setFilterType] = useState<string>('all')
+    const [filterTicketType, setFilterTicketType] = useState<string>('all')
 
     useEffect(() => {
         getAgentFullDetails(id).then(res => {
@@ -81,8 +98,30 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
 
     const filteredHistory = history.filter(item => {
         const itemDate = item.date.split('T')[0]
-        return itemDate >= startDate && itemDate <= endDate
+        const matchesDate = itemDate >= startDate && itemDate <= endDate
+        const matchesServiceType = filterType === 'all' || item.type === filterType
+        const matchesTicketType = filterTicketType === 'all' || item.ticket_type === filterTicketType
+        return matchesDate && matchesServiceType && matchesTicketType
     })
+
+    const handleExportExcel = () => {
+        const dataToExport = filteredHistory.map(item => ({
+            Fecha: new Date(item.date).toLocaleDateString('es-ES'),
+            Servicio: item.type,
+            'Tipo de Pasaje': item.type === 'Vuelo' ? (item.ticket_type || 'N/D') : 'No corresponde',
+            'PAX': item.type === 'Vuelo' ? (item.pax_total || 0) : 'N/D',
+            'Referencia': item.reference,
+            Cliente: item.clientName,
+            Detalle: item.description,
+            Monto: item.amount,
+            Estado: getServiceStatusLabel(item.status)
+        }))
+
+        const ws = XLSX.utils.json_to_sheet(dataToExport)
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws, "Ventas")
+        XLSX.writeFile(wb, `Ventas_Agente_${agent?.first_name}_${agent?.last_name}.xlsx`)
+    }
 
     const getServiceIcon = (type: string) => {
         switch (type) {
@@ -248,6 +287,33 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
                                             className="h-9 text-xs w-40"
                                         />
                                     </div>
+
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="ticket-type" className="text-[10px] font-bold text-slate-400 uppercase">Tipo Pasaje</Label>
+                                        <select 
+                                            id="ticket-type"
+                                            value={filterTicketType}
+                                            onChange={(e) => setFilterTicketType(e.target.value)}
+                                            className="h-9 w-48 rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-chimipink"
+                                        >
+                                            <option value="all">Todos los pasajes</option>
+                                            {TICKET_TYPE_OPTIONS.map(opt => (
+                                                <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="grid gap-1.5 self-end">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={handleExportExcel}
+                                            className="h-9 gap-2 text-slate-600 border-slate-200 hover:bg-slate-50"
+                                        >
+                                            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                                            <span className="hidden sm:inline">Exportar Excel</span>
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -259,7 +325,15 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
                                         return acc
                                     }, {})
                                 ).map(([type, count]) => (
-                                    <Badge key={type} variant="outline" className="text-[10px] font-bold border-slate-100 bg-slate-50 text-slate-600 px-3 py-1 rounded-full flex gap-2">
+                                    <Badge 
+                                        key={type} 
+                                        variant="outline" 
+                                        onClick={() => setFilterType(type === filterType ? 'all' : type)}
+                                        className={cn(
+                                            "text-[10px] font-bold border-slate-100 px-3 py-1 rounded-full flex gap-2 cursor-pointer transition-all hover:border-chimipink/30",
+                                            filterType === type ? "bg-chimipink/10 text-chimipink border-chimipink/20" : "bg-slate-50 text-slate-600"
+                                        )}
+                                    >
                                         <span className={cn("h-1.5 w-1.5 rounded-full", 
                                             type === 'Vuelo' ? "bg-blue-400" : 
                                             type === 'Giro' ? "bg-emerald-400" : 
@@ -280,6 +354,8 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
                                             <tr>
                                                 <th className="px-6 py-4">Fecha</th>
                                                 <th className="px-6 py-4">Servicio</th>
+                                                <th className="px-6 py-4">Tipo Pasaje</th>
+                                                <th className="px-6 py-4 text-center">PAX</th>
                                                 <th className="px-6 py-4">PNR/CODIGO</th>
                                                 <th className="px-6 py-4">CLIENTE</th>
                                                 <th className="px-6 py-4 text-center">Estado</th>
@@ -301,12 +377,28 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4">
+                                                            {item.type === 'Vuelo' ? (
+                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                                                    {item.ticket_type || 'N/D'}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[10px] text-slate-400 italic">No corresponde</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            {item.type === 'Vuelo' ? (
+                                                                <span className="text-xs font-bold text-slate-700">{item.pax_total || 0}</span>
+                                                            ) : (
+                                                                <span className="text-slate-300">-</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4">
                                                             <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
                                                                 {item.reference}
                                                             </span>
                                                         </td>
                                                         <td className="px-6 py-4">
-                                                            <p className="text-[11px] text-slate-600 font-bold max-w-[300px] truncate uppercase group-hover:text-chimipink transition-colors">
+                                                            <p className="text-[11px] text-slate-600 font-bold max-w-[300px] truncate uppercase">
                                                                 {item.clientName}
                                                             </p>
                                                         </td>

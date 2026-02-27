@@ -10,13 +10,12 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Loader2, ShieldCheck, FileCheck } from 'lucide-react'
 import { acceptServiceTerms } from '@/app/actions/client-portal'
-import { useRouter } from 'next/navigation'
 
 interface TermsGuardProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     serviceId: string
-    serviceType: 'flight' | 'parcel' | 'transfer'
+    serviceType: 'flight' | 'parcel' | 'transfer' | 'translation' | 'other'
     termsContent: string
     termsVersion: string
     onSuccess: () => void
