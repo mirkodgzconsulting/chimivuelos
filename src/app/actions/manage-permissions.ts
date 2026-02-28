@@ -3,6 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { recordAuditLog } from "@/lib/audit"
 
 export interface EditRequest {
     id: string
@@ -22,37 +23,81 @@ export interface EditRequest {
 }
 
 /**
- * Creates a new edit request for an agent
+ * Maps resource types to their table names in Supabase
  */
-export async function createEditRequest(resourceType: string, resourceId: string, reason: string, metadata: unknown = {}) {
+const RESOURCE_TABLE_MAP: Record<string, string> = {
+    'flights': 'flights',
+    'money_transfers': 'money_transfers',
+    'parcels': 'parcels',
+    'translations': 'translations',
+    'other_services': 'other_services'
+}
+
+/**
+ * Creates or updates an edit request for an agent (Draft & Approval system)
+ */
+export async function createEditRequest(resourceType: string, resourceId: string, reason: string, metadata: Record<string, unknown> = {}) {
     const supabase = await createClient()
     try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) throw new Error('Unauthorized')
 
-        const { error } = await supabaseAdmin.from('edit_requests').insert({
-            agent_id: user.id,
-            resource_type: resourceType,
-            resource_id: resourceId,
-            reason: reason,
-            status: 'pending',
-            metadata: metadata
-        })
+        // Check if there's already a pending request for this resource by ANY agent
+        const { data: existing } = await supabaseAdmin
+            .from('edit_requests')
+            .select('id, agent_id')
+            .eq('resource_type', resourceType)
+            .eq('resource_id', resourceId)
+            .eq('status', 'pending')
+            .single()
 
-        if (error) throw error
+        if (existing) {
+            // If it's the same agent, update the draft. If different, block (Scenario B)
+            if (existing.agent_id !== user.id) {
+                const { data: agent } = await supabaseAdmin.from('profiles').select('first_name, last_name').eq('id', existing.agent_id).single()
+                throw new Error(`Ya existe una solicitud pendiente para este registro enviada por ${agent?.first_name || 'otro agente'}.`)
+            }
 
-        revalidatePath('/dashboard') // Or specific pages
+            // Scenario A: Update existing draft
+            const { error } = await supabaseAdmin
+                .from('edit_requests')
+                .update({
+                    reason: reason,
+                    metadata: metadata,
+                    created_at: new Date().toISOString() // Refresh timestamp
+                })
+                .eq('id', existing.id)
+
+            if (error) throw error
+        } else {
+            // Create new request
+            const { error } = await supabaseAdmin.from('edit_requests').insert({
+                agent_id: user.id,
+                resource_type: resourceType,
+                resource_id: resourceId,
+                reason: reason,
+                status: 'pending',
+                metadata: { 
+                    ...metadata, 
+                    original_created_at: new Date().toISOString() 
+                }
+            })
+
+            if (error) throw error
+        }
+
+        revalidatePath('/admin/permissions')
         return { success: true }
     } catch (error) {
-        console.error('Error creating edit request:', error)
+        console.error('Error creating/updating edit request:', error)
         return { error: (error as Error).message }
     }
 }
 
 /**
- * Approves an edit request
+ * Approves an edit request and applies the draft data to the source table
  */
-export async function approveEditRequest(requestId: string, expirationMinutes: number = 60) {
+export async function approveEditRequest(requestId: string) {
     const supabase = await createClient()
     try {
         const { data: { user } } = await supabase.auth.getUser()
@@ -60,19 +105,75 @@ export async function approveEditRequest(requestId: string, expirationMinutes: n
 
         // Check if user is admin
         const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
-        if (profile?.role !== 'admin') throw new Error('Permissions denied')
+        if (profile?.role !== 'admin' && profile?.role !== 'supervisor') throw new Error('Permissions denied')
 
-        const expiresAt = new Date(Date.now() + expirationMinutes * 60000).toISOString()
+        // 1. Fetch the request details
+        const { data: request, error: reqError } = await supabaseAdmin
+            .from('edit_requests')
+            .select('*')
+            .eq('id', requestId)
+            .single()
 
-        const { error } = await supabaseAdmin.from('edit_requests').update({
+        if (reqError || !request) return { success: false, error: 'Request not found' }
+        
+        const draftData = request.metadata?.draftData as Record<string, unknown>
+        if (!draftData) throw new Error('No hay datos de borrador para aplicar')
+
+        const tableName = RESOURCE_TABLE_MAP[request.resource_type]
+        if (!tableName) throw new Error('Tipo de recurso no reconocido')
+
+        // 2. Fetch OLD values for audit log
+        const { data: oldValues } = await supabaseAdmin
+            .from(tableName)
+            .select('*')
+            .eq('id', request.resource_id)
+            .single()
+
+        // 3. APPLY CHANGE TO SOURCE TABLE
+        const { error: updateError } = await supabaseAdmin
+            .from(tableName)
+            .update(draftData)
+            .eq('id', request.resource_id)
+
+        if (updateError) throw updateError
+
+        // 4. RECORD AUDIT LOG (with 'approve_edit' action)
+        await recordAuditLog({
+            actorId: user.id,
+            action: 'approve_edit',
+            resourceType: request.resource_type,
+            resourceId: request.resource_id,
+            oldValues: oldValues,
+            newValues: draftData,
+            metadata: {
+                requestId: requestId,
+                agentId: request.agent_id,
+                reason: request.reason,
+                displayId: request.metadata?.displayId
+            }
+        })
+
+        // 5. Update request status
+        const { error: updateReqError } = await supabaseAdmin.from('edit_requests').update({
             status: 'approved',
             admin_id: user.id,
-            approved_at: new Date().toISOString(),
-            expires_at: expiresAt
+            approved_at: new Date().toISOString()
         }).eq('id', requestId)
 
-        if (error) throw error
+        if (updateReqError) throw updateReqError
+        
+        const RESOURCE_PATH_MAP: Record<string, string> = {
+            'flights': '/chimi-vuelos',
+            'money_transfers': '/chimi-giros',
+            'parcels': '/chimi-encomiendas',
+            'translations': '/chimi-traducciones',
+            'other_services': '/chimi-otros-servicios'
+        }
 
+        const resourcePath = RESOURCE_PATH_MAP[request.resource_type]
+        if (resourcePath) revalidatePath(resourcePath)
+        
+        revalidatePath('/admin/permissions')
         return { success: true }
     } catch (error) {
         console.error('Error approving edit request:', error)
@@ -90,7 +191,7 @@ export async function rejectEditRequest(requestId: string) {
         if (!user) throw new Error('Unauthorized')
 
         const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
-        if (profile?.role !== 'admin') throw new Error('Permissions denied')
+        if (profile?.role !== 'admin' && profile?.role !== 'supervisor') throw new Error('Permissions denied')
 
         const { error } = await supabaseAdmin.from('edit_requests').update({
             status: 'rejected',
@@ -99,6 +200,7 @@ export async function rejectEditRequest(requestId: string) {
 
         if (error) throw error
 
+        revalidatePath('/admin/permissions')
         return { success: true }
     } catch (error) {
         console.error('Error rejecting edit request:', error)
@@ -312,5 +414,35 @@ export async function getPendingRequestsCount() {
     } catch (error) {
         console.error('Error fetching pending count:', error)
         return 0
+    }
+}
+/**
+ * Gets map of resource IDs with pending requests and who sent them
+ */
+export async function getPendingResourceDetails(resourceType?: string) {
+    try {
+        let query = supabaseAdmin
+            .from('edit_requests')
+            .select('resource_id, agent:agent_id(first_name, last_name)')
+            .eq('status', 'pending')
+        
+        if (resourceType) {
+            query = query.eq('resource_type', resourceType)
+        }
+
+        const { data, error } = await query
+        
+        if (error) throw error
+        
+        const details: Record<string, string> = {}
+        data?.forEach(req => {
+            const agent = req.agent as unknown as { first_name: string, last_name: string } | null
+            details[req.resource_id] = agent ? `${agent.first_name} ${agent.last_name}` : 'Otro agente'
+        })
+        
+        return details
+    } catch (error) {
+        console.error('Error fetching pending resource details:', error)
+        return {}
     }
 }

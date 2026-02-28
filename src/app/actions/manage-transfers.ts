@@ -244,7 +244,7 @@ export async function createTransfer(formData: FormData) {
 
         if (error) throw error
 
-        revalidatePath('/chimi-transfers')
+        revalidatePath('/chimi-giros')
         return { success: true }
 
     } catch (error: unknown) {
@@ -271,16 +271,22 @@ export async function updateTransfer(formData: FormData) {
 
         let activeRequestId = 'admin_direct';
         let activeReason = 'Edición Directa';
+        const isDraft = formData.get('isDraft') === 'true'
 
         if (userRole === 'agent' || userRole === 'usuario') {
-            const permission = await getActivePermissionDetails('money_transfers', id)
-            if (!permission.hasPermission) {
-                throw new Error('No tienes permiso para editar este giro. Debes solicitar autorización.')
+            if (!isDraft) {
+                const permission = await getActivePermissionDetails('money_transfers', id)
+                if (!permission.hasPermission) {
+                    throw new Error('No tienes permiso para editar este giro. Debes solicitar autorización.')
+                }
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+                // Consumir permiso inmediatamente en la acción principal de guardado
+                await consumeEditPermission('money_transfers', id)
+            } else {
+                activeRequestId = 'agent_proposal'
+                activeReason = 'Propuesta de Borrador'
             }
-            activeRequestId = permission.requestId as string
-            activeReason = permission.reason as string
-            // Consumir permiso inmediatamente en la acción principal de guardado
-            await consumeEditPermission('money_transfers', id)
         } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('money_transfers', id)
             activeRequestId = permission.requestId as string
@@ -419,6 +425,11 @@ export async function updateTransfer(formData: FormData) {
             agent_id: agent_id || (await (await createClient()).auth.getUser()).data.user?.id
         }
 
+        // --- NEW DRAFT MODE ---
+        if (isDraft) {
+            return { success: true, draftData: updateData }
+        }
+
         const { error } = await supabase.from('money_transfers').update(updateData).eq('id', id)
 
         if (error) throw error
@@ -439,7 +450,7 @@ export async function updateTransfer(formData: FormData) {
             }
         })
 
-        revalidatePath('/chimi-transfers')
+        revalidatePath('/chimi-giros')
 
         return { success: true }
 
@@ -501,7 +512,7 @@ export async function updateTransferStatus(id: string, status: string) {
                 reason: activeReason
             }
         })
-        revalidatePath('/chimi-transfers')
+        revalidatePath('/chimi-giros')
         return { success: true }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error updating status'
@@ -559,7 +570,7 @@ export async function deleteTransfer(id: string) {
             }
         })
 
-        revalidatePath('/chimi-transfers')
+        revalidatePath('/chimi-giros')
         return { success: true }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error deleting transfer'
@@ -592,7 +603,7 @@ export async function deleteTransferDocument(transferId: string, docPath: string
              await supabase.from('money_transfers').update({ documents: docs as unknown }).eq('id', transferId)
         }
 
-        revalidatePath('/chimi-transfers')
+        revalidatePath('/chimi-giros')
         return { success: true }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Error deleting document'

@@ -212,7 +212,7 @@ export async function createFlight(formData: FormData) {
 /**
  * Updates an existing flight
  */
-export async function updateFlight(formData: FormData) {
+export async function updateFlight(formData: FormData, isDraft: boolean = false) {
     const supabase = await createClient()
     const adminSupabase = supabaseAdmin
     const id = formData.get('id') as string
@@ -228,14 +228,19 @@ export async function updateFlight(formData: FormData) {
         let activeReason = 'Edición Directa';
 
         if (userRole === 'agent' || userRole === 'usuario') {
-            const permission = await getActivePermissionDetails('flights', id)
-            if (!permission.hasPermission) {
-                throw new Error('No tienes permiso para editar este vuelo. Debes solicitar autorización.')
+            if (!isDraft) {
+                const permission = await getActivePermissionDetails('flights', id)
+                if (!permission.hasPermission) {
+                    throw new Error('No tienes permiso para editar este vuelo directamente. Se requiere guardarlo como borrador para aprobación.')
+                }
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+                // Consumir permiso inmediatamente en la acción principal de guardado
+                await consumeEditPermission('flights', id)
+            } else {
+                activeRequestId = 'agent_proposal'
+                activeReason = 'Propuesta de Borrador'
             }
-            activeRequestId = permission.requestId as string
-            activeReason = permission.reason as string
-            // Consumir permiso inmediatamente en la acción principal de guardado
-            await consumeEditPermission('flights', id)
         } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('flights', id)
             activeRequestId = permission.requestId as string
@@ -386,6 +391,10 @@ export async function updateFlight(formData: FormData) {
             pax_total: parseInt(formData.get('pax_total') as string) || 0,
             iata_gds: formData.get('iata_gds') as string,
             updated_at: new Date().toISOString()
+        }
+
+        if (isDraft) {
+            return { success: true, draftData: updateData }
         }
 
         const { error } = await adminSupabase.from('flights').update(updateData).eq('id', id)

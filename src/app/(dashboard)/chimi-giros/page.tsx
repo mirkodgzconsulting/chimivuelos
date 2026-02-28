@@ -3,23 +3,21 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import Image from "next/image"
 import { 
-    Search, Plus, FileSpreadsheet, Pencil, Trash2, 
-    ChevronLeft, ChevronRight, FileText, FolderOpen, Download, X,
-    Building2, Calendar, Check, NotebookPen, Copy, Lock, Unlock
+    Search, Plus, Trash2, Pencil, Copy, Check, FileText, Building2, Download, X, ChevronLeft, ChevronRight, FileSpreadsheet, NotebookPen, Calendar, FolderOpen
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { createClient } from '@/lib/supabase/client'
-import { EditRequestModal } from '@/components/permissions/EditRequestModal'
-import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
+import { getActivePermissions, createEditRequest } from '@/app/actions/manage-permissions'
 import { getPaymentMethodsIT, getPaymentMethodsPE, PaymentMethod } from '@/app/actions/manage-payment-methods'
 import { cn } from '@/lib/utils'
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { 
-    Dialog, DialogContent, DialogDescription, DialogFooter, 
-    DialogHeader, DialogTitle, DialogTrigger 
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter,
+    DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog"
 import {
     getTransfers,
@@ -139,12 +137,9 @@ export default function MoneyTransfersPage() {
     const [docsViewerTransfer, setDocsViewerTransfer] = useState<MoneyTransfer | null>(null)
     const [viewingBeneficiary, setViewingBeneficiary] = useState<MoneyTransfer | null>(null)
 
-    // Role & Permissions State
+    // Role state
     const [userRole, setUserRole] = useState<string | null>(null)
     const [unlockedResources, setUnlockedResources] = useState<Set<string>>(new Set())
-    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
-    const [pendingResourceId, setPendingResourceId] = useState<string | null>(null)
-    const [pendingResourceName, setPendingResourceName] = useState<string>('')
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -571,24 +566,8 @@ export default function MoneyTransfersPage() {
         setIsDialogOpen(true)
     }
 
-    const handleEditClick = async (transfer: MoneyTransfer) => {
-        if (userRole === 'admin' || userRole === 'supervisor') {
-            handleEdit(transfer)
-            return
-        }
-
-        if (userRole === 'agent') {
-            const permission = await getActivePermissionDetails('money_transfers', transfer.id)
-            const isUnlocked = unlockedResources.has(transfer.id) || permission.hasPermission
-            if (isUnlocked) {
-                setUnlockedResources(prev => new Set(prev).add(transfer.id))
-                handleEdit(transfer)
-            } else {
-                setPendingResourceId(transfer.id)
-                setPendingResourceName(transfer.transfer_code || transfer.id)
-                setIsPermissionModalOpen(true)
-            }
-        }
+    const handleEditClick = (transfer: MoneyTransfer) => {
+        handleEdit(transfer)
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -638,20 +617,38 @@ export default function MoneyTransfersPage() {
         let result
         if (selectedTransferId) {
             submission.append('id', selectedTransferId)
-            result = await updateTransfer(submission)
+            
+            // --- DRAFT & APPROVAL FOR AGENTS ---
+            if (userRole === 'agent' && !unlockedResources.has(selectedTransferId!)) {
+                submission.append('isDraft', 'true')
+                result = await updateTransfer(submission)
+                if (result.success && result.draftData) {
+                    const reqResult = await createEditRequest(
+                        'money_transfers',
+                        selectedTransferId,
+                        'Edición enviada para aprobación',
+                        { draftData: result.draftData, displayId: formData.transfer_code || 'Giro' }
+                    )
+                    if (reqResult.success) {
+                        toast.success('Solicitud enviada correctamente el administrador revisara su solicitud')
+                        setIsDialogOpen(false)
+                        resetForm()
+                        loadData()
+                    } else {
+                        alert(reqResult.error || 'Error al enviar borrador')
+                    }
+                    setIsLoading(false)
+                    return 
+                }
+            } else {
+                result = await updateTransfer(submission)
+            }
         } else {
             result = await createTransfer(submission)
         }
 
         if (result.success) {
             // Ensure the resource is locked again for the agent
-            if (selectedTransferId) {
-                setUnlockedResources(prev => {
-                    const next = new Set(prev)
-                    next.delete(selectedTransferId)
-                    return next
-                })
-            }
             setIsDialogOpen(false)
             resetForm()
             loadData()
@@ -665,10 +662,8 @@ export default function MoneyTransfersPage() {
         const transfer = transfers.find(t => t.id === id)
         if (!transfer) return
 
-        if (userRole === 'agent' && !unlockedResources.has(id)) {
-            setPendingResourceId(id)
-            setPendingResourceName(transfer.transfer_code || id)
-            setIsPermissionModalOpen(true)
+        if (userRole === 'agent') {
+            toast.info("Para cambiar el estado, use el botón de edición y guarde los cambios.")
             return
         }
 
@@ -2072,18 +2067,10 @@ export default function MoneyTransfersPage() {
                                                         variant="ghost" 
                                                         size="sm" 
                                                         onClick={() => handleEditClick(transfer)}
-                                                        className={cn(
-                                                            userRole === 'agent' && !unlockedResources.has(transfer.id) && "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                                        )}
-                                                        title={userRole === 'agent' && !unlockedResources.has(transfer.id) ? "Solicitar permiso para editar" : "Editar"}
+                                                        className="h-8 w-8 text-slate-400 hover:text-chimipink hover:bg-pink-50"
+                                                        title="Editar"
                                                     >
-                                                        {userRole === 'agent' && !unlockedResources.has(transfer.id) ? (
-                                                            <Lock className="h-4 w-4" />
-                                                        ) : unlockedResources.has(transfer.id) ? (
-                                                            <Unlock className="h-4 w-4 text-emerald-600" />
-                                                        ) : (
-                                                            <Pencil className="h-4 w-4 text-slate-400" />
-                                                        )}
+                                                        <Pencil className="h-4 w-4" />
                                                     </Button>
                                                     {(userRole === 'admin' || userRole === 'supervisor') && (
                                                         <Button variant="ghost" size="sm" onClick={() => handleDelete(transfer.id)}>
@@ -2130,13 +2117,7 @@ export default function MoneyTransfersPage() {
                 </CardContent>
             </Card>
 
-            <EditRequestModal 
-                isOpen={isPermissionModalOpen}
-                onClose={() => setIsPermissionModalOpen(false)}
-                resourceType="money_transfers"
-                resourceId={pendingResourceId || ''}
-                resourceName={pendingResourceName}
-            />
+
         </div>
     )
 }

@@ -35,8 +35,6 @@ import {
     Check,
     X,
     NotebookPen,
-    Lock,
-    Unlock,
     User,
     Image as ImageIcon
 } from 'lucide-react'
@@ -50,11 +48,12 @@ import {
     updateTranslationStatus
 } from '@/app/actions/manage-translations'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
-import { EditRequestModal } from '@/components/permissions/EditRequestModal'
-import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { getPaymentMethodsIT, getPaymentMethodsPE, PaymentMethod } from '@/app/actions/manage-payment-methods'
+import { getActivePermissions, createEditRequest } from '@/app/actions/manage-permissions'
+import { toast } from 'sonner'
+
 
 // Interfaces
 interface TranslationDocument {
@@ -176,6 +175,7 @@ const DocumentPreview = ({
 }
 
 export default function TranslationsPage() {
+    const [userRole, setUserRole] = useState<string | null>(null)
     // Main Data State
     const [translations, setTranslations] = useState<Translation[]>([])
     const [clients, setClients] = useState<ClientProfile[]>([])
@@ -213,21 +213,7 @@ export default function TranslationsPage() {
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [docsViewerTranslation, setDocsViewerTranslation] = useState<Translation | null>(null)
 
-    // Role & Permissions State
-    const [userRole, setUserRole] = useState<string | null>(null)
-    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
-    const [pendingResourceId, setPendingResourceId] = useState<string | null>(null)
-    const [pendingResourceName, setPendingResourceName] = useState<string>('')
     const [unlockedResources, setUnlockedResources] = useState<Set<string>>(new Set())
-
-    // Sync Permissions
-    useEffect(() => {
-        const fetchPermissions = async () => {
-            const permissions = await getActivePermissions()
-            setUnlockedResources(new Set(permissions))
-        }
-        fetchPermissions()
-    }, [isDialogOpen, isPermissionModalOpen])
 
     // Form Data
     const [formData, setFormData] = useState({
@@ -308,13 +294,15 @@ export default function TranslationsPage() {
                 const rawRole = user.user_metadata?.role || 'client'
                 const role = rawRole === 'usuario' ? 'agent' : rawRole
                 setUserRole(role)
-                if (role === 'agent' || role === 'usuario') {
-                    await getActivePermissions()
+
+                if (role === 'agent' || role === 'supervisor') {
+                    const permissions = await getActivePermissions()
+                    setUnlockedResources(new Set(permissions))
                 }
             }
         }
         fetchUserData()
-    }, [])
+    }, [isDialogOpen])
 
     const loadData = useCallback(async () => {
         setIsLoading(true)
@@ -492,35 +480,33 @@ export default function TranslationsPage() {
     }
 
     const handleActionClick = async (trans: Translation, action: 'edit' | 'delete') => {
-        if (userRole === 'admin' || userRole === 'supervisor') {
-            if (action === 'edit') handleEdit(trans)
-            else if (confirm('¿Borrar traducción?')) {
-                await deleteTranslation(trans.id)
-                loadData()
-            }
+        if (action === 'edit') {
+            handleEdit(trans)
             return
         }
-        // Agents need permission for edit
-        if (action === 'edit' && userRole === 'agent') {
-            const permission = await getActivePermissionDetails('translations', trans.id)
-            if (permission.hasPermission) {
-                handleEdit(trans)
+
+        if (action === 'delete') {
+            if (userRole === 'admin' || userRole === 'supervisor') {
+                if (confirm('¿Borrar traducción?')) {
+                    await deleteTranslation(trans.id)
+                    loadData()
+                }
             } else {
-                setPendingResourceId(trans.id)
-                setPendingResourceName(trans.tracking_code || trans.id)
-                setIsPermissionModalOpen(true)
+                toast.error('Solo los administradores pueden eliminar traducciones.')
             }
         }
     }
+
+
 
     const handleStatusChange = async (id: string, newStatus: string) => {
         const trans = translations.find(t => t.id === id)
         if (!trans) return
 
-        if (userRole === 'agent' && !unlockedResources.has(id)) {
-            setPendingResourceId(id)
-            setPendingResourceName(trans.tracking_code || id)
-            setIsPermissionModalOpen(true)
+        if (userRole === 'agent') {
+            toast.info('Los agentes no pueden cambiar el estado directamente. Por favor usa el botón de editar para proponer cambios que requieran aprobación.', {
+                duration: 5000
+            })
             return
         }
 
@@ -624,10 +610,34 @@ export default function TranslationsPage() {
             if (file) payload.append(`payment_proof_${index}`, file)
         })
 
-        const result = selectedId ? await updateTranslation(payload) : await createTranslation(payload)
+        if (userRole === 'agent' && !unlockedResources.has(selectedId!)) {
+            payload.append('isDraft', 'true')
+        }
+
+        const result = (selectedId ? await updateTranslation(payload) : await createTranslation(payload)) as { success?: boolean; error?: string; draftData?: Record<string, unknown> }
 
         if (result.error) alert(result.error)
         else {
+            // Check for draft submission
+            if (selectedId && userRole === 'agent' && result.success && result.draftData) {
+                const reqResult = await createEditRequest(
+                    'translations',
+                    selectedId,
+                    'Edición enviada para aprobación',
+                    { draftData: result.draftData, displayId: formData.tracking_code || 'Traducción' }
+                )
+                if (reqResult.success) {
+                    toast.success('Solicitud enviada correctamente el administrador revisara su solicitud')
+                    setIsDialogOpen(false)
+                    resetForm()
+                    loadData()
+                } else {
+                    alert(reqResult.error || 'Error al enviar borrador')
+                }
+                setIsLoading(false)
+                return
+            }
+
             setIsDialogOpen(false)
             resetForm()
             loadData()
@@ -1558,28 +1568,14 @@ export default function TranslationsPage() {
                                     </td>
                                     <td className="px-2 sm:px-4 py-3 text-right sticky right-0 bg-pink-50/90 backdrop-blur-sm group-hover:bg-pink-100 z-10 border-l border-pink-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.15)] transition-colors">
                                         <div className="flex items-center justify-end gap-1 sm:gap-2">
-                                            {t.documents && t.documents.length > 0 && (
-                                                <Button size="sm" variant="ghost" className="text-chimiteal hover:bg-teal-50" onClick={() => setDocsViewerTranslation(t)}>
-                                                    <FileText className="h-5 w-5" />
-                                                </Button>
-                                            )}
-                                            
                                             <Button 
                                                 variant="ghost" 
                                                 size="sm" 
                                                 onClick={() => handleActionClick(t, 'edit')}
-                                                className={cn(
-                                                    userRole === 'agent' && !unlockedResources.has(t.id) && "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                                )}
-                                                title={userRole === 'agent' && !unlockedResources.has(t.id) ? "Solicitar permiso para editar" : "Editar"}
+                                                className="h-8 w-8 hover:bg-slate-100"
+                                                title="Editar"
                                             >
-                                                {userRole === 'agent' && !unlockedResources.has(t.id) ? (
-                                                    <Lock className="h-4 w-4" />
-                                                ) : unlockedResources.has(t.id) ? (
-                                                    <Unlock className="h-4 w-4 text-emerald-600" />
-                                                ) : (
-                                                    <Pencil className="h-4 w-4 text-slate-400" />
-                                                )}
+                                                <Pencil className="h-4 w-4 text-slate-400" />
                                             </Button>
 
                                             {(userRole === 'admin' || userRole === 'supervisor') && (
@@ -1610,13 +1606,6 @@ export default function TranslationsPage() {
                 )}
             </Card>
 
-            <EditRequestModal 
-                isOpen={isPermissionModalOpen}
-                onClose={() => setIsPermissionModalOpen(false)}
-                resourceId={pendingResourceId || ''}
-                resourceType="translations"
-                resourceName={pendingResourceName}
-            />
 
             {/* Document Viewer Modal */}
             <Dialog open={!!docsViewerTranslation} onOpenChange={o => !o && setDocsViewerTranslation(null)}>

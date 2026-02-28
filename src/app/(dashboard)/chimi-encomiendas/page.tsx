@@ -38,12 +38,12 @@ import {
 import { getParcels, createParcel, updateParcel, deleteParcel, updateParcelStatus, deleteParcelDocument, getParcelDocumentUrl } from '@/app/actions/manage-parcels'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
 import * as XLSX from 'xlsx'
-import { EditRequestModal } from '@/components/permissions/EditRequestModal'
-import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
+import { getActivePermissions, createEditRequest } from '@/app/actions/manage-permissions'
 import { getPaymentMethodsIT, getPaymentMethodsPE, PaymentMethod } from '@/app/actions/manage-payment-methods'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { Lock, Unlock } from 'lucide-react'
+import { toast } from 'sonner'
+
 
 // Interfaces
 interface ParcelDocument {
@@ -154,12 +154,8 @@ export default function ParcelsPage() {
     const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null)
     const [docsViewerParcel, setDocsViewerParcel] = useState<Parcel | null>(null)
 
-    // Role & Permissions State
-    const [userRole, setUserRole] = useState<string | null>(null)
     const [unlockedResources, setUnlockedResources] = useState<Set<string>>(new Set())
-    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
-    const [pendingResourceId, setPendingResourceId] = useState<string | null>(null)
-    const [pendingResourceName, setPendingResourceName] = useState<string>('')
+    const [userRole, setUserRole] = useState<string | null>(null)
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -177,7 +173,7 @@ export default function ParcelsPage() {
             }
         }
         fetchInitialData()
-    }, [])
+    }, [isDialogOpen])
 
 
 
@@ -450,24 +446,9 @@ export default function ParcelsPage() {
     }
 
     const handleEditClick = async (parcel: Parcel) => {
-        if (userRole === 'admin' || userRole === 'supervisor') {
-            handleEdit(parcel)
-            return
-        }
-
-        if (userRole === 'agent') {
-            const permission = await getActivePermissionDetails('parcels', parcel.id)
-            const isUnlocked = unlockedResources.has(parcel.id) || permission.hasPermission
-            if (isUnlocked) {
-                setUnlockedResources(prev => new Set(prev).add(parcel.id))
-                handleEdit(parcel)
-            } else {
-                setPendingResourceId(parcel.id)
-                setPendingResourceName(parcel.tracking_code || parcel.id)
-                setIsPermissionModalOpen(true)
-            }
-        }
+        handleEdit(parcel)
     }
+
 
     const handlePaymentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -586,21 +567,37 @@ export default function ParcelsPage() {
             }
         })
 
-        const result = selectedParcelId 
+        if (userRole === 'agent' && !unlockedResources.has(selectedParcelId!)) {
+            payload.append('isDraft', 'true')
+        }
+
+        const result = (selectedParcelId 
             ? await updateParcel(payload)
-            : await createParcel(payload)
+            : await createParcel(payload)) as { success?: boolean; error?: string; draftData?: Record<string, unknown> }
 
         if (result.error) {
             alert(result.error)
         } else {
-            // Ensure the resource is locked again for the agent
-            if (selectedParcelId) {
-                setUnlockedResources(prev => {
-                    const next = new Set(prev)
-                    next.delete(selectedParcelId)
-                    return next
-                })
+            // Check for draft submission
+            if (selectedParcelId && userRole === 'agent' && result.success && result.draftData) {
+                const reqResult = await createEditRequest(
+                    'parcels',
+                    selectedParcelId,
+                    'Edición enviada para aprobación',
+                    { draftData: result.draftData, displayId: formData.tracking_code || 'Encomienda' }
+                )
+                if (reqResult.success) {
+                    toast.success('Solicitud enviada correctamente el administrador revisara su solicitud')
+                    setIsDialogOpen(false)
+                    resetForm()
+                    loadData()
+                } else {
+                    alert(reqResult.error || 'Error al enviar borrador')
+                }
+                setIsLoading(false)
+                return
             }
+
             setIsDialogOpen(false)
             resetForm()
             loadData()
@@ -612,10 +609,10 @@ export default function ParcelsPage() {
         const parcel = parcels.find(p => p.id === id)
         if (!parcel) return
 
-        if (userRole === 'agent' && !unlockedResources.has(id)) {
-            setPendingResourceId(id)
-            setPendingResourceName(parcel.tracking_code || id)
-            setIsPermissionModalOpen(true)
+        if (userRole === 'agent') {
+            toast.info('Los agentes no pueden cambiar el estado directamente. Por favor usa el botón de editar para proponer cambios que requieran aprobación.', {
+                duration: 5000
+            })
             return
         }
 
@@ -1764,18 +1761,10 @@ export default function ParcelsPage() {
                                                         variant="ghost" 
                                                         size="sm" 
                                                         onClick={() => handleEditClick(parcel)}
-                                                        className={cn(
-                                                            userRole === 'agent' && !unlockedResources.has(parcel.id) && "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                                        )}
-                                                        title={userRole === 'agent' && !unlockedResources.has(parcel.id) ? "Solicitar permiso para editar" : "Editar"}
+                                                        className="h-8 w-8 hover:bg-slate-100"
+                                                        title="Editar"
                                                     >
-                                                        {userRole === 'agent' && !unlockedResources.has(parcel.id) ? (
-                                                            <Lock className="h-4 w-4" />
-                                                        ) : unlockedResources.has(parcel.id) ? (
-                                                            <Unlock className="h-4 w-4 text-emerald-600" />
-                                                        ) : (
-                                                            <Pencil className="h-4 w-4 text-slate-400" />
-                                                        )}
+                                                        <Pencil className="h-4 w-4 text-slate-400" />
                                                     </Button>
                                                     {(userRole === 'admin' || userRole === 'supervisor') && (
                                                         <Button variant="ghost" size="sm" onClick={() => handleDelete(parcel.id)}>
@@ -1821,13 +1810,6 @@ export default function ParcelsPage() {
                     )}
                 </CardContent>
             </Card>
-            <EditRequestModal 
-                isOpen={isPermissionModalOpen}
-                onClose={() => setIsPermissionModalOpen(false)}
-                resourceType="parcels"
-                resourceId={pendingResourceId || ''}
-                resourceName={pendingResourceName}
-            />
         </div>
     )
 }

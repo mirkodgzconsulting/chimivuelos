@@ -10,7 +10,8 @@ import {
     Search,
     User,
     Calendar,
-    FilterX
+    FilterX,
+    RefreshCw
 } from "lucide-react"
 import { 
     getAllEditRequests, 
@@ -411,9 +412,11 @@ export default function AdminPermissionsPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
+    const [previewDraft, setPreviewDraft] = useState<EditRequest | null>(null)
 
     type AuditLogGroup = AuditLog & { _siblings: AuditLog[] };
     const [selectedLog, setSelectedLog] = useState<AuditLogGroup | null>(null)
+    const [currentData, setCurrentData] = useState<Record<string, unknown> | null>(null)
     const [agents, setAgents] = useState<{id: string, full_name: string}[]>([])
     
     // Filter State
@@ -442,6 +445,29 @@ export default function AdminPermissionsPage() {
         };
         loadAgents();
     }, []);
+
+    useEffect(() => {
+        if (previewDraft) {
+            const fetchCurrent = async () => {
+                const tables: Record<string, string> = {
+                    'flights': 'flights',
+                    'money_transfers': 'money_transfers',
+                    'parcels': 'parcels',
+                    'translations': 'translations',
+                    'other_services': 'other_services'
+                };
+                const tableName = tables[previewDraft.resource_type];
+                if (tableName) {
+                    const supabase = createClient();
+                    const { data } = await supabase.from(tableName).select('*').eq('id', previewDraft.resource_id).single();
+                    setCurrentData(data);
+                }
+            };
+            fetchCurrent();
+        } else {
+            setCurrentData(null);
+        }
+    }, [previewDraft]);
 
     const resetFilters = () => {
         setFilters({
@@ -478,6 +504,29 @@ export default function AdminPermissionsPage() {
     useEffect(() => {
         fetchData()
     }, [fetchData])
+
+    // Enable Real-time updates
+    useEffect(() => {
+        const supabase = createClient();
+        const channel = supabase
+            .channel('edit_requests_changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'edit_requests'
+                },
+                () => {
+                    fetchData();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchData]);
 
     const groupedAuditLogs = useMemo(() => {
         const groups: AuditLogGroup[] = [];
@@ -644,7 +693,7 @@ export default function AdminPermissionsPage() {
                                 value={filters.search}
                                 onChange={(e) => { setFilters(prev => ({ ...prev, search: e.target.value })); setCurrentPage(1); }}
                                 className="w-full pl-10 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-chimiteal/20 outline-none font-bold placeholder:font-normal"
-                                placeholder="Buscar PNR / ID..."
+                                placeholder="Buscar PNR / Código..."
                             />
                         </div>
                         <Button 
@@ -681,8 +730,18 @@ export default function AdminPermissionsPage() {
                                             </tr>
                                         ) : requests.map((req) => (
                                             <tr key={req.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                <td className="px-6 py-4 whitespace-nowrap text-slate-500">
-                                                    {format(new Date(req.created_at), "dd/MM/yy HH:mm", { locale: es })}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-slate-500 text-xs text-left">
+                                                            {format(new Date(req.created_at), "dd/MM/yy HH:mm", { locale: es })}
+                                                        </span>
+                                                        {typeof req.metadata?.original_created_at === 'string' && 
+                                                         (new Date(req.created_at).getTime() - new Date(req.metadata.original_created_at).getTime()) > 1000 && (
+                                                            <span className="text-[8px] font-black text-amber-600 uppercase flex items-center gap-1 mt-0.5 animate-pulse">
+                                                                <RefreshCw className="h-2 w-2" /> RE-EDITADA
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 font-bold text-slate-900">
                                                     {req.agent.first_name} {req.agent.last_name}
@@ -719,6 +778,16 @@ export default function AdminPermissionsPage() {
                                                 <td className="px-6 py-4 text-right">
                                                     {req.status === 'pending' && (
                                                         <div className="flex justify-end gap-1">
+                                                            {Boolean(req.metadata?.isDraftSubmission || req.metadata?.draftData) && (
+                                                                <Button 
+                                                                    variant="outline" 
+                                                                    size="sm" 
+                                                                    onClick={() => setPreviewDraft(req)} 
+                                                                    className="h-7 text-chimiteal border-chimiteal/30 hover:bg-teal-50 text-[10px] font-bold"
+                                                                >
+                                                                    VER CAMBIOS
+                                                                </Button>
+                                                            )}
                                                             <Button size="sm" onClick={() => handleApprove(req.id)} className="h-7 bg-chimipink hover:opacity-90 transition-opacity text-white text-[10px] font-bold shadow-sm">APROBAR</Button>
                                                             <Button variant="outline" size="sm" onClick={() => handleReject(req.id)} className="h-7 text-red-600 border-red-100 hover:bg-red-50 text-[10px] font-bold">RECHAZAR</Button>
                                                         </div>
@@ -796,7 +865,7 @@ export default function AdminPermissionsPage() {
                                                         className="h-7 gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50 transition-all text-[9px] font-bold"
                                                     >
                                                         <History className="h-3 w-3" />
-                                                        INSPECTOR
+                                                        VER DETALLES
                                                     </Button>
                                                 </td>
                                             </tr>
@@ -917,6 +986,116 @@ export default function AdminPermissionsPage() {
 
                             <DialogFooter className="p-4 bg-slate-50 border-t shrink-0">
                                 <Button onClick={() => setSelectedLog(null)} className="bg-chimipink hover:opacity-90 transition-opacity text-white font-bold h-9 px-6 rounded-lg text-xs shadow-md">CERRAR VISOR</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+            <Dialog open={!!previewDraft} onOpenChange={(o) => !o && setPreviewDraft(null)}>
+                <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 border-none rounded-2xl overflow-hidden bg-white shadow-2xl">
+                    {previewDraft && (
+                        <>
+
+                            <div className="p-6 bg-white space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+                                <div className="flex items-center justify-between px-4 py-3 bg-teal-50/50 rounded-xl border border-teal-100/50 mb-4">
+                                     <div className="flex flex-col">
+                                         <span className="text-[10px] font-bold text-teal-600 uppercase tracking-widest">Servicio</span>
+                                         <span className="text-sm font-bold text-slate-700 uppercase">
+                                             {previewDraft.resource_type === 'flights' ? 'Vuelos' : 
+                                              previewDraft.resource_type === 'money_transfers' ? 'Giros' : 
+                                              previewDraft.resource_type === 'parcels' ? 'Encomiendas' : 
+                                              previewDraft.resource_type === 'translations' ? 'Traducciones' :
+                                              previewDraft.resource_type === 'other_services' ? 'Otros Servicios' : previewDraft.resource_type}
+                                         </span>
+                                     </div>
+                                     <div className="text-right">
+                                         <span className="text-[10px] font-bold text-teal-600 uppercase tracking-widest">Identificador</span>
+                                         <span className="text-sm font-bold text-slate-700 block">{String(previewDraft.metadata?.displayId || previewDraft.resource_id)}</span>
+                                     </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    
+                                    <div className="border border-slate-100 rounded-lg overflow-hidden">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-slate-50 border-b">
+                                                <tr className="text-slate-400 font-bold uppercase text-[9px]">
+                                                    <th className="px-4 py-2 w-1/4">Atributo</th>
+                                                    <th className="px-4 py-2 w-[37.5%]">Mantenido / Anterior</th>
+                                                    <th className="px-4 py-2 w-[37.5%]">Cambio Propuesto</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {(() => {
+                                                    const draft = (previewDraft.metadata?.draftData as Record<string, unknown>) || {};
+                                                    const current = currentData || {};
+                                                    
+                                                    const changedKeys = Object.keys(draft).filter(key => {
+                                                        if (['updated_at', 'id', 'agent_id', 'created_at'].includes(key)) return false;
+                                                        const normDraft = JSON.stringify(deepNormalize(draft[key]));
+                                                        const normCurrent = JSON.stringify(deepNormalize(current[key]));
+                                                        return normDraft !== normCurrent;
+                                                    });
+
+                                                    if (changedKeys.length === 0) {
+                                                        return (
+                                                            <tr>
+                                                                <td colSpan={3} className="px-4 py-8 text-center text-slate-400 italic">No hay diferencias detectadas entre el borrador y los datos actuales.</td>
+                                                            </tr>
+                                                        );
+                                                    }
+
+                                                    return changedKeys.map(key => (
+                                                        <tr key={key} className="transition-colors hover:bg-slate-50/50">
+                                                            <td className="px-4 py-3 align-top">
+                                                                <p className="text-[10px] text-slate-500 font-bold uppercase">
+                                                                    {FIELD_LABELS[key] || key}
+                                                                </p>
+                                                            </td>
+                                                            <td className="px-4 py-3 align-top border-x border-slate-50">
+                                                                <SmartValueRenderer value={current[key]} field={key} isChanged={false} compareValue={draft[key]} />
+                                                            </td>
+                                                            <td className="px-4 py-3 align-top bg-emerald-50/20">
+                                                                <SmartValueRenderer 
+                                                                    value={draft[key]} 
+                                                                    field={key} 
+                                                                    isChanged={true} 
+                                                                    compareValue={current[key]} 
+                                                                />
+                                                            </td>
+                                                        </tr>
+                                                    ));
+                                                })()}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 space-y-2">
+                                    <span className="text-[10px] font-bold text-amber-600 uppercase flex items-center gap-2">
+                                        <ShieldCheck className="h-3 w-3" /> Justificación del Agente
+                                    </span>
+                                    <p className="text-xs text-slate-700 leading-relaxed italic">&quot;{previewDraft.reason}&quot;</p>
+                                </div>
+                            </div>
+
+                            <DialogFooter className="p-4 bg-slate-50 border-t flex gap-3">
+                                <Button 
+                                    variant="ghost" 
+                                    onClick={() => setPreviewDraft(null)}
+                                    className="text-slate-500 font-bold text-xs"
+                                >
+                                    Cerrar Vista
+                                </Button>
+                                <Button 
+                                    onClick={() => {
+                                        handleApprove(previewDraft.id);
+                                        setPreviewDraft(null);
+                                    }} 
+                                    className="bg-chimipink hover:bg-chimipink/90 text-white font-bold text-xs px-6 shadow-lg shadow-chimipink/20"
+                                >
+                                    APROBAR Y APLICAR
+                                </Button>
                             </DialogFooter>
                         </>
                     )}

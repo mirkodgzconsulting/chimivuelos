@@ -1,15 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2, Lock, Unlock, User, Copy } from 'lucide-react'
+import { Plus, Search, Trash2, Edit, FileText, Download, FileSpreadsheet, ChevronLeft, ChevronRight, ListChecks, Wallet, Check, X, Calendar, Building2, User, Copy, Pencil, RefreshCw } from 'lucide-react'
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
-import { EditRequestModal } from '@/components/permissions/EditRequestModal'
-import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
 import { getPaymentMethodsIT, getPaymentMethodsPE, PaymentMethod } from '@/app/actions/manage-payment-methods'
 import { cn } from '@/lib/utils'
 import { toast } from "sonner"
+import { getActivePermissions, createEditRequest, getPendingResourceDetails } from '@/app/actions/manage-permissions'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -279,9 +278,6 @@ export default function FlightsPage() {
     // Role & Permissions State
     const [userRole, setUserRole] = useState<string | null>(null)
     const [unlockedResources, setUnlockedResources] = useState<Set<string>>(new Set())
-    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
-    const [pendingResourceId, setPendingResourceId] = useState<string | null>(null)
-    const [pendingResourceName, setPendingResourceName] = useState<string>('')
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -292,7 +288,7 @@ export default function FlightsPage() {
                 const role = rawRole === 'usuario' ? 'agent' : rawRole
                 setUserRole(role)
 
-                if (role === 'agent') {
+                if (role === 'agent' || role === 'supervisor') {
                     const permissions = await getActivePermissions()
                     setUnlockedResources(new Set(permissions))
                 }
@@ -371,16 +367,19 @@ export default function FlightsPage() {
     const [baseOnAccount, setBaseOnAccount] = useState(0) // Track existing payments sum
     const [tempPayments, setTempPayments] = useState<PaymentDetail[]>([])
     const [tempPaymentProofs, setTempPaymentProofs] = useState<(File | null)[]>([])
+    const [pendingRequests, setPendingRequests] = useState<Record<string, string>>({})
 
     // Load Data
     const loadData = useCallback(async () => {
-        const [flightsData, clientsData, methodsIT, methodsPE] = await Promise.all([
+        const [flightsData, clientsData, methodsIT, methodsPE, pendingData] = await Promise.all([
             getFlights(),
             getClientsForDropdown(),
             getPaymentMethodsIT(),
-            getPaymentMethodsPE()
+            getPaymentMethodsPE(),
+            getPendingResourceDetails('flights')
         ])
         setFlights(flightsData as unknown as Flight[])
+        setPendingRequests(pendingData)
         setClients(clientsData as unknown as ClientOption[])
         setPaymentMethodsIT(methodsIT)
         setPaymentMethodsPE(methodsPE)
@@ -389,6 +388,28 @@ export default function FlightsPage() {
     useEffect(() => {
         loadData()
     }, [loadData])
+
+    // Enable Real-time updates
+    useEffect(() => {
+        const supabase = createClient();
+        const channel = supabase
+            .channel('flights_and_requests')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'flights' },
+                () => { loadData(); }
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'edit_requests' },
+                () => { loadData(); }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [loadData]);
 
     // Sync Modals with data updates
     useEffect(() => {
@@ -651,24 +672,8 @@ export default function FlightsPage() {
         }
     }
 
-    const handleEditClick = async (flight: Flight) => {
-        if (userRole === 'admin' || userRole === 'supervisor') {
-            handleEdit(flight)
-            return
-        }
-
-        if (userRole === 'agent') {
-            const permission = await getActivePermissionDetails('flights', flight.id)
-            const isUnlocked = unlockedResources.has(flight.id) || permission.hasPermission
-            if (isUnlocked) {
-                setUnlockedResources(prev => new Set(prev).add(flight.id))
-                handleEdit(flight)
-            } else {
-                setPendingResourceId(flight.id)
-                setPendingResourceName(flight.pnr || flight.id)
-                setIsPermissionModalOpen(true)
-            }
-        }
+    const handleEditClick = (flight: Flight) => {
+        handleEdit(flight)
     }
 
     const deleteDoc = async (path: string) => {
@@ -685,10 +690,9 @@ export default function FlightsPage() {
         const flight = flights.find(f => f.id === id)
         if (!flight) return
 
-        if (userRole === 'agent' && !unlockedResources.has(id)) {
-            setPendingResourceId(id)
-            setPendingResourceName(flight.pnr || id)
-            setIsPermissionModalOpen(true)
+        // Inline status change is only direct for admins/supervisors
+        if (userRole === 'agent') {
+            toast.info("Para cambiar el estado, use el botón de edición y guarde los cambios.")
             return
         }
 
@@ -905,14 +909,36 @@ export default function FlightsPage() {
                 data.append('payment_proof_file', paymentProofFile)
             }
 
-            if (selectedFlightId) {
-                 await updateFlight(data)
-                 // Ensure the resource is locked again for the agent
-                 setUnlockedResources(prev => {
-                     const next = new Set(prev)
-                     next.delete(selectedFlightId)
-                     return next
-                 })
+             if (selectedFlightId) {
+                  const isDraft = userRole === 'agent' && !unlockedResources.has(selectedFlightId)
+                  const result = (await updateFlight(data, isDraft)) as { success?: boolean; error?: string; draftData?: Record<string, unknown> }
+                  
+                  if (result.success) {
+                    if (isDraft && result.draftData) {
+                        const reqResult = await createEditRequest(
+                            'flights',
+                            selectedFlightId,
+                            'Edición enviada para aprobación',
+                            { draftData: result.draftData, displayId: formData.pnr || 'Vuelo' }
+                        )
+                        if (reqResult.success) {
+                            toast.success('Solicitud enviada correctamente el administrador revisara su solicitud')
+                            setIsDialogOpen(false)
+                            resetForm()
+                            loadData()
+                        } else {
+                            toast.error(reqResult.error || 'Error al enviar borrador')
+                        }
+                        setIsSubmitting(false)
+                        return
+                    } else {
+                        toast.success('Vuelo actualizado correctamente')
+                    }
+                  } else {
+                     toast.error(result.error || 'Error al actualizar vuelo')
+                     setIsSubmitting(false)
+                     return
+                  }
             } else {
                  const result = await createFlight(data)
                  if (!result.success) {
@@ -2765,7 +2791,16 @@ export default function FlightsPage() {
                                                 {new Date(flight.created_at).toLocaleDateString('es-PE', { timeZone: 'UTC' })}
                                             </td>
                                             <td className="px-6 py-4 font-medium text-slate-700">{new Date(flight.travel_date).toLocaleDateString('es-PE', { timeZone: 'UTC' })}</td>
-                                            <td className="px-6 py-4 font-mono text-slate-600">{flight.pnr || '-'}</td>
+                                            <td className="px-6 py-4 font-mono text-slate-600">
+                                                <div className="flex flex-col gap-1">
+                                                    <span>{flight.pnr || '-'}</span>
+                                                    {pendingRequests[flight.id] && (
+                                                        <span className="text-[8px] font-black text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded flex items-center gap-1 w-fit animate-pulse" title={`Bloqueado por: ${pendingRequests[flight.id]}`}>
+                                                            <RefreshCw className="h-2 w-2" /> REVISIÓN PENDIENTE
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4">
                                                 <div className="font-medium text-slate-900">{flight.profiles?.first_name} {flight.profiles?.last_name}</div>
                                                 <div className="text-xs text-slate-500">{flight.profiles?.email}</div>
@@ -2894,18 +2929,10 @@ export default function FlightsPage() {
                                                                 variant="ghost" 
                                                                 size="sm" 
                                                                 onClick={() => handleEditClick(flight)}
-                                                                className={cn(
-                                                                    userRole === 'agent' && !unlockedResources.has(flight.id) && "text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                                                )}
-                                                                title={userRole === 'agent' && !unlockedResources.has(flight.id) ? "Solicitar permiso para editar" : "Editar"}
+                                                                className="h-8 w-8 text-slate-400 hover:text-chimipink hover:bg-pink-50"
+                                                                title="Editar"
                                                             >
-                                                                {userRole === 'agent' && !unlockedResources.has(flight.id) ? (
-                                                                    <Lock className="h-4 w-4" />
-                                                                ) : unlockedResources.has(flight.id) ? (
-                                                                    <Unlock className="h-4 w-4 text-emerald-600" />
-                                                                ) : (
-                                                                    <Edit className="h-4 w-4 text-slate-400" />
-                                                                )}
+                                                                <Pencil className="h-4 w-4" />
                                                             </Button>
                                                             {(userRole === 'admin' || userRole === 'supervisor') && (
                                                                 <Button variant="ghost" size="sm" onClick={() => handleDeleteFlight(flight.id)}>
@@ -2953,13 +2980,6 @@ export default function FlightsPage() {
                     )}
                 </CardContent>
             </Card>
-            <EditRequestModal 
-            isOpen={isPermissionModalOpen}
-            onClose={() => setIsPermissionModalOpen(false)}
-            resourceType="flights"
-            resourceId={pendingResourceId || ''}
-            resourceName={pendingResourceName}
-        />
-    </div>
+        </div>
     )
 }

@@ -184,16 +184,22 @@ export async function updateParcel(formData: FormData) {
 
         let activeRequestId = 'admin_direct';
         let activeReason = 'Edición Directa';
+        const isDraft = formData.get('isDraft') === 'true'
 
         if (userRole === 'agent' || userRole === 'usuario') {
-            const permission = await getActivePermissionDetails('parcels', id)
-            if (!permission.hasPermission) {
-                throw new Error('No tienes permiso para editar esta encomienda. Debes solicitar autorización.')
+            if (!isDraft) {
+                const permission = await getActivePermissionDetails('parcels', id)
+                if (!permission.hasPermission) {
+                    throw new Error('No tienes permiso para editar esta encomienda. Debes solicitar autorización.')
+                }
+                activeRequestId = permission.requestId as string
+                activeReason = permission.reason as string
+                // Consumir permiso inmediatamente en la acción principal de guardado
+                await consumeEditPermission('parcels', id)
+            } else {
+                activeRequestId = 'agent_proposal'
+                activeReason = 'Propuesta de Borrador'
             }
-            activeRequestId = permission.requestId as string
-            activeReason = permission.reason as string
-            // Consumir permiso inmediatamente en la acción principal de guardado
-            await consumeEditPermission('parcels', id)
         } else if (userRole === 'admin' || userRole === 'supervisor') {
             const permission = await getActivePermissionDetails('parcels', id)
             activeRequestId = permission.requestId as string
@@ -287,6 +293,11 @@ export async function updateParcel(formData: FormData) {
         documents: currentDocs,
         payment_details,
         updated_at: new Date().toISOString()
+    }
+
+    // --- NEW DRAFT MODE ---
+    if (isDraft) {
+        return { success: true, draftData: updateData }
     }
 
     const { error } = await supabase

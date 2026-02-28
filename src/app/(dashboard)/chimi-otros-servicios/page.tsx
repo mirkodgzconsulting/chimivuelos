@@ -48,9 +48,9 @@ import {
     updateOtherServiceStatus
 } from '@/app/actions/manage-other-services'
 import { getClientsForDropdown } from '@/app/actions/manage-transfers'
-import { EditRequestModal } from '@/components/permissions/EditRequestModal'
-import { getActivePermissionDetails, getActivePermissions } from '@/app/actions/manage-permissions'
+import { getActivePermissions, createEditRequest } from '@/app/actions/manage-permissions'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getPaymentMethodsIT, getPaymentMethodsPE, PaymentMethod } from '@/app/actions/manage-payment-methods'
 
@@ -172,9 +172,6 @@ export default function OtherServicesPage() {
 
     // Role & Permissions State
     const [userRole, setUserRole] = useState<string | null>(null)
-    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false)
-    const [pendingResourceId, setPendingResourceId] = useState<string | null>(null)
-    const [pendingResourceName, setPendingResourceName] = useState<string>('')
     const [unlockedResources, setUnlockedResources] = useState<Set<string>>(new Set())
 
     // Sync Permissions
@@ -184,7 +181,7 @@ export default function OtherServicesPage() {
             setUnlockedResources(new Set(permissions))
         }
         fetchPermissions()
-    }, [isDialogOpen, isPermissionModalOpen])
+    }, [isDialogOpen])
 
     // Form Data
     const [formData, setFormData] = useState({
@@ -418,34 +415,29 @@ export default function OtherServicesPage() {
     }
 
     const handleActionClick = async (serv: OtherService, action: 'edit' | 'delete') => {
-        if (userRole === 'admin' || userRole === 'supervisor') {
-            if (action === 'edit') handleEdit(serv)
-            else if (confirm('¿Borrar servicio?')) {
-                await deleteOtherService(serv.id)
-                loadData()
+        if (action === 'delete') {
+            if (userRole === 'admin' || userRole === 'supervisor') {
+                if (confirm('¿Borrar servicio?')) {
+                    await deleteOtherService(serv.id)
+                    loadData()
+                }
             }
             return
         }
-        if (action === 'edit' && userRole === 'agent') {
-            const permission = await getActivePermissionDetails('other_services', serv.id)
-            if (permission.hasPermission) {
-                handleEdit(serv)
-            } else {
-                setPendingResourceId(serv.id)
-                setPendingResourceName(serv.tracking_code || serv.id)
-                setIsPermissionModalOpen(true)
-            }
+
+        if (action === 'edit') {
+            handleEdit(serv)
         }
     }
+
+
 
     const handleStatusChange = async (id: string, newStatus: string) => {
         const serv = services.find(s => s.id === id)
         if (!serv) return
 
         if (userRole === 'agent' && !unlockedResources.has(id)) {
-            setPendingResourceId(id)
-            setPendingResourceName(serv.tracking_code || id)
-            setIsPermissionModalOpen(true)
+            toast.info("Para cambiar el estado, use el botón de edición y guarde los cambios.")
             return
         }
 
@@ -544,6 +536,34 @@ export default function OtherServicesPage() {
         finalProofs.forEach((file, index) => {
             if (file) payload.append(`payment_proof_${index}`, file)
         })
+
+        if (selectedId) {
+            payload.append('id', selectedId)
+            
+            // --- DRAFT & APPROVAL FOR AGENTS ---
+            if (userRole === 'agent' && !unlockedResources.has(selectedId)) {
+                payload.append('isDraft', 'true')
+                const result = await updateOtherService(payload)
+                if (result.success && result.draftData) {
+                    const reqResult = await createEditRequest(
+                        'other_services',
+                        selectedId,
+                        'Edición enviada para aprobación',
+                        { draftData: result.draftData, displayId: formData.tracking_code || 'Servicio' }
+                    )
+                    if (reqResult.success) {
+                        toast.success('Solicitud enviada correctamente el administrador revisara su solicitud')
+                        setIsDialogOpen(false)
+                        resetForm()
+                        loadData()
+                    } else {
+                        alert(reqResult.error || 'Error al enviar borrador')
+                    }
+                    setIsLoading(false)
+                    return // Stop here
+                }
+            }
+        }
 
         const result = selectedId ? await updateOtherService(payload) : await createOtherService(payload)
 
@@ -1422,7 +1442,8 @@ export default function OtherServicesPage() {
                                                     variant="ghost" 
                                                     size="sm" 
                                                     onClick={() => handleActionClick(s, 'edit')}
-                                                    className="text-slate-400 hover:text-slate-600"
+                                                    className="h-8 w-8 text-slate-400 hover:text-chimipink hover:bg-pink-50"
+                                                    title="Editar"
                                                 >
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
@@ -1475,18 +1496,6 @@ export default function OtherServicesPage() {
             </Card>
 
             {/* Permission Request Modal for Agents */}
-            <EditRequestModal 
-                isOpen={isPermissionModalOpen}
-                onClose={() => setIsPermissionModalOpen(false)}
-                resourceId={pendingResourceId || ''}
-                resourceType="other_services"
-                resourceName={pendingResourceName}
-                onSuccess={() => {
-                    setIsPermissionModalOpen(false);
-                    const serv = services.find(s => s.id === pendingResourceId);
-                    if (serv) handleEdit(serv);
-                }}
-            />
         </div>
     )
 }
