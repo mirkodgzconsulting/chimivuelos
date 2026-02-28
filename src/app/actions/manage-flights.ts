@@ -505,7 +505,7 @@ export async function deleteFlight(id: string) {
         }
 
         // Get flight for audit log and document deletion
-        const { data: flight } = await supabase.from('flights').select('*').eq('id', id).single()
+        const { data: flight } = await supabaseAdmin.from('flights').select('*').eq('id', id).single()
         if (!flight) throw new Error('Vuelo no encontrado')
         
         if (flight && flight.documents) {
@@ -523,7 +523,7 @@ export async function deleteFlight(id: string) {
             }
         }
 
-        const { error } = await supabase.from('flights').delete().eq('id', id)
+        const { error } = await supabaseAdmin.from('flights').delete().eq('id', id)
         if (error) throw error
 
         // Record Audit Log
