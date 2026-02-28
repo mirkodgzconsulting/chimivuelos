@@ -146,7 +146,14 @@ export default function MoneyTransfersPage() {
             const supabase = createClient()
             const { data: { user } } = await supabase.auth.getUser()
             if (user) {
-                const rawRole = user.user_metadata?.role || 'client'
+                // Fetch latest role directly from database
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .single()
+
+                const rawRole = profile?.role || 'client'
                 const role = rawRole === 'usuario' ? 'agent' : rawRole
                 setUserRole(role)
 

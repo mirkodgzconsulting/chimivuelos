@@ -117,8 +117,16 @@ export default function GastosPage() {
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-            const role = user.user_metadata?.role || 'client'
-            setUserRole(role === 'usuario' ? 'agent' : role)
+            // Fetch latest role directly from database
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single()
+
+            const rawRole = profile?.role || 'client'
+            const role = rawRole === 'usuario' ? 'agent' : rawRole
+            setUserRole(role)
         }
     }, [])
 

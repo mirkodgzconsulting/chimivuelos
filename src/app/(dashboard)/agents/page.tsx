@@ -68,9 +68,18 @@ export default function AgentsPage() {
     let mounted = true
     
     // Get user role
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (mounted && user) {
-        setUserRole(user.user_metadata?.role || 'agent')
+        // Fetch latest role directly from database
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        const rawRole = profile?.role || 'agent'
+        const role = rawRole === 'usuario' ? 'agent' : rawRole
+        setUserRole(role)
       }
     })
 

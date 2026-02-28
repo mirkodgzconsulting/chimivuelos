@@ -10,9 +10,19 @@ export default async function DashboardLayout({
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    const { redirect } = await import("next/navigation");
+    return redirect('/login');
+  }
 
-  // Second layer of security: Check role in the layout
-  const role = user?.user_metadata?.role || 'client';
+  // Fetch latest role directly from database instead of session metadata
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  const role = profile?.role || 'client';
 
   if (role === 'client') {
     const { redirect } = await import("next/navigation");

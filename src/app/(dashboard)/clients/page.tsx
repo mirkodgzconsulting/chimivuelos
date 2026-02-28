@@ -120,10 +120,17 @@ export default function ClientsPage() {
     let mounted = true;
 
     // Get user role
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (mounted && user) {
-        const rawRole = user.user_metadata?.role || "agent";
-        const role = rawRole === "usuario" ? "agent" : rawRole;
+        // Fetch latest role directly from database
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        const rawRole = profile?.role || 'client'
+        const role = rawRole === 'usuario' ? 'agent' : rawRole
         setUserRole(role);
       }
     });
