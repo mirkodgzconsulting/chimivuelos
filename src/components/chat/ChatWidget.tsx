@@ -172,9 +172,9 @@ export function ChatWidget() {
     if (!isClientPortal) return null
 
     return (
-        <div className="fixed bottom-0 right-6 z-50 flex flex-col items-end font-sans focus-within:outline-none">
+        <div className="fixed bottom-10 right-2 z-50 flex flex-col items-end font-sans focus-within:outline-none">
             {isOpen && (
-                <div className="w-[350px] h-[500px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300 mb-20 z-50">
+                <div className="w-[350px] h-[500px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300 mb-4 z-50">
                     <div className="bg-linear-to-r from-chimipink to-chimicyan p-4 flex justify-between items-center text-slate-900 border-b border-white/20">
                         <div className="flex items-center gap-3">
                             <div className="bg-white/30 p-2 rounded-full backdrop-blur-sm border border-white/40 shadow-sm">
@@ -240,30 +240,35 @@ export function ChatWidget() {
             )}
 
             <div className="flex items-end relative">
-                {!isOpen && (
-                    <div className="absolute right-full bottom-0 mr-[-5px] w-48 h-48 animate-in slide-in-from-right-10 fade-in duration-1000 pointer-events-none overflow-hidden">
-                        <Image 
-                            src="/bot2.webp" 
-                            alt="Bot Asistente" 
-                            width={200} 
-                            height={200} 
-                            className="object-contain object-bottom drop-shadow-xl translate-y-[2px]"
-                            priority
-                        />
-                    </div>
+                {!isOpen ? (
+                    <button 
+                        onClick={toggleChat}
+                        className="flex flex-col items-center animate-in slide-in-from-bottom-10 fade-in duration-700 hover:scale-105 active:scale-95 transition-all cursor-pointer relative"
+                    >
+                        {unreadCount > 0 && (
+                            <span className="absolute top-[20%] right-0 bg-red-600 text-white text-[10px] font-bold h-6 w-6 flex items-center justify-center rounded-full border-2 border-white animate-bounce shadow-md z-10">
+                                {unreadCount}
+                            </span>
+                        )}
+                        <div className="relative w-[90px] sm:w-[110px]">
+                            <Image 
+                                src="/bot3.webp" 
+                                alt="Chat Soporte - Escríbenos" 
+                                width={110} 
+                                height={140} 
+                                className="object-contain drop-shadow-2xl"
+                                priority
+                            />
+                        </div>
+                    </button>
+                ) : (
+                    <button 
+                        onClick={toggleChat}
+                        className="mb-8 mr-4 bg-chimipink hover:bg-pink-600 text-white p-4 rounded-full shadow-2xl shadow-pink-300/40 transition-all hover:scale-110 active:scale-95 z-50 cursor-pointer border-2 border-white/50"
+                    >
+                        <X size={24} />
+                    </button>
                 )}
-
-                <button 
-                    onClick={toggleChat}
-                    className="mb-14 mr-2 relative bg-chimipink hover:bg-pink-600 text-white p-4 rounded-full shadow-xl shadow-pink-300/40 transition-all hover:scale-110 active:scale-95 group z-50 cursor-pointer"
-                >
-                    {isOpen ? <X size={24} /> : <MessageCircle size={24} className="fill-current" />}
-                    {!isOpen && unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 w-5 flex items-center justify-center rounded-full border-2 border-white animate-bounce shadow-sm">
-                            {unreadCount}
-                        </span>
-                    )}
-                </button>
             </div>
         </div>
     )
